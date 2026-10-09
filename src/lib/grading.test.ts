@@ -1,0 +1,157 @@
+import { describe, expect, it } from "vitest"
+import { gradeAttempt, gradeQuestion, scoreOutOf10, starsFor } from "./grading"
+import type { Question } from "./types"
+
+const base = { prompt: "", points: 1, skills: [] }
+
+const mc: Question = { ...base, id: "mc", type: "trac-nghiem", options: ["54", "56", "63"], correctIndex: 1 }
+const tf: Question = { ...base, id: "tf", type: "dung-sai", answer: false }
+const blanks: Question = { ...base, id: "fb", type: "dien-cho-trong", points: 2, prompt: "___ và ___", answers: ["Cao vời vợi", "468"] }
+const shortNum: Question = { ...base, id: "sn", type: "tra-loi-ngan", answer: "24 kg" }
+const shortText: Question = { ...base, id: "st", type: "tra-loi-ngan", answer: "Hà Nội" }
+const match: Question = {
+  ...base,
+  id: "m",
+  type: "noi",
+  points: 1.5,
+  pairs: [
+    { left: "father", right: "bố" },
+    { left: "mother", right: "mẹ" },
+    { left: "sister", right: "chị" },
+  ],
+}
+const order: Question = { ...base, id: "o", type: "sap-xep", tokens: ["Hôm nay", "em", "đến", "trường"], shuffled: [2, 0, 3, 1] }
+const essay: Question = { ...base, id: "e", type: "tu-luan", points: 2, rubric: "" }
+
+describe("gradeQuestion", () => {
+  it("marks unanswered objective questions wrong with 0 points", () => {
+    expect(gradeQuestion(mc, undefined)).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    expect(gradeQuestion(shortNum, "   ")).toEqual({ isCorrect: false, pointsAwarded: 0 })
+  })
+
+  it("grades multiple choice by option index", () => {
+    expect(gradeQuestion(mc, 1)).toEqual({ isCorrect: true, pointsAwarded: 1 })
+    expect(gradeQuestion(mc, 0)).toEqual({ isCorrect: false, pointsAwarded: 0 })
+  })
+
+  it("grades true/false", () => {
+    expect(gradeQuestion(tf, false)).toEqual({ isCorrect: true, pointsAwarded: 1 })
+    expect(gradeQuestion(tf, true)).toEqual({ isCorrect: false, pointsAwarded: 0 })
+  })
+
+  describe("fill in the blanks", () => {
+    it("ignores case, extra spaces and trailing punctuation", () => {
+      expect(gradeQuestion(blanks, ["  cao   vời vợi. ", "468"])).toEqual({ isCorrect: true, pointsAwarded: 2 })
+    })
+
+    it("keeps Vietnamese tone marks significant", () => {
+      expect(gradeQuestion(blanks, ["cao vơi vợi", "468"]).isCorrect).toBe(false)
+    })
+
+    it("treats NFD and NFC input as the same text", () => {
+      expect(gradeQuestion(blanks, ["Cao vời vợi".normalize("NFD"), "468"]).isCorrect).toBe(true)
+    })
+
+    it("gives partial credit per blank", () => {
+      expect(gradeQuestion(blanks, ["cao vời vợi", "486"])).toEqual({ isCorrect: false, pointsAwarded: 1 })
+    })
+  })
+
+  describe("short answer", () => {
+    it("accepts the number alone when the expected answer has a unit", () => {
+      expect(gradeQuestion(shortNum, "24").isCorrect).toBe(true)
+      expect(gradeQuestion(shortNum, "24kg").isCorrect).toBe(true)
+      expect(gradeQuestion(shortNum, "24 KG").isCorrect).toBe(true)
+    })
+
+    it("rejects a wrong number or a wrong unit", () => {
+      expect(gradeQuestion(shortNum, "25 kg").isCorrect).toBe(false)
+      expect(gradeQuestion(shortNum, "24 g").isCorrect).toBe(false)
+    })
+
+    it("accepts extra words that appear in the expected answer", () => {
+      const q: Question = { ...shortNum, answer: "540 cái bút" }
+      expect(gradeQuestion(q, "540 cái bút").isCorrect).toBe(true)
+      expect(gradeQuestion(q, "540").isCorrect).toBe(true)
+    })
+
+    it("compares text answers case-insensitively", () => {
+      expect(gradeQuestion(shortText, "hà nội").isCorrect).toBe(true)
+      expect(gradeQuestion(shortText, "Hà Nam").isCorrect).toBe(false)
+    })
+  })
+
+  describe("matching", () => {
+    it("is correct when every left item maps to its own pair (JSON string keys)", () => {
+      expect(gradeQuestion(match, { "0": 0, "1": 1, "2": 2 })).toEqual({ isCorrect: true, pointsAwarded: 1.5 })
+    })
+
+    it("gives partial credit per correct pair", () => {
+      expect(gradeQuestion(match, { "0": 0, "1": 2, "2": 1 })).toEqual({ isCorrect: false, pointsAwarded: 0.5 })
+    })
+  })
+
+  describe("ordering", () => {
+    it("is correct when tokens are in the original order", () => {
+      expect(gradeQuestion(order, [0, 1, 2, 3])).toEqual({ isCorrect: true, pointsAwarded: 1 })
+      expect(gradeQuestion(order, [1, 0, 2, 3])).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    })
+
+    it("compares token text, so swapping identical tokens still counts", () => {
+      const q: Question = { ...order, tokens: ["a", "b", "a"], shuffled: [1, 0, 2] }
+      expect(gradeQuestion(q, [2, 1, 0]).isCorrect).toBe(true)
+    })
+
+    it("is wrong when not all tokens were placed", () => {
+      expect(gradeQuestion(order, [0, 1, 2]).isCorrect).toBe(false)
+    })
+  })
+
+  it("leaves essays for the parent", () => {
+    expect(gradeQuestion(essay, { text: "Bạn em tên là Lan." })).toEqual({ isCorrect: null, pointsAwarded: null })
+  })
+})
+
+describe("scoreOutOf10", () => {
+  it("rounds to the nearest quarter point", () => {
+    expect(scoreOutOf10(7, 9)).toBe(7.75)
+    expect(scoreOutOf10(10, 10)).toBe(10)
+    expect(scoreOutOf10(0, 10)).toBe(0)
+  })
+
+  it("returns 0 for an empty set", () => {
+    expect(scoreOutOf10(0, 0)).toBe(0)
+  })
+})
+
+describe("starsFor", () => {
+  it.each([
+    [10, 3],
+    [9, 3],
+    [8.75, 2],
+    [7, 2],
+    [5, 1],
+    [4.75, 0],
+  ])("score %s → %s stars", (score, stars) => {
+    expect(starsFor(score)).toBe(stars)
+  })
+})
+
+describe("gradeAttempt", () => {
+  it("scores a fully objective attempt", () => {
+    const result = gradeAttempt([mc, tf], { mc: 1, tf: true })
+    expect(result.needsReview).toBe(false)
+    expect(result.autoPoints).toBe(1)
+    expect(result.totalPoints).toBe(2)
+    expect(result.score).toBe(5)
+    expect(result.grades.map((g) => g.questionId)).toEqual(["mc", "tf"])
+  })
+
+  it("waits for the parent when an essay is present", () => {
+    const result = gradeAttempt([mc, essay], { mc: 1, e: { text: "..." } })
+    expect(result.needsReview).toBe(true)
+    expect(result.score).toBeNull()
+    expect(result.autoPoints).toBe(1)
+    expect(result.totalPoints).toBe(3)
+  })
+})

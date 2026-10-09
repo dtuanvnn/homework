@@ -21,3 +21,4 @@ logs/
 /.opencode-skills/
 .next/
 next-env.d.ts
+!.env.example
