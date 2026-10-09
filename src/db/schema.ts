@@ -37,6 +37,8 @@ export const students = pgTable("students", {
   id: uuid().primaryKey().defaultRandom(),
   name: text().notNull(),
   grade: smallint().notNull(),
+  /** Class label shown in the UI, e.g. "3C1"; `grade` stays numeric for filtering. */
+  className: text("class_name"),
   avatarEmoji: text("avatar_emoji").notNull().default("🦊"),
   createdAt: createdAt(),
 }).enableRLS()

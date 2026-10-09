@@ -25,7 +25,7 @@ export default function StudentChip({ student, mode, collapsed }: StudentChipPro
       {avatar}
       <div className="min-w-0 flex-1 leading-tight">
         <div className="truncate font-semibold text-slate-900">{student.name}</div>
-        <div className="text-xs text-slate-500">Lớp {student.grade}</div>
+        <div className="text-xs text-slate-500">Lớp {student.className ?? student.grade}</div>
       </div>
       {mode === 'student' && <StarCount count={student.totalStars} className="px-2 text-xs" />}
     </div>

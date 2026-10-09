@@ -69,7 +69,7 @@ export async function getStudent(): Promise<Student & { id: string }> {
   if (!row) throw new Error("No student found. Run `pnpm db:seed`.")
   const graded = await db.select({ score: attempts.score }).from(attempts).where(isNotNull(attempts.gradedAt))
   const totalStars = graded.reduce((sum, a) => sum + starsFor(a.score ?? 0), 0)
-  return { id: row.id, name: row.name, grade: row.grade, avatarEmoji: row.avatarEmoji, totalStars }
+  return { id: row.id, name: row.name, grade: row.grade, className: row.className ?? undefined, avatarEmoji: row.avatarEmoji, totalStars }
 }
 
 /* ---------- Library ---------- */

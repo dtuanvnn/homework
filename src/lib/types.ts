@@ -17,6 +17,8 @@ export interface Student {
   id: string
   name: string
   grade: number
+  /** Class label such as "3C1", when set. */
+  className?: string
   avatarEmoji: string
   totalStars: number
 }
