@@ -9,7 +9,7 @@ import type { Difficulty, ExerciseKind, Question, SubjectId } from "@/lib/types"
  */
 
 /** Most files one scan may send (photos are ~0.3–1 MB after shrinkImage). */
-export const MAX_SCAN_FILES = 10
+export const MAX_SCAN_FILES = 20
 /** Total base64 payload per scan; the Claude API caps a request at 32 MB. */
 export const MAX_SCAN_BASE64_BYTES = 24 * 1024 * 1024
 

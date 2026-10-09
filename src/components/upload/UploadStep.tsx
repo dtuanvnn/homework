@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react'
-import { AlertTriangle, Camera, FolderOpen, Sparkles, UploadCloud } from 'lucide-react'
+import { AlertTriangle, Camera, FolderOpen, Loader2, Sparkles, UploadCloud } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import AttachmentGallery, { filesToAttachments } from '@/components/exercise-detail/AttachmentGallery'
 import { MAX_SCAN_FILES, type ScanMeta } from '@/lib/ai/scan'
+import { pdfToImages } from '@/lib/pdf-client'
 import { EXERCISE_KINDS, GRADES } from '@/lib/library'
 import { SUBJECT_LIST } from '@/lib/subjects'
 import { cn } from '@/lib/utils'
@@ -29,8 +31,24 @@ export default function UploadStep({ files, onFilesChange, meta, onMetaChange, o
   const [dragging, setDragging] = useState(false)
   const tooMany = files.length > MAX_SCAN_FILES
 
-  const addFiles = (list: FileList | null) => {
-    if (list?.length) onFilesChange([...files, ...filesToAttachments(list)])
+  const [converting, setConverting] = useState(false)
+  // PDFs become one image per page: the AI reads images, and each page then shows in the review viewer.
+  const addFiles = async (list: FileList | null) => {
+    if (!list?.length) return
+    const picked = Array.from(list)
+    if (!picked.some((f) => f.type === 'application/pdf')) {
+      onFilesChange([...files, ...filesToAttachments(picked)])
+      return
+    }
+    setConverting(true)
+    try {
+      const expanded = (await Promise.all(picked.map((f) => (f.type === 'application/pdf' ? pdfToImages(f) : [f])))).flat()
+      onFilesChange([...files, ...filesToAttachments(expanded)])
+    } catch {
+      toast.error('Không đọc được tệp PDF', { description: 'Hãy thử tệp khác hoặc chụp ảnh từng trang.' })
+    } finally {
+      setConverting(false)
+    }
   }
 
   return (
@@ -61,6 +79,12 @@ export default function UploadStep({ files, onFilesChange, meta, onMetaChange, o
         </span>
         <p className="mt-4 text-lg font-bold text-slate-900">Kéo thả ảnh hoặc PDF vào đây</p>
         <p className="mt-1 text-sm text-slate-500">Phiếu bài tập, đề kiểm tra, trang sách · JPG, PNG, PDF</p>
+        {converting && (
+          <p role="status" className="mt-3 flex items-center gap-2 text-sm font-medium text-indigo-700">
+            <Loader2 className="size-4 animate-spin" />
+            Đang tách các trang PDF thành ảnh…
+          </p>
+        )}
         <div className="mt-6 flex w-full max-w-sm flex-col gap-2 sm:flex-row sm:justify-center">
           <Button variant="outline" size="lg" className="sm:flex-1" onClick={() => cameraInput.current?.click()}>
             <Camera className="size-5" />

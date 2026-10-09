@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Homework Hub: a mobile-first (iPad/phone) web app a parent uses to assign, grade and track homework for **one** primary-school child (Grade 3 now, growing to 4–7+; Toán, Tiếng Việt, Tiếng Anh). No authentication — only an optional `APP_PIN` gate. All UI text is Vietnamese. The UI started as a Figma Make export (prompts in `docs/figma-prompts.md`) and was migrated to Next.js; keep its visual language, animations and sounds when changing screens.
 
-Roadmap: Phase 1 = core flows on a real database. Phase 2 = Claude features, all in `src/server/actions/ai-*.ts`: scanning images/PDFs into questions (`ai-scan`), AI-generated sets (`ai-generate`), AI grading of essays and scanned paper work (`ai-grading`), AI progress summaries on Reports (`ai-summary`). AI only suggests: scanned/generated sets go through the review/editor UI, and AI marks are applied to the grading form for the parent to confirm with the normal `gradeAttempt` action.
+Roadmap: Phase 1 = core flows on a real database. Phase 2 = AI features (DeepSeek or Claude), all in `src/server/actions/ai-*.ts`: scanning images/PDFs into questions (`ai-scan`), AI-generated sets (`ai-generate`), AI grading of essays and scanned paper work (`ai-grading`), AI progress summaries on Reports (`ai-summary`). AI only suggests: scanned/generated sets go through the review/editor UI, and AI marks are applied to the grading form for the parent to confirm with the normal `gradeAttempt` action.
 
 ## Commands
 
@@ -27,7 +27,7 @@ pnpm exec playwright test e2e/smoke.spec.ts --project=ipad
 pnpm db:generate              # after editing src/db/schema.ts, then review the SQL in drizzle/
 ```
 
-Env vars live in `.env.local` (see `.env.example`): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `STORAGE_BUCKET`, `APP_PIN`, `ANTHROPIC_API_KEY`.
+Env vars live in `.env.local` (see `.env.example`): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `STORAGE_BUCKET`, `APP_PIN`, `DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY`, `AI_PROVIDER`.
 
 ## Architecture
 
@@ -45,7 +45,7 @@ Env vars live in `.env.local` (see `.env.example`): `DATABASE_URL`, `SUPABASE_UR
 
 **Files.** Photos and PDFs go straight from the browser to a private Supabase Storage bucket using one-time signed upload URLs (`createUploadTargets` in `src/server/storage.ts` + `uploadFiles` in `src/lib/upload-client.ts`); the server only records paths after checking `isUploaded`. Never route file bodies through Server Actions (Vercel caps request bodies at ~4.5 MB; the action body limit is 4 MB for handwriting data URLs). The browser only ever sees signed URLs.
 
-**AI.** Every Claude call goes through `ask()` in `src/server/ai/claude.ts` (model `AI_MODEL`, streamed structured output validated by a zod schema, server-side refusal fallback, Vietnamese error messages). Prompts, output schemas and response mapping live as pure, tested code in `src/lib/ai/*`; question output uses the flat `aiQuestionSchema` and `toQuestion()` (repairs + confidence capping). Scans are sent from Storage via `storageFileBlocks()`; photos are downscaled in the browser with `shrinkImage()` before upload. Pages whose actions call AI export `maxDuration = 300`.
+**AI.** Every model call goes through `ask()` in `src/server/ai/llm.ts`, which returns an object validated by a zod schema and throws Vietnamese error messages. Two providers via `AI_PROVIDER` (default: DeepSeek when `DEEPSEEK_API_KEY` is set): DeepSeek `deepseek-flash` through its Anthropic-compatible endpoint, where the schema is sent as a forced tool and the tool input is validated (one retry), images only — no PDFs; or Claude with structured outputs and refusal fallback. PDFs are split into page images in the browser (`src/lib/pdf-client.ts`) before scanning. Prompts, output schemas and response mapping live as pure, tested code in `src/lib/ai/*`; question output uses the flat `aiQuestionSchema` and `toQuestion()` (repairs + confidence capping). Scans are sent from Storage via `storageFileBlocks()`; photos are downscaled in the browser with `shrinkImage()` before upload. Pages whose actions call AI export `maxDuration = 300`.
 
 **Database.** Drizzle + postgres-js against Supabase Postgres (`src/db/schema.ts`, migrations in `drizzle/`). RLS is enabled on every table with no policies, so nothing is reachable through Supabase's public REST API; the app connects directly from the server. In production use Supabase's **session** pooler (port 5432): postgres-js pipelines queries and the transaction pooler (6543) hangs on them (see `src/db/index.ts`).
 

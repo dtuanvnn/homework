@@ -12,7 +12,7 @@ import {
   type GenerateResult,
 } from "@/lib/ai/generate"
 import { assertAccess } from "../access"
-import { ask } from "../ai/claude"
+import { ask } from "../ai/llm"
 import { getQuestions, listExerciseSets } from "../queries"
 
 /**

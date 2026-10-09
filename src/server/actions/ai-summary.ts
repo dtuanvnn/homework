@@ -8,7 +8,7 @@ import { candidateList, candidateSets, SUMMARY_SYSTEM, summaryFacts, summaryResu
 import { buildReport, rangePeriod } from "@/lib/analytics"
 import { dateInput } from "@/lib/schedule"
 import { assertAccess } from "../access"
-import { ask } from "../ai/claude"
+import { ask } from "../ai/llm"
 import { loadReportInput } from "../analytics"
 import { getStudent } from "../queries"
 

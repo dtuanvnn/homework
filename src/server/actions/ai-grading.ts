@@ -20,7 +20,7 @@ import type { Response } from "@/lib/grading"
 import type { Question } from "@/lib/types"
 import { essayDrawing, isEssayValue } from "@/lib/views/grading"
 import { assertAccess } from "../access"
-import { ask, storageFileBlocks, type ContentBlock } from "../ai/claude"
+import { ask, storageFileBlocks, type ContentBlock } from "../ai/llm"
 import { isUuid } from "../queries"
 
 /*

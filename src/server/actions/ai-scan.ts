@@ -13,7 +13,7 @@ import {
   type ScanResult,
 } from "@/lib/ai/scan"
 import { assertAccess } from "../access"
-import { ask, storageFileBlocks, type ContentBlock } from "../ai/claude"
+import { ask, storageFileBlocks, type ContentBlock } from "../ai/llm"
 import { isUploaded } from "../storage"
 
 const scanInputSchema = z.object({
