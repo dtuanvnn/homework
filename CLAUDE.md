@@ -45,7 +45,7 @@ Env vars live in `.env.local` (see `.env.example`): `DATABASE_URL`, `SUPABASE_UR
 
 **Files.** Photos and PDFs go straight from the browser to a private Supabase Storage bucket using one-time signed upload URLs (`createUploadTargets` in `src/server/storage.ts` + `uploadFiles` in `src/lib/upload-client.ts`); the server only records paths after checking `isUploaded`. Never route file bodies through Server Actions (Vercel caps request bodies at ~4.5 MB; the action body limit is 4 MB for handwriting data URLs). The browser only ever sees signed URLs.
 
-**Database.** Drizzle + postgres-js against Supabase Postgres (`src/db/schema.ts`, migrations in `drizzle/`). RLS is enabled on every table with no policies, so nothing is reachable through Supabase's public REST API; the app connects directly from the server. Use the transaction pooler URL in production (`prepare: false` is already set).
+**Database.** Drizzle + postgres-js against Supabase Postgres (`src/db/schema.ts`, migrations in `drizzle/`). RLS is enabled on every table with no policies, so nothing is reachable through Supabase's public REST API; the app connects directly from the server. In production use Supabase's **session** pooler (port 5432): postgres-js pipelines queries and the transaction pooler (6543) hangs on them (see `src/db/index.ts`).
 
 ## Gotchas
 
