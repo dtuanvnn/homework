@@ -1,6 +1,6 @@
 import { AlertTriangle, ClipboardCheck, ClipboardList, Star } from 'lucide-react'
 import { formatScoreValue } from '@/lib/format'
-import type { WeekSummary } from '@/lib/stats'
+import type { WeekSummary } from '@/lib/analytics'
 import ProgressRing from './ProgressRing'
 import StatCard from './StatCard'
 import TrendChip from './TrendChip'

@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { useStudent } from '@/components/layout/AppFrame'
 import { Button } from '@/components/ui/button'
 import type { ExerciseSource } from '@/lib/types'
 import AddExerciseMenu from './AddExerciseMenu'
@@ -42,6 +43,7 @@ interface LibraryEmptyStateProps {
 }
 
 export default function LibraryEmptyState({ filtered, onAdd, onReset }: LibraryEmptyStateProps) {
+  const student = useStudent()
   return (
     <div className="flex flex-col items-center rounded-2xl border-2 border-dashed border-slate-200 bg-white/60 px-6 py-12 text-center">
       <EmptyIllustration />
@@ -51,7 +53,7 @@ export default function LibraryEmptyState({ filtered, onAdd, onReset }: LibraryE
       <p className="mt-1 max-w-sm text-sm text-slate-500">
         {filtered
           ? 'Thử đổi từ khóa hoặc bỏ bớt bộ lọc để xem thêm bài tập.'
-          : 'Soạn bài, tải lên phiếu bài tập hoặc để AI tạo giúp bạn bộ bài đầu tiên cho Minh An.'}
+          : `Soạn bài, tải lên phiếu bài tập hoặc để AI tạo giúp bạn bộ bài đầu tiên cho ${student.name}.`}
       </p>
       <div className="mt-5 flex flex-wrap justify-center gap-2">
         {filtered && (

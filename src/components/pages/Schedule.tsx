@@ -1,3 +1,5 @@
+"use client"
+
 import { useCallback, useState } from "react"
 import {
   CalendarDays,
@@ -5,6 +7,7 @@ import {
   ChevronRight,
   Clock3,
   FileText,
+  Loader2,
   Monitor,
   Plus,
   Printer,
@@ -16,17 +19,19 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import AssignSheet from "@/components/schedule/AssignSheet"
 import PrintableExercise from "@/components/schedule/PrintableExercise"
 import { useLibrary } from "@/state/library-store"
-import { TODAY } from "@/data/mock-data"
+import { useStudent } from "@/components/layout/AppFrame"
 import { addDays, startOfWeek } from "@/lib/dates"
 import { DAY_LABELS, DAY_SHORT, dateInput, shortDate, timeLabel } from "@/lib/schedule"
 import { SUBJECT_LIST, SUBJECTS, STATUSES } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 import type { Assignment } from "@/lib/types"
 
-export default function Schedule() {
+export default function Schedule({ now }: { now: string }) {
   const library = useLibrary()
+  const student = useStudent()
+  const todayKey = dateInput(new Date(now))
   const [view, setView] = useState("week")
-  const [date, setDate] = useState(new Date(TODAY))
+  const [date, setDate] = useState(() => new Date(now))
   const [sheetOpen, setSheetOpen] = useState(false)
   const [printing, setPrinting] = useState<Assignment | null>(null)
   const finishPrint = useCallback(() => setPrinting(null), [])
@@ -46,6 +51,12 @@ export default function Schedule() {
     0,
   )
   const printSet = printing ? library.getSet(printing.exerciseSetId) : undefined
+  // Questions load lazily: the "In đề" click starts the fetch, printing waits for it.
+  const printReady = printSet ? library.questionsLoaded(printSet.id) : false
+  const startPrint = (assignment: Assignment) => {
+    library.getQuestions(assignment.exerciseSetId)
+    setPrinting(assignment)
+  }
 
   const assignmentCard = (assignment: Assignment, compact = false) => {
     const set = library.getSet(assignment.exerciseSetId)
@@ -132,9 +143,13 @@ export default function Schedule() {
               "w-fit px-0 text-slate-600",
               compact && "gap-1 text-xs",
             )}
-            onClick={() => setPrinting(assignment)}
+            onClick={() => startPrint(assignment)}
           >
-            <Printer className="size-3.5" />
+            {printing?.id === assignment.id && !printReady ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Printer className="size-3.5" />
+            )}
             In đề
           </Button>
         )}
@@ -152,7 +167,7 @@ export default function Schedule() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <CardTitle className="text-lg">
-              {dateInput(date) === dateInput(TODAY) ? "Hôm nay" : DAY_LABELS[(date.getDay() + 6) % 7]}
+              {dateInput(date) === todayKey ? "Hôm nay" : DAY_LABELS[(date.getDay() + 6) % 7]}
             </CardTitle>
             <p className="text-sm text-slate-500">
               {date.toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} · {items.length} bài
@@ -184,7 +199,7 @@ export default function Schedule() {
             </div>
             <CardTitle>Ngày trống, con học gì nhỉ?</CardTitle>
             <p className="max-w-xs text-sm text-slate-500">
-              Thêm một bài nhẹ nhàng cho Minh An, chỉ mất chưa đến một phút.
+              Thêm một bài nhẹ nhàng cho {student.name}, chỉ mất chưa đến một phút.
             </p>
             <Button className="rounded-full" onClick={() => openAssign(date)}>
               <Plus />
@@ -264,7 +279,7 @@ export default function Schedule() {
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setDate(new Date(TODAY))}>
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setDate(new Date(now))}>
               Hôm nay
             </Button>
             <ToggleGroup
@@ -284,7 +299,7 @@ export default function Schedule() {
           {days.map((day, i) => {
             const items = forDay(day)
             const key = dateInput(day)
-            const isToday = key === dateInput(TODAY)
+            const isToday = key === todayKey
             const selected = key === selectedKey
             return (
               <button
@@ -343,7 +358,7 @@ export default function Schedule() {
           <div className="hidden md:grid md:grid-cols-7 md:overflow-hidden md:rounded-2xl md:border md:bg-white">
             {days.map((day, i) => {
               const items = forDay(day)
-              const isToday = dateInput(day) === dateInput(TODAY)
+              const isToday = dateInput(day) === todayKey
               return (
                 <section key={dateInput(day)} className={cn("group min-w-0 border-r border-slate-100 last:border-r-0", isToday && "bg-indigo-50/40")}>
                   <button
@@ -384,9 +399,6 @@ export default function Schedule() {
       ) : (
         dayAgenda()
       )}
-      <p className="text-xs text-slate-400">
-        Lịch mẫu dùng ngày 15/10/2026. Thay đổi được giữ trong phiên hiện tại.
-      </p>
       <Button
         size="lg"
         className="fixed right-4 bottom-24 z-30 h-14 rounded-full px-6 text-base shadow-xl shadow-indigo-300 md:hidden"
@@ -402,7 +414,7 @@ export default function Schedule() {
           onCreated={setDate}
         />
       )}
-      {printing && printSet && (
+      {printing && printSet && printReady && (
         <PrintableExercise
           set={printSet}
           questions={library.getQuestions(printSet.id)}

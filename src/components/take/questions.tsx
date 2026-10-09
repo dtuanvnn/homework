@@ -4,15 +4,9 @@ import { motion, useReducedMotion } from "motion/react"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { SubjectStyle } from "@/lib/subjects"
-import type {
-  EssayQuestion,
-  FillBlankQuestion,
-  MatchingQuestion,
-  MultipleChoiceQuestion,
-  OrderingQuestion,
-  ShortAnswerQuestion,
-  TrueFalseQuestion,
-} from "@/lib/types"
+import type { TakeQuestion } from "@/lib/views/student"
+
+type Q<T extends TakeQuestion["type"]> = Extract<TakeQuestion, { type: T }>
 
 interface Props<Q, A> {
   q: Q
@@ -36,7 +30,7 @@ function useChoiceMotion() {
         }
 }
 
-export function MultipleChoice({ q, value, onChange, tone }: Props<MultipleChoiceQuestion, number>) {
+export function MultipleChoice({ q, value, onChange, tone }: Props<Q<"trac-nghiem">, number>) {
   const choice = useChoiceMotion()
   return (
     <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
@@ -66,7 +60,7 @@ export function MultipleChoice({ q, value, onChange, tone }: Props<MultipleChoic
   )
 }
 
-export function TrueFalse({ value, onChange }: Props<TrueFalseQuestion, boolean>) {
+export function TrueFalse({ value, onChange }: Props<Q<"dung-sai">, boolean>) {
   const choice = useChoiceMotion()
   const opts = [
     { v: true, label: "Đúng ✓", on: "bg-emerald-500 text-white border-transparent shadow-lg", off: "text-emerald-700" },
@@ -94,7 +88,7 @@ export function TrueFalse({ value, onChange }: Props<TrueFalseQuestion, boolean>
   )
 }
 
-export function FillBlank({ q, value = [], onChange, tone }: Props<FillBlankQuestion, string[]>) {
+export function FillBlank({ q, value = [], onChange, tone }: Props<Q<"dien-cho-trong">, string[]>) {
   const parts = q.prompt.split("___")
   return (
     <p className="rounded-3xl bg-white p-6 text-2xl leading-[2.4] font-semibold text-slate-800 md:text-3xl">
@@ -120,7 +114,7 @@ export function FillBlank({ q, value = [], onChange, tone }: Props<FillBlankQues
   )
 }
 
-export function ShortAnswer({ value = "", onChange, tone, math }: Props<ShortAnswerQuestion, string> & { math: boolean }) {
+export function ShortAnswer({ value = "", onChange, tone, math }: Props<Q<"tra-loi-ngan">, string> & { math: boolean }) {
   return (
     <div className="space-y-3">
       <input
@@ -144,13 +138,15 @@ export function ShortAnswer({ value = "", onChange, tone, math }: Props<ShortAns
 /* ---------- Matching ---------- */
 
 type Pairs = Record<number, number> // left index -> right index
+/** Stable default, so `measure` below doesn't change on every render. */
+const NO_PAIRS: Pairs = {}
 
-export function Matching({ q, value = {}, onChange, tone }: Props<MatchingQuestion, Pairs>) {
+export function Matching({ q, value = NO_PAIRS, onChange, tone }: Props<Q<"noi">, Pairs>) {
   // Shuffle right column deterministically.
   const rightOrder = q.pairs.map((_, i) => i).sort((a, b) => ((a * 7 + 3) % 5) - ((b * 7 + 3) % 5))
   const reduced = useReducedMotion()
   const [picked, setPicked] = useState<number | null>(null)
-  const [drag, setDrag] = useState<{ from: number; x: number; y: number } | null>(null)
+  const [drag, setDrag] = useState<{ from: number; x: number; y: number; start: { x: number; y: number } } | null>(null)
   const box = useRef<HTMLDivElement>(null)
   const [lines, setLines] = useState<{ x1: number; y1: number; x2: number; y2: number; l: number }[]>([])
   const anchor = useCallback((side: "l" | "r", i: number) => {
@@ -168,6 +164,8 @@ export function Matching({ q, value = {}, onChange, tone }: Props<MatchingQuesti
       }),
     )
   }, [value, anchor])
+  // Lines follow the rendered layout, so they can only be measured after render.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useLayoutEffect(measure, [measure])
   useEffect(() => {
     window.addEventListener("resize", measure)
@@ -220,10 +218,7 @@ export function Matching({ q, value = {}, onChange, tone }: Props<MatchingQuesti
             <motion.circle cx={ln.x2} cy={ln.y2} r={6} fill="white" strokeWidth={3} initial={reduced ? false : { scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3, type: "spring", stiffness: 500, damping: 15 }} />
           </g>
         ))}
-        {drag && (() => {
-          const a = anchor("l", drag.from)
-          return <line x1={a.x} y1={a.y} x2={drag.x} y2={drag.y} stroke="#a5b4fc" strokeWidth={4} strokeDasharray="8 6" strokeLinecap="round" />
-        })()}
+        {drag && <line x1={drag.start.x} y1={drag.start.y} x2={drag.x} y2={drag.y} stroke="#a5b4fc" strokeWidth={4} strokeDasharray="8 6" strokeLinecap="round" />}
       </svg>
       {q.pairs.map((p, i) => {
         const r = rightOrder[i]
@@ -237,7 +232,7 @@ export function Matching({ q, value = {}, onChange, tone }: Props<MatchingQuesti
             onClick={() => (leftLinked ? unlink(i) : setPicked(picked === i ? null : i))}
             onPointerDown={(e) => {
               if (e.pointerType === "mouse" && e.button !== 0) return
-              setDrag({ from: i, ...local(e) })
+              setDrag({ from: i, ...local(e), start: anchor("l", i) })
             }}
             className={cn(
               "min-h-18 rounded-2xl border-2 px-4 py-3 text-xl font-bold transition-all",
@@ -272,7 +267,7 @@ export function Matching({ q, value = {}, onChange, tone }: Props<MatchingQuesti
 
 /* ---------- Ordering ---------- */
 
-export function Ordering({ q, value = [], onChange, tone }: Props<OrderingQuestion, number[]>) {
+export function Ordering({ q, value = [], onChange, tone }: Props<Q<"sap-xep">, number[]>) {
   const reduced = useReducedMotion()
   const chipSpring = { type: "spring" as const, stiffness: 500, damping: 30 }
   const pool = q.shuffled.filter((i) => !value.includes(i))
@@ -351,7 +346,7 @@ export interface EssayValue {
   drawing?: string
 }
 
-export function Essay({ value = { text: "" }, onChange, tone }: Props<EssayQuestion, EssayValue>) {
+export function Essay({ value = { text: "" }, onChange, tone }: Props<Q<"tu-luan">, EssayValue>) {
   const [hand, setHand] = useState(Boolean(value.drawing) && !value.text)
   return (
     <div className="space-y-3">

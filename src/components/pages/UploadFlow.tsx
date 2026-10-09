@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowLeft, CheckCircle2, Save } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -8,14 +8,13 @@ import ReviewStep from '@/components/upload/ReviewStep'
 import UploadStep, { type UploadMeta } from '@/components/upload/UploadStep'
 import UploadStepper, { type UploadStepId } from '@/components/upload/UploadStepper'
 import { needsCheck, pagesFromFiles, type ReviewItem } from '@/components/upload/review-utils'
-import { TODAY } from '@/data/mock-data'
+import { findInvalidQuestion } from '@/components/exercise-detail/question-draft'
 import { mockScan } from '@/data/scan-mock'
 import { formatDayMonth } from '@/lib/format'
-import { uid } from '@/lib/questions'
 import { SUBJECTS } from '@/lib/subjects'
 import { cn } from '@/lib/utils'
 import { useLibrary } from '@/state/library-store'
-import type { Attachment, Difficulty } from '@/lib/types'
+import type { Attachment, Difficulty, ExerciseSet } from '@/lib/types'
 import type { LeaveGuard } from '@/components/layout/AppFrame'
 
 interface UploadFlowProps {
@@ -27,7 +26,8 @@ interface UploadFlowProps {
 const STEP_COPY: Record<UploadStepId, string> = {
   upload: 'Tải ảnh chụp hoặc PDF phiếu bài tập, AI sẽ tách thành từng câu hỏi.',
   processing: 'AI đang đọc tài liệu của bạn.',
-  review: 'Đối chiếu với bản gốc và sửa những câu AI chưa chắc chắn.',
+  // The scan is simulated until the AI service is connected (Phase 2).
+  review: 'Đối chiếu với bản gốc và sửa những câu AI chưa chắc chắn. Bản thử nghiệm: câu hỏi hiện là dữ liệu mẫu.',
 }
 
 export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: UploadFlowProps) {
@@ -39,6 +39,7 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
   const [title, setTitle] = useState('')
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null)
   const [confirmSave, setConfirmSave] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const pages = useMemo(() => pagesFromFiles(files), [files])
   const flaggedCount = items.filter(needsCheck).length
@@ -51,37 +52,47 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
 
   const handleScanDone = useCallback(() => {
     setItems(mockScan(meta.subject, pages.length).map((s) => ({ ...s, reviewed: false })))
-    setTitle(`Phiếu bài tập ${SUBJECTS[meta.subject].name} ${meta.grade} – ${formatDayMonth(TODAY)}`)
+    setTitle(`Phiếu bài tập ${SUBJECTS[meta.subject].name} ${meta.grade} – ${formatDayMonth(new Date())}`)
     setStep('review')
   }, [meta.subject, meta.grade, pages.length])
 
   const requestCancel = () => (hasProgress ? setPendingLeave(() => onClose) : onClose())
 
-  const save = () => {
+  const save = async () => {
+    if (saving) return
     const questions = items.map((i) => i.question)
+    const invalid = findInvalidQuestion(questions)
+    if (invalid) {
+      toast.error(`Câu ${invalid.index + 1} chưa thể lưu`, { description: invalid.hint })
+      document.getElementById(`review-${questions[invalid.index].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
     const avgDifficulty = Math.round(questions.reduce((s, q) => s + q.points, 0) / Math.max(1, questions.length) + 1.5)
-    const set = {
-      id: uid('bt'),
+    const set: ExerciseSet = {
+      id: crypto.randomUUID(),
       title: title.trim() || 'Phiếu bài tập đã quét',
       subject: meta.subject,
       grade: meta.grade,
       kind: meta.kind,
       topic: questions[0]?.skills[0] ?? '',
       description: `Quét bằng AI từ ${files.length} tệp (${pages.length} trang).`,
-      source: 'tai-len' as const,
-      status: 'nhap' as const,
+      source: 'tai-len',
+      status: 'nhap',
       questionCount: questions.length,
       estimatedMinutes: Math.max(10, questions.length * 3),
       difficulty: Math.min(5, Math.max(1, avgDifficulty)) as Difficulty,
       timesAssigned: 0,
-      createdAt: TODAY.toISOString(),
+      createdAt: new Date().toISOString(),
     }
-    library.addSet(set, questions, files)
+    setSaving(true)
+    // Picked files carry `file` and are uploaded; the built-in sample documents are demo-only and not stored.
+    const ok = await library.addSet(set, questions, files.filter((f) => f.file))
+    setSaving(false)
+    if (!ok) return
     toast.success('Đã lưu vào kho bài tập', {
       description: `“${set.title}” · ${questions.length} câu · lưu ở dạng Nháp`,
-      action: { label: 'Mở', onClick: () => onOpenSet(set.id) },
     })
-    onClose()
+    onOpenSet(set.id)
   }
 
   const handleSave = () => {
@@ -90,7 +101,7 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
       return
     }
     if (flaggedCount > 0) setConfirmSave(true)
-    else save()
+    else void save()
   }
 
   return (
@@ -123,11 +134,11 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
               {flaggedCount ? `Còn ${flaggedCount} câu cần kiểm tra` : 'Tất cả câu hỏi đã sẵn sàng'}
             </p>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1 md:flex-none" onClick={requestCancel}>
+              <Button variant="outline" className="flex-1 md:flex-none" disabled={saving} onClick={requestCancel}>
                 Hủy
               </Button>
-              <Button className="flex-[2] md:flex-none" onClick={handleSave}>
-                <Save />
+              <Button className="flex-[2] md:flex-none" disabled={saving} onClick={handleSave}>
+                {saving ? <Loader2 className="animate-spin" aria-hidden /> : <Save />}
                 Lưu vào kho bài tập
               </Button>
             </div>
@@ -176,7 +187,7 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
             <Button
               onClick={() => {
                 setConfirmSave(false)
-                save()
+                void save()
               }}
             >
               Vẫn lưu nháp

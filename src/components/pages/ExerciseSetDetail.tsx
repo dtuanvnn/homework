@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, CheckCircle2, Plus, Save, Send } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Loader2, Plus, Save, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,37 +9,58 @@ import QuestionEditorSheet from '@/components/exercise-detail/QuestionEditorShee
 import QuestionList from '@/components/exercise-detail/QuestionList'
 import SectionHeader from '@/components/shared/SectionHeader'
 import SubjectIcon from '@/components/shared/SubjectIcon'
-import { TODAY, student } from '@/data/mock-data'
-import { addDays } from '@/lib/dates'
 import { formatScoreValue, formatVietnameseDate } from '@/lib/format'
 import { totalPoints } from '@/lib/questions'
 import { cn } from '@/lib/utils'
 import { useLibrary } from '@/state/library-store'
 import type { Attachment, ExerciseSet, ExerciseSetStatus, Question } from '@/lib/types'
 
-/** Called by the shell before navigating away; `next` runs once leaving is confirmed. */
-import type { LeaveGuard } from "@/components/layout/AppFrame"
+import { useStudent, type LeaveGuard } from '@/components/layout/AppFrame'
 
 interface ExerciseSetDetailProps {
-  setId: string
+  initialSet: ExerciseSet
+  initialQuestions: Question[]
+  initialAttachments: Attachment[]
   onClose: () => void
+  /** Called by the shell before navigating away; `next` runs once leaving is confirmed. */
   registerLeaveGuard: (guard: LeaveGuard | null) => void
 }
 
-function snapshot(set: ExerciseSet | undefined, questions: Question[], attachments: Attachment[]) {
-  if (!set) return ''
+type SaveAction = 'nhap' | 'san-sang' | 'assign' | 'leave'
+
+/** A save that uploads new files, kept until the store returns the stored list. */
+interface InFlightSave {
+  set: ExerciseSet
+  questions: Question[]
+  attachments: Attachment[]
+  /** `filesKey` of the stored list when the save started. */
+  storedKey: string
+}
+
+const filesKey = (attachments: Attachment[]) => attachments.map((a) => a.id).join('|')
+
+function snapshot(set: ExerciseSet, questions: Question[], attachments: Attachment[]) {
   const { status: _status, timesAssigned: _t, questionCount: _q, ...meta } = set
   return JSON.stringify([meta, questions, attachments.map((a) => a.id)])
 }
 
-export default function ExerciseSetDetail({ setId, onClose, registerLeaveGuard }: ExerciseSetDetailProps) {
+export default function ExerciseSetDetail({
+  initialSet,
+  initialQuestions,
+  initialAttachments,
+  onClose,
+  registerLeaveGuard,
+}: ExerciseSetDetailProps) {
   const library = useLibrary()
-  const stored = library.getSet(setId)
+  const student = useStudent()
+  const setId = initialSet.id
 
-  const [draft, setDraft] = useState<ExerciseSet | undefined>(stored)
-  const [questions, setQuestions] = useState<Question[]>(() => library.getQuestions(setId))
-  const [attachments, setAttachments] = useState<Attachment[]>(() => library.getAttachments(setId))
-  const [baseline, setBaseline] = useState(() => snapshot(stored, questions, attachments))
+  const [draft, setDraft] = useState<ExerciseSet>(initialSet)
+  const [questions, setQuestions] = useState<Question[]>(initialQuestions)
+  const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments)
+  const [baseline, setBaseline] = useState(() => snapshot(initialSet, initialQuestions, initialAttachments))
+  const [saving, setSaving] = useState<SaveAction | null>(null)
+  const [inFlight, setInFlight] = useState<InFlightSave | null>(null)
   const [titleError, setTitleError] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<Question | null>(null)
@@ -47,33 +68,31 @@ export default function ExerciseSetDetail({ setId, onClose, registerLeaveGuard }
 
   const dirty = snapshot(draft, questions, attachments) !== baseline
   const points = totalPoints(questions)
-  const timesAssigned = stored?.timesAssigned ?? 0
+  const timesAssigned = library.getSet(setId)?.timesAssigned ?? initialSet.timesAssigned
+
+  // Newly picked files are uploaded on save. Once the store holds the saved
+  // list (stored rows with real URLs), swap it in for the local previews.
+  const storedAttachments = library.getAttachments(setId)
+  if (inFlight && filesKey(storedAttachments) !== inFlight.storedKey) {
+    setInFlight(null)
+    setAttachments([...storedAttachments, ...attachments.filter((a) => !inFlight.attachments.includes(a))])
+    setBaseline(snapshot(inFlight.set, inFlight.questions, storedAttachments))
+  }
 
   const skillSuggestions = useMemo(() => {
     const all = new Set<string>()
-    if (draft?.topic) all.add(draft.topic)
+    if (draft.topic) all.add(draft.topic)
     questions.forEach((q) => q.skills.forEach((s) => all.add(s)))
     return [...all]
-  }, [draft?.topic, questions])
+  }, [draft.topic, questions])
 
   useEffect(() => {
     registerLeaveGuard((next) => (dirty ? setPendingLeave(() => next) : next()))
     return () => registerLeaveGuard(null)
   }, [dirty, registerLeaveGuard])
 
-  if (!draft) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-20 text-center">
-        <p className="font-semibold text-slate-900">Không tìm thấy bộ bài tập này.</p>
-        <Button variant="outline" onClick={onClose}>
-          <ArrowLeft />
-          Về Kho bài tập
-        </Button>
-      </div>
-    )
-  }
-
-  const persist = (status: ExerciseSetStatus): boolean => {
+  const persist = async (status: ExerciseSetStatus, action: SaveAction): Promise<boolean> => {
+    if (saving) return false
     if (!draft.title.trim()) {
       setTitleError(true)
       document.getElementById('set-title')?.focus()
@@ -85,32 +104,51 @@ export default function ExerciseSetDetail({ setId, onClose, registerLeaveGuard }
       return false
     }
     const next = { ...draft, title: draft.title.trim(), status }
-    library.saveSet(next, questions, attachments)
-    setDraft(next)
-    setBaseline(snapshot(next, questions, attachments))
-    return true
+    const uploads = attachments.some((a) => a.file)
+    setSaving(action)
+    if (uploads) setInFlight({ set: next, questions, attachments, storedKey: filesKey(storedAttachments) })
+    try {
+      const ok = await library.saveSet(next, questions, attachments)
+      if (!ok) {
+        setInFlight(null)
+        return false
+      }
+      // With uploads, the baseline moves once the stored files arrive (see above).
+      if (!uploads) setBaseline(snapshot(next, questions, attachments))
+      setDraft((d) => ({ ...d, title: d.title.trim(), status }))
+      return true
+    } finally {
+      setSaving(null)
+    }
   }
 
-  const handleSaveDraft = () => {
-    if (persist('nhap')) toast.success('Đã lưu nháp')
+  const handleSaveDraft = async () => {
+    if (await persist('nhap', 'nhap')) toast.success('Đã lưu nháp')
   }
 
-  const handleSaveReady = () => {
-    if (persist('san-sang')) toast.success('Đã lưu · Bộ bài sẵn sàng để giao')
+  const handleSaveReady = async () => {
+    if (await persist('san-sang', 'san-sang')) toast.success('Đã lưu · Bộ bài sẵn sàng để giao')
   }
 
-  const handleAssign = () => {
-    if (!persist('san-sang')) return
-    library.markAssigned(draft.id)
+  const handleAssign = async () => {
+    if (saving) return
+    if ((dirty || draft.status !== 'san-sang') && !(await persist('san-sang', 'assign'))) return
+    setSaving('assign')
+    const assignment = await library.assignSet(draft.id)
+    setSaving(null)
+    if (!assignment) return
     toast.success(`Đã giao bài cho ${student.name}`, {
-      description: `“${draft.title.trim()}” · Hạn ${formatVietnameseDate(addDays(TODAY, 1))}`,
+      description: `“${draft.title.trim()}” · Hạn ${formatVietnameseDate(assignment.dueDate)}`,
     })
   }
 
   const patchDraft = (patch: Partial<ExerciseSet>) => {
     if (patch.title !== undefined && patch.title.trim()) setTitleError(false)
-    setDraft((d) => (d ? { ...d, ...patch } : d))
+    setDraft((d) => ({ ...d, ...patch }))
   }
+
+  const spinnerOr = (action: SaveAction, icon: React.ReactNode) =>
+    saving === action ? <Loader2 className="animate-spin" aria-hidden /> : icon
 
   const openAdd = () => {
     setEditing(null)
@@ -190,16 +228,16 @@ export default function ExerciseSetDetail({ setId, onClose, registerLeaveGuard }
             </div>
           </div>
           <div className="hidden shrink-0 items-center gap-2 md:flex">
-            <Button variant="outline" onClick={handleAssign}>
-              <Send />
+            <Button variant="outline" disabled={saving !== null} onClick={handleAssign}>
+              {spinnerOr('assign', <Send />)}
               Giao bài này
             </Button>
-            <Button variant="secondary" onClick={handleSaveDraft}>
-              <Save />
+            <Button variant="secondary" disabled={saving !== null} onClick={handleSaveDraft}>
+              {spinnerOr('nhap', <Save />)}
               Lưu nháp
             </Button>
-            <Button onClick={handleSaveReady}>
-              <CheckCircle2 />
+            <Button disabled={saving !== null} onClick={handleSaveReady}>
+              {spinnerOr('san-sang', <CheckCircle2 />)}
               Lưu & sẵn sàng
             </Button>
           </div>
@@ -257,19 +295,27 @@ export default function ExerciseSetDetail({ setId, onClose, registerLeaveGuard }
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 px-4 pt-1.5 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(15,23,42,0.06)] backdrop-blur md:hidden">
         <div className="flex items-center justify-between gap-2">
-          <span className={cn('text-xs font-medium', dirty ? 'text-amber-700' : 'text-slate-400')}>
-            {dirty ? 'Có thay đổi chưa lưu' : 'Đã lưu mọi thay đổi'}
+          <span className={cn('text-xs font-medium', dirty && !saving ? 'text-amber-700' : 'text-slate-400')}>
+            {saving ? 'Đang lưu…' : dirty ? 'Có thay đổi chưa lưu' : 'Đã lưu mọi thay đổi'}
           </span>
-          <Button variant="ghost" size="sm" className="-mr-2 h-11 text-indigo-700 hover:bg-indigo-50" onClick={handleAssign}>
-            <Send />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-mr-2 h-11 text-indigo-700 hover:bg-indigo-50"
+            disabled={saving !== null}
+            onClick={handleAssign}
+          >
+            {spinnerOr('assign', <Send />)}
             Giao bài này
           </Button>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={handleSaveDraft}>
+          <Button variant="outline" className="flex-1" disabled={saving !== null} onClick={handleSaveDraft}>
+            {spinnerOr('nhap', null)}
             Lưu nháp
           </Button>
-          <Button className="flex-[1.4]" onClick={handleSaveReady}>
+          <Button className="flex-[1.4]" disabled={saving !== null} onClick={handleSaveReady}>
+            {spinnerOr('san-sang', null)}
             Lưu & sẵn sàng
           </Button>
         </div>
@@ -293,6 +339,7 @@ export default function ExerciseSetDetail({ setId, onClose, registerLeaveGuard }
             <Button
               variant="ghost"
               className="text-red-600 hover:bg-red-50"
+              disabled={saving !== null}
               onClick={() => {
                 const next = pendingLeave
                 setPendingLeave(null)
@@ -302,9 +349,10 @@ export default function ExerciseSetDetail({ setId, onClose, registerLeaveGuard }
               Bỏ thay đổi
             </Button>
             <Button
-              onClick={() => {
+              disabled={saving !== null}
+              onClick={async () => {
                 const next = pendingLeave
-                if (!persist(draft.status)) {
+                if (!(await persist(draft.status, 'leave'))) {
                   setPendingLeave(null)
                   return
                 }
@@ -313,6 +361,7 @@ export default function ExerciseSetDetail({ setId, onClose, registerLeaveGuard }
                 next?.()
               }}
             >
+              {spinnerOr('leave', null)}
               {isDraft ? 'Lưu nháp & thoát' : 'Lưu & thoát'}
             </Button>
           </DialogFooter>

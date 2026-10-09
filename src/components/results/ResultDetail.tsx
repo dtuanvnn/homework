@@ -16,13 +16,13 @@ function DrawnCheck({ reduced }: { reduced: boolean | null }) {
 }
 import { ArrowRight, ArrowUp, Home, MessageCircle, RotateCcw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { StudentResult } from "@/data/student-results"
+import type { ResultView } from "@/lib/views/student"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 
 export const fmtScore = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 2 })
 
-function message(r: StudentResult) {
+function message(r: ResultView) {
   if (r.previousScore !== undefined && r.score > r.previousScore) return "Giỏi lắm! Con đã tiến bộ hơn lần trước 🎉"
   if (r.score >= 9) return "Xuất sắc! Con làm gần như đúng hết 🌟"
   if (r.score >= 8) return "Giỏi lắm! Con làm rất tốt 🎉"
@@ -32,12 +32,10 @@ function message(r: StudentResult) {
 
 export default function ResultDetail({
   result: r,
-  retryUsed,
   onRetry,
   onHome,
 }: {
-  result: StudentResult
-  retryUsed?: boolean
+  result: ResultView
   onRetry: () => void
   onHome: () => void
 }) {
@@ -62,7 +60,6 @@ export default function ResultDetail({
   const s = SUBJECTS[r.subject]
   const wrong = r.review.filter((q) => !q.correct)
   const list = filter === "all" ? r.review : wrong
-  const canRetry = r.attempt < r.maxAttempts && !retryUsed
 
   return (
     <div className="flex flex-col gap-6 pb-8 text-lg">
@@ -139,7 +136,7 @@ export default function ResultDetail({
       </section>
 
       {/* Parent comment */}
-      <div className="flex items-end gap-3">
+      {r.parentComment && <div className="flex items-end gap-3">
         <div className="flex shrink-0 flex-col items-center gap-1">
           <span className="flex size-14 items-center justify-center rounded-full bg-indigo-100 text-3xl" aria-hidden>👨‍👩‍👧</span>
           <span className="text-sm font-bold text-slate-600">Bố mẹ</span>
@@ -147,7 +144,7 @@ export default function ResultDetail({
         <p className="mb-6 rounded-3xl rounded-bl-md border-2 border-indigo-100 bg-white px-5 py-4 text-xl leading-relaxed font-medium text-slate-800 shadow-sm">
           {r.parentComment}
         </p>
-      </div>
+      </div>}
 
       {/* Review */}
       <section className="space-y-4">
@@ -222,7 +219,7 @@ export default function ResultDetail({
       {/* Bottom actions: sticky above the phone tab bar */}
       <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 rounded-3xl border bg-white/95 p-3 shadow-lg backdrop-blur md:bottom-4">
         <div className="flex flex-col gap-2 sm:flex-row">
-          {canRetry && (
+          {r.canRetry && (
             <Press className="flex-1"><Button className="h-14 w-full rounded-2xl text-lg font-extrabold [&_svg]:size-6" onClick={onRetry}>
               <RotateCcw />
               Làm lại lần 2

@@ -1,10 +1,8 @@
-"use client"
-
-import { useAppNavigation } from "@/components/layout/AppFrame"
-import { TAB_PATHS } from "@/components/layout/routes"
 import StudentResults from "@/components/pages/StudentResults"
+import { buildResults } from "@/lib/views/student"
+import { listAssignments } from "@/server/queries"
 
-export default function ResultsPage() {
-  const { navigate } = useAppNavigation()
-  return <StudentResults onHome={() => navigate(TAB_PATHS.today)} />
+export default async function ResultsPage() {
+  const results = buildResults(await listAssignments(), new Date())
+  return <StudentResults results={results} />
 }

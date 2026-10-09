@@ -6,6 +6,7 @@ import { z } from "zod"
 import { db, schema } from "@/db"
 import { editedQuestionSchema } from "@/lib/question-schema"
 import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
+import { runAction, type ActionResult } from "@/lib/action-result"
 import { assertAccess } from "../access"
 import { getExerciseSetDetail, getQuestions, getStudent, isUuid, toExerciseSet } from "../queries"
 import { createUploadTargets, isUploaded, removeFromStorage, type UploadTarget } from "../storage"
@@ -45,113 +46,124 @@ export type NewFile = z.infer<typeof newFileSchema>
 export type SavePayload = z.input<typeof savePayloadSchema>
 
 /** Questions of one set, fetched lazily by the library store. */
-export async function loadQuestions(setId: string): Promise<Question[]> {
-  await assertAccess()
-  return isUuid(setId) ? getQuestions(setId) : []
+export async function loadQuestions(setId: string): Promise<ActionResult<Question[]>> {
+  return runAction(async () => {
+    await assertAccess()
+    return isUuid(setId) ? getQuestions(setId) : []
+  })
 }
 
 /** Creates an empty draft set (the "Soạn thủ công" entry point). */
-export async function createExerciseSet(): Promise<ExerciseSet> {
-  await assertAccess()
-  const student = await getStudent()
-  const [row] = await db
-    .insert(exerciseSets)
-    .values({ title: "Bộ bài tập mới", subject: "toan", grade: student.grade, kind: "luyen-tap", source: "thu-cong", status: "nhap" })
-    .returning()
-  refresh()
-  return toExerciseSet(row, 0, 0)
+export async function createExerciseSet(): Promise<ActionResult<ExerciseSet>> {
+  return runAction(async () => {
+    await assertAccess()
+    const student = await getStudent()
+    const [row] = await db
+      .insert(exerciseSets)
+      .values({ title: "Bộ bài tập mới", subject: "toan", grade: student.grade, kind: "luyen-tap", source: "thu-cong", status: "nhap" })
+      .returning()
+    refresh()
+    return toExerciseSet(row, 0, 0)
+  })
 }
 
 /** One-time upload URLs for files of a (possibly not yet saved) set. */
-export async function requestSetUploads(setId: string, names: string[]): Promise<UploadTarget[]> {
-  await assertAccess()
-  if (!isUuid(setId)) throw new Error("Mã bộ bài không hợp lệ")
-  return createUploadTargets("sets", setId, names.slice(0, 30))
+export async function requestSetUploads(setId: string, names: string[]): Promise<ActionResult<UploadTarget[]>> {
+  return runAction(async () => {
+    await assertAccess()
+    if (!isUuid(setId)) throw new Error("Mã bộ bài không hợp lệ")
+    return createUploadTargets("sets", setId, names.slice(0, 30))
+  })
 }
 
 /**
  * Creates or replaces a set with its questions and files. Used by the editor,
  * the upload flow and AI generation (new sets carry a client-made UUID).
  */
-export async function saveExerciseSet(payload: SavePayload): Promise<{ set: ExerciseSet; attachments: Attachment[] }> {
-  await assertAccess()
-  const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
-  for (const f of newFiles) {
-    if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
-  }
-  const { id, ...meta } = set
-
-  const removedPaths = await db.transaction(async (tx) => {
-    await tx
-      .insert(exerciseSets)
-      .values({ id, ...meta })
-      .onConflictDoUpdate({ target: exerciseSets.id, set: { ...meta, updatedAt: new Date() } })
-
-    await tx.delete(questions).where(eq(questions.setId, id))
-    if (qs.length) {
-      await tx.insert(questions).values(
-        qs.map(({ id: qid, ...content }, position) => ({ ...(isUuid(qid) ? { id: qid } : {}), setId: id, position, content })),
-      )
+export async function saveExerciseSet(payload: SavePayload): Promise<ActionResult<{ set: ExerciseSet; attachments: Attachment[] }>> {
+  return runAction(async () => {
+    await assertAccess()
+    const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
+    for (const f of newFiles) {
+      if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
     }
+    const { id, ...meta } = set
 
-    const keep = keepAttachmentIds.filter(isUuid)
-    const removed = await tx
-      .delete(attachments)
-      .where(and(eq(attachments.setId, id), keep.length ? notInArray(attachments.id, keep) : undefined))
-      .returning({ path: attachments.storagePath })
-    if (newFiles.length) {
-      const start = keep.length
-      await tx.insert(attachments).values(
-        newFiles.map((f, i) => ({ setId: id, name: f.name, kind: f.kind, sizeKb: f.sizeKb, pages: f.pages, storagePath: f.path, position: start + i })),
-      )
-    }
-    return removed.flatMap((r) => (r.path ? [r.path] : []))
+    const removedPaths = await db.transaction(async (tx) => {
+      await tx
+        .insert(exerciseSets)
+        .values({ id, ...meta })
+        .onConflictDoUpdate({ target: exerciseSets.id, set: { ...meta, updatedAt: new Date() } })
+
+      await tx.delete(questions).where(eq(questions.setId, id))
+      if (qs.length) {
+        await tx.insert(questions).values(
+          qs.map(({ id: qid, ...content }, position) => ({ ...(isUuid(qid) ? { id: qid } : {}), setId: id, position, content })),
+        )
+      }
+
+      const keep = keepAttachmentIds.filter(isUuid)
+      const removed = await tx
+        .delete(attachments)
+        .where(and(eq(attachments.setId, id), keep.length ? notInArray(attachments.id, keep) : undefined))
+        .returning({ path: attachments.storagePath })
+      if (newFiles.length) {
+        const start = keep.length
+        await tx.insert(attachments).values(
+          newFiles.map((f, i) => ({ setId: id, name: f.name, kind: f.kind, sizeKb: f.sizeKb, pages: f.pages, storagePath: f.path, position: start + i })),
+        )
+      }
+      return removed.flatMap((r) => (r.path ? [r.path] : []))
+    })
+
+    await removeUnreferenced(removedPaths)
+    refresh()
+    const saved = await getExerciseSetDetail(id)
+    if (!saved) throw new Error("Không lưu được bộ bài")
+    return { set: saved.set, attachments: saved.attachments }
   })
-
-  await removeUnreferenced(removedPaths)
-  refresh()
-  const saved = await getExerciseSetDetail(id)
-  if (!saved) throw new Error("Không lưu được bộ bài")
-  return { set: saved.set, attachments: saved.attachments }
 }
 
-export async function duplicateExerciseSet(id: string): Promise<ExerciseSet> {
-  await assertAccess()
-  if (!isUuid(id)) throw new Error("Mã bộ bài không hợp lệ")
-  const original = await db.query.exerciseSets.findFirst({ where: eq(exerciseSets.id, id) })
-  if (!original) throw new Error("Không tìm thấy bộ bài")
-  const { id: _id, createdAt: _created, updatedAt: _updated, ...meta } = original
-  const sourceQuestions = await getQuestions(id)
+export async function duplicateExerciseSet(id: string): Promise<ActionResult<ExerciseSet>> {
+  return runAction(async () => {
+    await assertAccess()
+    if (!isUuid(id)) throw new Error("Mã bộ bài không hợp lệ")
+    const original = await db.query.exerciseSets.findFirst({ where: eq(exerciseSets.id, id) })
+    if (!original) throw new Error("Không tìm thấy bộ bài")
+    const { id: _id, createdAt: _created, updatedAt: _updated, ...meta } = original
+    const sourceQuestions = await getQuestions(id)
 
-  const copy = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .insert(exerciseSets)
-      .values({ ...meta, title: `${meta.title} (bản sao)`, status: "nhap" })
-      .returning()
-    if (sourceQuestions.length) {
-      await tx.insert(questions).values(sourceQuestions.map(({ id: _q, ...content }, position) => ({ setId: row.id, position, content })))
-    }
-    // Files are shared by reference: demo files keep their URL, Storage files keep their path.
-    const files = await tx.select().from(attachments).where(eq(attachments.setId, id))
-    if (files.length) {
-      await tx.insert(attachments).values(files.map(({ id: _f, createdAt: _c, ...f }) => ({ ...f, setId: row.id })))
-    }
-    return row
+    const copy = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(exerciseSets)
+        .values({ ...meta, title: `${meta.title} (bản sao)`, status: "nhap" })
+        .returning()
+      if (sourceQuestions.length) {
+        await tx.insert(questions).values(sourceQuestions.map(({ id: _q, ...content }, position) => ({ setId: row.id, position, content })))
+      }
+      // Files are shared by reference: demo files keep their URL, Storage files keep their path.
+      const files = await tx.select().from(attachments).where(eq(attachments.setId, id))
+      if (files.length) {
+        await tx.insert(attachments).values(files.map(({ id: _f, createdAt: _c, ...f }) => ({ ...f, setId: row.id })))
+      }
+      return row
+    })
+    refresh()
+    return toExerciseSet(copy, sourceQuestions.length, 0)
   })
-  refresh()
-  return toExerciseSet(copy, sourceQuestions.length, 0)
 }
 
-export async function deleteExerciseSet(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  await assertAccess()
-  if (!isUuid(id)) return { ok: false, error: "Mã bộ bài không hợp lệ" }
-  const used = await db.$count(assignments, eq(assignments.setId, id))
-  if (used > 0) return { ok: false, error: "Bộ bài đã được giao nên không thể xóa. Hãy chuyển về Nháp nếu không dùng nữa." }
-  const files = await db.select({ path: attachments.storagePath }).from(attachments).where(eq(attachments.setId, id))
-  await db.delete(exerciseSets).where(eq(exerciseSets.id, id))
-  await removeUnreferenced(files.flatMap((f) => (f.path ? [f.path] : [])))
-  refresh()
-  return { ok: true }
+export async function deleteExerciseSet(id: string): Promise<ActionResult<void>> {
+  return runAction(async () => {
+    await assertAccess()
+    if (!isUuid(id)) throw new Error("Mã bộ bài không hợp lệ")
+    const used = await db.$count(assignments, eq(assignments.setId, id))
+    if (used > 0) throw new Error("Bộ bài đã được giao nên không thể xóa. Hãy chuyển về Nháp nếu không dùng nữa.")
+    const files = await db.select({ path: attachments.storagePath }).from(attachments).where(eq(attachments.setId, id))
+    await db.delete(exerciseSets).where(eq(exerciseSets.id, id))
+    await removeUnreferenced(files.flatMap((f) => (f.path ? [f.path] : [])))
+    refresh()
+  })
 }
 
 /** Duplicated sets can share a Storage object, so only delete paths no row references any more. */
@@ -174,8 +186,7 @@ const newAssignmentSchema = z.object({
 })
 export type NewAssignment = z.input<typeof newAssignmentSchema>
 
-export async function createAssignments(items: NewAssignment[]): Promise<Assignment[]> {
-  await assertAccess()
+async function insertAssignments(items: NewAssignment[]): Promise<Assignment[]> {
   const parsed = z.array(newAssignmentSchema).min(1).max(14).parse(items)
   for (const item of parsed) {
     if (new Date(item.dueAt) <= new Date(item.availableFrom)) throw new Error("Hạn nộp phải sau thời điểm giao bài")
@@ -210,13 +221,23 @@ export async function createAssignments(items: NewAssignment[]): Promise<Assignm
   }))
 }
 
+export async function createAssignments(items: NewAssignment[]): Promise<ActionResult<Assignment[]>> {
+  return runAction(async () => {
+    await assertAccess()
+    return insertAssignments(items)
+  })
+}
+
 /** "Giao bài" shortcut on a library card: available now, due tomorrow 20:00. */
-export async function quickAssign(setId: string): Promise<Assignment> {
-  const due = new Date()
-  due.setDate(due.getDate() + 1)
-  due.setHours(20, 0, 0, 0)
-  const [created] = await createAssignments([
-    { setId, availableFrom: new Date().toISOString(), dueAt: due.toISOString(), mode: "web", maxAttempts: 2 },
-  ])
-  return created
+export async function quickAssign(setId: string): Promise<ActionResult<Assignment>> {
+  return runAction(async () => {
+    const due = new Date()
+    due.setDate(due.getDate() + 1)
+    due.setHours(20, 0, 0, 0)
+    await assertAccess()
+    const [created] = await insertAssignments([
+      { setId, availableFrom: new Date().toISOString(), dueAt: due.toISOString(), mode: "web", maxAttempts: 2 },
+    ])
+    return created
+  })
 }

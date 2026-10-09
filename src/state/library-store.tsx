@@ -13,6 +13,7 @@ import {
   saveExerciseSet,
   type NewAssignment,
 } from "@/server/actions/library"
+import { unwrap } from "@/lib/action-result"
 import { uploadFiles } from "@/lib/upload-client"
 import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
 
@@ -62,16 +63,26 @@ export function LibraryProvider({
   initialAssignments: Assignment[]
   children: React.ReactNode
 }) {
-  const [sets, setSets] = useState(initialSets)
+  const [allSets, setSets] = useState(initialSets)
   const [assignments, setAssignments] = useState(initialAssignments)
   // Re-sync when the server sends fresh data (after refresh()).
   const [prevProps, setPrevProps] = useState({ initialSets, initialAssignments })
-  const hidden = useRef(new Set<string>())
   if (prevProps.initialSets !== initialSets || prevProps.initialAssignments !== initialAssignments) {
     setPrevProps({ initialSets, initialAssignments })
-    setSets(initialSets.filter((s) => !hidden.current.has(s.id)))
+    setSets(initialSets)
     setAssignments(initialAssignments)
   }
+  /** Sets deleted locally but still inside their undo window. */
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set())
+  const sets = useMemo(() => allSets.filter((s) => !hiddenIds.has(s.id)), [allSets, hiddenIds])
+  const hide = useCallback((id: string, on: boolean) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
 
   const [questions, setQuestions] = useState<Record<string, Question[]>>({})
   const [attachments, setAttachments] = useState<Record<string, Attachment[]>>({})
@@ -86,6 +97,7 @@ export function LibraryProvider({
       if (!loading.current.has(id)) {
         loading.current.add(id)
         void loadQuestions(id)
+          .then(unwrap)
           .then((qs) => setQuestions((prev) => (prev[id] ? prev : { ...prev, [id]: qs })))
           .catch(() => loading.current.delete(id))
       }
@@ -106,9 +118,9 @@ export function LibraryProvider({
       const fresh = files.filter((f) => f.file)
       const newFiles = await uploadFiles(
         fresh.map((f) => f.file!),
-        (names) => requestSetUploads(set.id, names),
+        async (names) => unwrap(await requestSetUploads(set.id, names)),
       )
-      const saved = await saveExerciseSet({
+      const saved = unwrap(await saveExerciseSet({
         set: {
           id: set.id,
           title: set.title,
@@ -125,7 +137,7 @@ export function LibraryProvider({
         questions: qs,
         keepAttachmentIds: files.filter((f) => !f.file).map((f) => f.id),
         newFiles,
-      })
+      }))
       for (const f of fresh) if (f.url?.startsWith("blob:")) URL.revokeObjectURL(f.url)
       setSets((prev) => (prev.some((s) => s.id === set.id) ? prev.map((s) => (s.id === set.id ? saved.set : s)) : [saved.set, ...prev]))
       setQuestions((prev) => ({ ...prev, [set.id]: qs }))
@@ -139,7 +151,7 @@ export function LibraryProvider({
 
   const duplicateSet = useCallback(async (id: string) => {
     try {
-      const copy = await duplicateExerciseSet(id)
+      const copy = unwrap(await duplicateExerciseSet(id))
       setSets((prev) => {
         const i = prev.findIndex((s) => s.id === id)
         return [...prev.slice(0, i + 1), copy, ...prev.slice(i + 1)]
@@ -153,32 +165,23 @@ export function LibraryProvider({
 
   const deleteSet = useCallback(
     (id: string) => {
-      const index = sets.findIndex((s) => s.id === id)
-      const removed = sets[index]
-      hidden.current.add(id)
-      setSets((prev) => prev.filter((s) => s.id !== id))
-      const restoreLocal = () => {
-        hidden.current.delete(id)
-        if (!removed) return
-        setSets((prev) => (prev.some((s) => s.id === id) ? prev : [...prev.slice(0, index), removed, ...prev.slice(index)]))
-      }
+      hide(id, true)
       const timer = window.setTimeout(async () => {
-        const result = await deleteExerciseSet(id).catch((e) => ({ ok: false as const, error: errorMessage(e) }))
-        if (!result.ok) {
-          restoreLocal()
-          toast.error("Không xóa được bộ bài", { description: result.error })
-        } else hidden.current.delete(id)
+        const result = await deleteExerciseSet(id).catch((e): { ok: false; error: string } => ({ ok: false, error: errorMessage(e) }))
+        if (result.ok) setSets((prev) => prev.filter((s) => s.id !== id))
+        else toast.error("Không xóa được bộ bài", { description: result.error })
+        hide(id, false)
       }, UNDO_MS)
       return () => {
         window.clearTimeout(timer)
-        restoreLocal()
+        hide(id, false)
       }
     },
-    [sets],
+    [hide],
   )
 
   const addAssignments = useCallback(async (items: NewAssignment[]) => {
-    const created = await createAssignments(items)
+    const created = unwrap(await createAssignments(items))
     setAssignments((prev) => [...prev, ...created])
     setSets((prev) =>
       prev.map((s) => ({ ...s, timesAssigned: s.timesAssigned + created.filter((a) => a.exerciseSetId === s.id).length })),
@@ -188,7 +191,7 @@ export function LibraryProvider({
 
   const assignSet = useCallback(async (id: string) => {
     try {
-      const created = await quickAssign(id)
+      const created = unwrap(await quickAssign(id))
       setAssignments((prev) => [...prev, created])
       setSets((prev) => prev.map((s) => (s.id === id ? { ...s, timesAssigned: s.timesAssigned + 1 } : s)))
       return created
@@ -199,7 +202,7 @@ export function LibraryProvider({
   }, [])
 
   const createSet = useCallback(async () => {
-    const set = await createExerciseSet()
+    const set = unwrap(await createExerciseSet())
     setSets((prev) => [set, ...prev])
     setQuestions((prev) => ({ ...prev, [set.id]: [] }))
     setAttachments((prev) => ({ ...prev, [set.id]: [] }))

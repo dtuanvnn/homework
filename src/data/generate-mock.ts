@@ -10,6 +10,7 @@ export default function generateMock(
   difficulty: Difficulty,
   revision: number,
   references: Question[],
+  studentName: string,
 ): Question[] {
   return Array.from({ length: count }, (_, i): Question => {
     const type = types[i % types.length]
@@ -35,7 +36,7 @@ export default function generateMock(
       ? `Tính ${a} × ${b}.`
       : english
         ? `Viết nghĩa tiếng Việt của từ “${word}”.`
-        : `Tìm từ chỉ hoạt động trong câu: “Minh An ${word} cùng bạn.”`
+        : `Tìm từ chỉ hoạt động trong câu: “${studentName} ${word} cùng bạn.”`
     const result = math
       ? answer
       : english
@@ -98,7 +99,7 @@ export default function generateMock(
           ? [String(a), "×", String(b), "=", answer]
           : english
             ? ["This", "is", "my", word]
-            : ["Minh An", word, "cùng", "bạn"]
+            : [studentName, word, "cùng", "bạn"]
         return {
           ...base,
           type,

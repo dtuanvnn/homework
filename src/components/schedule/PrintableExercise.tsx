@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom"
 import { useEffect } from "react"
 import { CardTitle } from "@/components/ui/card"
+import { useStudent } from "@/components/layout/AppFrame"
 import { OPTION_LETTERS } from "@/lib/questions"
 import type { ExerciseSet, Question } from "@/lib/types"
 
@@ -16,6 +17,7 @@ export default function PrintableExercise({
   note?: string
   onDone: () => void
 }) {
+  const student = useStudent()
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       window.print()
@@ -26,7 +28,7 @@ export default function PrintableExercise({
   return createPortal(
     <div id="homework-print" className="hidden bg-white p-8 text-slate-900">
       <CardTitle className="text-2xl">{set.title}</CardTitle>
-      <p className="mt-3">Họ và tên: Minh An · Lớp {set.grade} · Ngày: ……………</p>
+      <p className="mt-3">Họ và tên: {student.name} · Lớp {set.grade} · Ngày: ……………</p>
       {note && <p className="mt-3">Ghi chú: {note}</p>}
       <ol className="mt-6 space-y-6">
         {questions.map((q, i) => (

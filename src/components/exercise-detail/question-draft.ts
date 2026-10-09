@@ -1,3 +1,4 @@
+import { editedQuestionSchema } from '@/lib/question-schema'
 import { BLANK, countBlanks, shuffleIndexes } from '@/lib/questions'
 import type { MatchingPair, Question, QuestionType } from '@/lib/types'
 
@@ -138,4 +139,14 @@ export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Qu
     case 'tu-luan':
       return { ...base, type: 'tu-luan', rubric: d.rubric.trim() }
   }
+}
+
+/**
+ * First question the server would reject (e.g. an unreviewed scan result),
+ * with a readable hint taken from the editor's own checks when available.
+ */
+export function findInvalidQuestion(questions: Question[]): { index: number; hint: string } | null {
+  const index = questions.findIndex((q) => !editedQuestionSchema.safeParse(q).success)
+  if (index < 0) return null
+  return { index, hint: validateDraft(toDraft(questions[index]))[0] ?? 'Kiểm tra lại nội dung và đáp án.' }
 }

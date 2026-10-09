@@ -1,19 +1,21 @@
-import { Check, Send } from 'lucide-react'
+import { Check, Loader2, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import SubjectIcon from '@/components/shared/SubjectIcon'
 import { SUBJECTS } from '@/lib/subjects'
 import { cn } from '@/lib/utils'
-import type { SkillInsight } from '@/lib/types'
+import type { WeakSkill } from '@/lib/analytics'
 
 interface InsightCardProps {
-  insight: SkillInsight
+  insight: WeakSkill
   assigned: boolean
-  onAssign: () => void
+  pending?: boolean
+  /** Missing when there is no set to practise with. */
+  onAssign?: () => void
 }
 
-export default function InsightCard({ insight, assigned, onAssign }: InsightCardProps) {
+export default function InsightCard({ insight, assigned, pending = false, onAssign }: InsightCardProps) {
   const subject = SUBJECTS[insight.subject]
   const weak = insight.accuracy < 60
 
@@ -42,18 +44,23 @@ export default function InsightCard({ insight, assigned, onAssign }: InsightCard
           aria-label={`${insight.accuracy}% đúng`}
         />
         <p className="mt-2 text-xs text-slate-500">
-          Sai {insight.wrongCount}/{insight.totalCount} câu trong {insight.recentAttempts} bài gần nhất
+          Sai {insight.wrongCount}/{insight.totalCount} câu trong {insight.attempts} bài gần nhất
         </p>
+        {insight.practiceTitle && (
+          <p className="mt-1 line-clamp-1 text-xs text-slate-500">
+            Gợi ý: <span className="font-medium text-slate-700">{insight.practiceTitle}</span>
+          </p>
+        )}
       </div>
 
       <Button
         variant={assigned ? 'secondary' : 'outline'}
         className={cn('mt-auto w-full', assigned && 'text-emerald-700')}
         onClick={onAssign}
-        disabled={assigned}
+        disabled={assigned || pending || !onAssign}
       >
-        {assigned ? <Check /> : <Send />}
-        {assigned ? 'Đã giao bài' : 'Giao bài luyện tập'}
+        {assigned ? <Check /> : pending ? <Loader2 className="animate-spin" /> : <Send />}
+        {assigned ? 'Đã giao bài' : onAssign ? 'Giao bài luyện tập' : 'Chưa có bài phù hợp'}
       </Button>
     </Card>
   )

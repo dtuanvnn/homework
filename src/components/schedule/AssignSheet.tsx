@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { CalendarDays, Check, FileText, Monitor, Search } from "lucide-react"
+import { CalendarDays, Check, FileText, Loader2, Monitor, Search } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,6 +23,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
 import { useLibrary } from "@/state/library-store"
+import { useStudent } from "@/components/layout/AppFrame"
 import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
 import { normalizeText } from "@/lib/library"
 import {
@@ -35,6 +36,7 @@ import {
 } from "@/lib/schedule"
 import { addDays, startOfWeek } from "@/lib/dates"
 import { cn } from "@/lib/utils"
+import type { NewAssignment } from "@/server/actions/library"
 
 export default function AssignSheet({
   date,
@@ -49,7 +51,9 @@ export default function AssignSheet({
   onCreated: (date: Date) => void
 }) {
   const library = useLibrary()
+  const student = useStudent()
   const [query, setQuery] = useState("")
+  const [saving, setSaving] = useState(false)
   const [subject, setSubject] = useState("all")
   const [error, setError] = useState("")
   const [draft, setDraft] = useState<ScheduleDraft>({
@@ -74,19 +78,28 @@ export default function AssignSheet({
       normalizeText(`${s.title} ${s.topic}`).includes(normalizeText(query)),
   )
   const selected = library.getSet(draft.exerciseSetId)
-  const save = () => {
+  const save = async () => {
+    setSaving(true)
     try {
-      if (!selected || !library.getQuestions(selected.id).length)
+      if (!selected || !selected.questionCount)
         throw new Error("Hãy chọn bộ bài có ít nhất một câu hỏi.")
-      const items = createAssignments(draft)
-      library.addAssignments(items)
-      toast.success(`Đã giao ${items.length} bài cho Minh An`, {
+      // Local wall-clock times → ISO instants; the server validates again.
+      const items: NewAssignment[] = createAssignments(draft).map((a) => ({
+        setId: a.exerciseSetId,
+        availableFrom: a.assignedDate,
+        dueAt: a.dueDate,
+        mode: draft.mode,
+        maxAttempts: draft.maxAttempts,
+        note: a.parentNote,
+      }))
+      const created = await library.addAssignments(items)
+      toast.success(`Đã giao ${created.length} bài cho ${student.name}`, {
         description:
           draft.mode === "paper"
             ? "Chọn “In đề” trên lịch để in phiếu bài tập."
             : "Bài tập đã được thêm vào lịch.",
       })
-      onCreated(new Date(items[0].assignedDate))
+      onCreated(new Date(created[0]?.assignedDate ?? items[0].availableFrom))
       onClose()
     } catch (e) {
       setError(
@@ -94,6 +107,7 @@ export default function AssignSheet({
           ? e.message
           : "Không thể giao bài. Vui lòng thử lại.",
       )
+      setSaving(false)
     }
   }
   return (
@@ -102,7 +116,7 @@ export default function AssignSheet({
         <SheetHeader>
           <SheetTitle>Giao bài mới</SheetTitle>
           <SheetDescription>
-            Chọn bài và sắp xếp nhịp học cho Minh An.
+            Chọn bài và sắp xếp nhịp học cho {student.name}.
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 pb-6 md:px-6">
@@ -147,7 +161,7 @@ export default function AssignSheet({
                     variant="outline"
                     role="radio"
                     aria-checked={s.id === draft.exerciseSetId}
-                    disabled={!library.getQuestions(s.id).length}
+                    disabled={!s.questionCount}
                     onClick={() => patch({ exerciseSetId: s.id })}
                     className={cn(
                       "h-auto min-h-16 w-full justify-start whitespace-normal p-3 text-left",
@@ -163,7 +177,7 @@ export default function AssignSheet({
                     <span className="min-w-0 flex-1">
                       <span className="block">{s.title}</span>
                       <span className="mt-1 block text-xs font-normal text-slate-500">
-                        Lớp {s.grade} · {library.getQuestions(s.id).length} câu
+                        Lớp {s.grade} · {s.questionCount} câu
                         {s.status === "nhap" ? " · Nháp" : ""}
                       </span>
                     </span>
@@ -341,8 +355,8 @@ export default function AssignSheet({
             <Button variant="outline" className="flex-1" onClick={onClose}>
               Hủy
             </Button>
-            <Button className="flex-[2]" onClick={save}>
-              <CalendarDays />
+            <Button className="flex-[2]" disabled={saving} onClick={save}>
+              {saving ? <Loader2 className="animate-spin" /> : <CalendarDays />}
               Giao bài
             </Button>
           </div>

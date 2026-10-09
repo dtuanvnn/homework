@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowLeft,
   Check,
   CheckSquare,
   CircleHelp,
+  Loader2,
   PenLine,
   RotateCcw,
   Save,
@@ -34,10 +35,11 @@ import {
 import DifficultyStars from "@/components/exercise-detail/DifficultyStars"
 import QuestionList from "@/components/exercise-detail/QuestionList"
 import QuestionEditorSheet from "@/components/exercise-detail/QuestionEditorSheet"
+import { findInvalidQuestion } from "@/components/exercise-detail/question-draft"
+import { useStudent } from "@/components/layout/AppFrame"
 import generateMock from "@/data/generate-mock"
-import { TODAY } from "@/data/mock-data"
 import { GRADES, EXERCISE_KINDS } from "@/lib/library"
-import { QUESTION_TYPE_LIST, uid } from "@/lib/questions"
+import { QUESTION_TYPE_LIST } from "@/lib/questions"
 import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 import { useLibrary } from "@/state/library-store"
@@ -64,6 +66,7 @@ export default function AIGenerate({
   registerLeaveGuard: (guard: LeaveGuard | null) => void
 }) {
   const library = useLibrary()
+  const student = useStudent()
   const [subject, setSubject] = useState<SubjectId>("toan")
   const [grade, setGrade] = useState(3)
   const [kind, setKind] = useState<"de-thi" | "luyen-tap">("luyen-tap")
@@ -84,6 +87,9 @@ export default function AIGenerate({
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null)
   const [dirty, setDirty] = useState(false)
   const [error, setError] = useState("")
+  /** Waiting for the questions of the chosen reference sets before generating. */
+  const [loadingRefs, setLoadingRefs] = useState(false)
+  const [saving, setSaving] = useState(false)
   const references = library.sets.filter(
     (s) => s.subject === subject && s.grade === grade && s.questionCount > 0,
   )
@@ -104,6 +110,13 @@ export default function AIGenerate({
     return () => registerLeaveGuard(null)
   }, [dirty, registerLeaveGuard])
 
+  // Reference questions are fetched lazily by the store; start as soon as a set is picked.
+  const { getQuestions, questionsLoaded } = library
+  useEffect(() => {
+    referenceIds.forEach((id) => getQuestions(id))
+  }, [referenceIds, getQuestions, loadingRefs])
+  const referencesReady = referenceIds.every(questionsLoaded)
+
   const toggle = <T,>(values: T[], value: T) =>
     values.includes(value)
       ? values.filter((v) => v !== value)
@@ -114,6 +127,11 @@ export default function AIGenerate({
       return
     }
     setError("")
+    if (!referencesReady) {
+      setLoadingRefs(true)
+      return
+    }
+    setLoadingRefs(false)
     const qs = generateMock(
       subject,
       types,
@@ -121,12 +139,13 @@ export default function AIGenerate({
       topics,
       difficulty,
       revision,
-      referenceIds.flatMap(library.getQuestions),
+      referenceIds.flatMap(getQuestions),
+      student.name,
     )
     setQuestions(qs)
     setRevision((v) => v + 1)
     setResult({
-      id: uid("bt"),
+      id: crypto.randomUUID(),
       title: `${EXERCISE_KINDS[kind]} ${SUBJECTS[subject].name} ${grade} – ${topics.join(", ")}`,
       subject,
       grade,
@@ -139,17 +158,55 @@ export default function AIGenerate({
       status: "nhap",
       timesAssigned: 0,
       estimatedMinutes: count * 2,
-      createdAt: TODAY.toISOString(),
+      createdAt: new Date().toISOString(),
     })
     setDirty(true)
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
-  const save = () => {
+  // Generate once the reference questions requested above have arrived.
+  const generateRef = useRef(generate)
+  useEffect(() => {
+    generateRef.current = generate
+  })
+  useEffect(() => {
+    if (!loadingRefs) return
+    if (referencesReady) {
+      generateRef.current()
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setLoadingRefs(false)
+      toast.error("Không tải được bài tham khảo", {
+        description: "Vui lòng thử lại hoặc bỏ chọn bài tham khảo.",
+      })
+    }, 15000)
+    return () => window.clearTimeout(timer)
+  }, [loadingRefs, referencesReady])
+  const save = async () => {
     if (!result || !questions.length || !result.title.trim()) {
       toast.error("Hãy nhập tên bộ bài và giữ ít nhất một câu hỏi.")
       return
     }
-    library.addSet({ ...result, title: result.title.trim() }, questions, [])
+    const invalid = findInvalidQuestion(questions)
+    if (invalid) {
+      toast.error(`Câu ${invalid.index + 1} chưa thể lưu`, {
+        description: invalid.hint,
+      })
+      return
+    }
+    setSaving(true)
+    const ok = await library.addSet(
+      {
+        ...result,
+        title: result.title.trim(),
+        questionCount: questions.length,
+        createdAt: new Date().toISOString(),
+      },
+      questions,
+      [],
+    )
+    setSaving(false)
+    if (!ok) return
     toast.success("Đã lưu vào kho (nháp)", {
       description: `${questions.length} câu · Bạn có thể tiếp tục sửa trong kho.`,
     })
@@ -175,7 +232,7 @@ export default function AIGenerate({
             Tạo bằng AI
           </CardTitle>
           <p className="mt-1 text-sm text-slate-500">
-            Một bộ bài vừa sức, dành riêng cho Minh An.
+            Một bộ bài vừa sức, dành riêng cho {student.name}.
           </p>
         </div>
       </div>
@@ -422,9 +479,13 @@ export default function AIGenerate({
               {error}
             </p>
           )}
-          <Button size="lg" onClick={generate}>
-            <Sparkles />
-            Tạo đề
+          <Button size="lg" onClick={generate} disabled={loadingRefs}>
+            {loadingRefs ? (
+              <Loader2 className="animate-spin" aria-hidden />
+            ) : (
+              <Sparkles />
+            )}
+            {loadingRefs ? "Đang lấy bài tham khảo…" : "Tạo đề"}
           </Button>
         </>
       ) : (
@@ -470,9 +531,9 @@ export default function AIGenerate({
               <Button
                 className="col-span-2 md:ml-auto"
                 onClick={save}
-                disabled={!questions.length || !result.title.trim()}
+                disabled={saving || !questions.length || !result.title.trim()}
               >
-                <Save />
+                {saving ? <Loader2 className="animate-spin" aria-hidden /> : <Save />}
                 Lưu vào kho (nháp)
               </Button>
             </div>

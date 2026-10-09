@@ -75,7 +75,7 @@ function wrongResponse(q: Question): Response {
 function simulate(questions: Question[], skill: number): Record<string, Response> {
   return Object.fromEntries(
     questions.map((q) => {
-      const p = q.skills.some((s) => WEAK_SKILLS.has(s)) ? skill - 0.2 : skill
+      const p = q.skills.some((s) => WEAK_SKILLS.has(s)) ? skill - 0.35 : skill
       return [q.id, random() < p ? correctResponse(q) : wrongResponse(q)]
     }),
   )

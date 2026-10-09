@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowLeft, ChevronRight, TextCursorInput } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -34,15 +34,19 @@ interface QuestionEditorSheetProps {
 }
 
 export default function QuestionEditorSheet({ open, onOpenChange, editing, onSubmit, skillSuggestions }: QuestionEditorSheetProps) {
-  const [draft, setDraft] = useState<QuestionDraft | null>(null)
+  const [draft, setDraft] = useState<QuestionDraft | null>(() => (open && editing ? toDraft(editing) : null))
   const [showErrors, setShowErrors] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    setDraft(editing ? toDraft(editing) : null)
-    setShowErrors(false)
-  }, [open, editing])
+  // Reset the form whenever the sheet opens or switches question.
+  const [shownFor, setShownFor] = useState({ open, editing })
+  if (shownFor.open !== open || shownFor.editing !== editing) {
+    setShownFor({ open, editing })
+    if (open) {
+      setDraft(editing ? toDraft(editing) : null)
+      setShowErrors(false)
+    }
+  }
 
   const patch = (p: Partial<QuestionDraft>) => setDraft((d) => (d ? { ...d, ...p } : d))
   const issues = draft ? validateDraft(draft) : []

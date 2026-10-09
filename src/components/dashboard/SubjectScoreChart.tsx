@@ -5,7 +5,7 @@ import SectionHeader from '@/components/shared/SectionHeader'
 import { addDays } from '@/lib/dates'
 import { formatDayMonth, formatScore, formatScoreValue } from '@/lib/format'
 import { SUBJECT_LIST } from '@/lib/subjects'
-import type { WeeklySubjectPoint } from '@/lib/stats'
+import type { WeeklySubjectPoint } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
 interface ChartRow {
@@ -43,12 +43,14 @@ function ChartTooltip({ active, payload }: TooltipContentProps<ValueType, NameTy
 export default function SubjectScoreChart({ points, className }: { points: WeeklySubjectPoint[]; className?: string }) {
   const data: ChartRow[] = points.map((p) => ({
     label: formatDayMonth(p.weekStart),
-    range: `${formatDayMonth(p.weekStart)} – ${formatDayMonth(addDays(p.weekStart, 6))}`,
+    range: `${formatDayMonth(p.weekStart)} – ${formatDayMonth(addDays(new Date(p.weekStart), 6))}`,
     toan: p.toan,
     'tieng-viet': p['tieng-viet'],
     'tieng-anh': p['tieng-anh'],
   }))
   const latest = data[data.length - 1]
+  // Keep the 5–10 zoom unless a weekly average falls below 5.
+  const floor = points.some((p) => SUBJECT_LIST.some((s) => (p[s.id] ?? 10) < 5)) ? 0 : 5
 
   return (
     <section className={cn('flex flex-col gap-3', className)}>
@@ -73,8 +75,8 @@ export default function SubjectScoreChart({ points, className }: { points: Weekl
               <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="4 4" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={8} />
               <YAxis
-                domain={[5, 10]}
-                ticks={[5, 6, 7, 8, 9, 10]}
+                domain={[floor, 10]}
+                ticks={floor === 0 ? [0, 2, 4, 6, 8, 10] : [5, 6, 7, 8, 9, 10]}
                 tickLine={false}
                 axisLine={false}
                 tick={{ fill: '#64748b', fontSize: 12 }}

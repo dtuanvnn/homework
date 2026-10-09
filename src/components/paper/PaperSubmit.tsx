@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Press from "@/components/fun/Press"
 import { celebrate, spring } from "@/lib/animations"
 import { play } from "@/hooks/useSound"
-import { Camera, ChevronLeft, ChevronRight, Crop, Home, ImagePlus, RefreshCw, Send, Sun, Trash2, X } from "lucide-react"
+import { Camera, ChevronLeft, ChevronRight, Crop, Home, ImagePlus, Loader2, RefreshCw, Send, Sun, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { SUBJECTS } from "@/lib/subjects"
@@ -13,6 +13,7 @@ import type { SubjectId } from "@/lib/types"
 interface Page {
   id: string
   url: string
+  file: File
 }
 
 const uid = () => Math.random().toString(36).slice(2, 9)
@@ -54,11 +55,15 @@ export default function PaperSubmit({
   title,
   subject,
   onClose,
+  onSubmit,
   onSubmitted,
 }: {
   title: string
   subject: SubjectId
   onClose: () => void
+  /** Uploads and hands in the pages in order; resolves false when it failed (the caller shows the error). */
+  onSubmit: (files: File[]) => Promise<boolean>
+  /** "Về trang chính" on the success screen. */
   onSubmitted: () => void
 }) {
   const tone = SUBJECTS[subject]
@@ -69,6 +74,7 @@ export default function PaperSubmit({
   const [retakeId, setRetakeId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState(false)
   const [done, setDone] = useState(false)
+  const [sending, setSending] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
@@ -76,10 +82,11 @@ export default function PaperSubmit({
 
   useEffect(() => {
     const prev = document.body.style.overflow
+    const created = urls.current
     document.body.style.overflow = "hidden"
     return () => {
       document.body.style.overflow = prev
-      urls.current.forEach(URL.revokeObjectURL)
+      created.forEach(URL.revokeObjectURL)
     }
   }, [])
 
@@ -92,10 +99,10 @@ export default function PaperSubmit({
     const fresh = Array.from(files).map((f) => {
       const url = URL.createObjectURL(f)
       urls.current.push(url)
-      return { id: uid(), url }
+      return { id: uid(), url, file: f }
     })
     if (retakeId) {
-      setPages((p) => p.map((pg) => (pg.id === retakeId ? { ...pg, url: fresh[0].url } : pg)))
+      setPages((p) => p.map((pg) => (pg.id === retakeId ? { ...pg, url: fresh[0].url, file: fresh[0].file } : pg)))
       setRetakeId(null)
     } else {
       setPages((p) => {
@@ -130,6 +137,16 @@ export default function PaperSubmit({
 
   const current = pages[active]
 
+  const send = async () => {
+    setSending(true)
+    const ok = await onSubmit(pages.map((p) => p.file)).catch(() => false)
+    setSending(false)
+    setConfirm(false)
+    if (!ok) return
+    play("submit")
+    setDone(true)
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-50 text-lg" role="dialog" aria-modal aria-label={`Nộp bài giấy: ${title}`}>
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files, true); e.target.value = "" }} />
@@ -151,7 +168,7 @@ export default function PaperSubmit({
       <header className="border-b bg-white px-3 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3 md:px-6">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
           {!done && (
-            <Button variant="ghost" size="icon" className="size-12 shrink-0 rounded-full [&_svg]:size-6" aria-label="Đóng" onClick={onClose}>
+            <Button variant="ghost" size="icon" className="size-12 shrink-0 rounded-full [&_svg]:size-6" aria-label="Đóng" disabled={sending} onClick={onClose}>
               <X />
             </Button>
           )}
@@ -290,16 +307,17 @@ export default function PaperSubmit({
         </>
       )}
 
-      <Dialog open={confirm} onOpenChange={setConfirm}>
+      <Dialog open={confirm} onOpenChange={(open) => { if (!sending) setConfirm(open) }}>
         <DialogContent className="z-[60] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-2xl">Nộp {pages.length} trang này nhé?</DialogTitle>
             <DialogDescription className="text-base">Em kiểm tra xem đã chụp đủ và rõ tất cả các trang chưa.</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" className="h-12 text-base" onClick={() => setConfirm(false)}>Kiểm tra lại</Button>
-            <Button className="h-12 bg-emerald-600 text-base hover:bg-emerald-700" onClick={() => { setConfirm(false); play("submit"); setDone(true) }}>
-              <Send />Nộp bài
+            <Button variant="outline" className="h-12 text-base" disabled={sending} onClick={() => setConfirm(false)}>Kiểm tra lại</Button>
+            <Button className="h-12 bg-emerald-600 text-base hover:bg-emerald-700" disabled={sending} onClick={() => void send()}>
+              {sending ? <Loader2 className="animate-spin" /> : <Send />}
+              {sending ? "Đang gửi…" : "Nộp bài"}
             </Button>
           </DialogFooter>
         </DialogContent>

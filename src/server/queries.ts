@@ -199,7 +199,7 @@ export async function getNavCounts(now = new Date()) {
     )
     select
       count(*) filter (where l.submitted_at is not null and l.graded_at is null)::int as awaiting,
-      count(*) filter (where l.submitted_at is null and a.available_from <= ${now})::int as open
+      count(*) filter (where l.submitted_at is null and a.available_from <= ${now.toISOString()})::int as open
     from ${assignments} a left join latest l on l.assignment_id = a.id
   `)
   return { awaitingGrading: row?.awaiting ?? 0, openAssignments: row?.open ?? 0 }

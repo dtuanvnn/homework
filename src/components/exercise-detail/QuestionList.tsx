@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import {
   DndContext,
   KeyboardSensor,
@@ -21,6 +22,8 @@ interface QuestionListProps {
 }
 
 export default function QuestionList({ questions, onReorder, onEdit, onDelete }: QuestionListProps) {
+  // Stable id so dnd-kit's aria-describedby matches between server and client render.
+  const dndId = useId()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -43,6 +46,7 @@ export default function QuestionList({ questions, onReorder, onEdit, onDelete }:
 
   return (
     <DndContext
+      id={dndId}
       sensors={sensors}
       collisionDetection={closestCenter}
       modifiers={[restrictToVerticalAxis, restrictToParentElement]}

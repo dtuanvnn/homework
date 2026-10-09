@@ -8,9 +8,8 @@ import ExerciseCard, {
 } from "@/components/library/ExerciseCard"
 import LibraryEmptyState from "@/components/library/LibraryEmptyState"
 import LibraryFilterBar from "@/components/library/LibraryFilterBar"
-import { TODAY, student } from "@/data/mock-data"
+import { useStudent } from "@/components/layout/AppFrame"
 import { useLibrary } from "@/state/library-store"
-import { addDays } from "@/lib/dates"
 import { formatVietnameseDate } from "@/lib/format"
 import {
   EMPTY_FILTERS,
@@ -32,7 +31,9 @@ export default function ExerciseLibrary({
   onGenerate,
 }: ExerciseLibraryProps) {
   const library = useLibrary()
+  const student = useStudent()
   const sets = library.sets
+  const [creating, setCreating] = useState(false)
   const [query, setQuery] = useState("")
   const [filters, setFilters] = useState<LibraryFilters>(EMPTY_FILTERS)
 
@@ -48,9 +49,17 @@ export default function ExerciseLibrary({
     setQuery("")
   }
 
-  const handleAdd = (source: ExerciseSource) => {
+  const handleAdd = async (source: ExerciseSource) => {
     if (source === "thu-cong") {
-      onOpenSet(library.createSet().id)
+      if (creating) return
+      setCreating(true)
+      try {
+        onOpenSet((await library.createSet()).id)
+      } catch {
+        toast.error("Không tạo được bộ bài", { description: "Vui lòng thử lại." })
+      } finally {
+        setCreating(false)
+      }
       return
     }
     if (source === "tai-len") {
@@ -63,14 +72,15 @@ export default function ExerciseLibrary({
   const actions: ExerciseCardActions = {
     onOpen: (set) => onOpenSet(set.id),
     onEdit: (set) => onOpenSet(set.id),
-    onAssign: (set) => {
-      library.markAssigned(set.id)
+    onAssign: async (set) => {
+      const assignment = await library.assignSet(set.id)
+      if (!assignment) return
       toast.success(`Đã giao bài cho ${student.name}`, {
-        description: `“${set.title}” · Hạn ${formatVietnameseDate(addDays(TODAY, 1))}`,
+        description: `“${set.title}” · Hạn ${formatVietnameseDate(assignment.dueDate)}`,
       })
     },
-    onDuplicate: (set) => {
-      library.duplicateSet(set.id)
+    onDuplicate: async (set) => {
+      if (!(await library.duplicateSet(set.id))) return
       toast.success("Đã nhân bản bài tập", {
         description: "Bản sao được lưu ở dạng Nháp.",
       })

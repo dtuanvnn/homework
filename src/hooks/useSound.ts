@@ -180,7 +180,7 @@ const snapshot = () => settings
 export function useSound() {
   const s = useSyncExternalStore(subscribe, snapshot, snapshot)
   return {
-    play: useCallback(play, []),
+    play,
     enabled: s.enabled,
     volume: s.volume,
     setEnabled: useCallback((enabled: boolean) => { update({ enabled }); if (enabled) { audio(); play("tap") } }, []),

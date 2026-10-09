@@ -1,57 +1,26 @@
+"use client"
+
 import { useState } from "react"
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react"
 import Press from "@/components/fun/Press"
 import { latePulse, listItem, pressable, spring } from "@/lib/animations"
 import { play } from "@/hooks/useSound"
 import { Camera, Hourglass, Play, RotateCcw, Trophy } from "lucide-react"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import TakeAssignment from "@/components/take/TakeAssignment"
-import PaperSubmit from "@/components/paper/PaperSubmit"
-import ResultDetail, { fmtScore } from "@/components/results/ResultDetail"
+import { useAppNavigation } from "@/components/layout/AppFrame"
+import { studentPaths } from "@/components/layout/routes"
+import { fmtScore } from "@/components/results/ResultDetail"
 import { scoreBadge } from "@/components/pages/StudentResults"
-import { TODAY } from "@/data/mock-data"
-import { myAssignments, type MyAssignment } from "@/data/student-assignments"
-import { resultForTitle } from "@/data/student-results"
-import { takeQuestions } from "@/data/student-today"
-import { addDays, startOfDay, startOfWeek } from "@/lib/dates"
-import { DAY_LABELS, timeLabel } from "@/lib/schedule"
+import { starsFor } from "@/lib/grading"
 import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 import type { SubjectId } from "@/lib/types"
+import type { AssignmentGroup, AssignmentsView, MyAssignment } from "@/lib/views/student"
 
 type TabId = "todo" | "waiting" | "retry" | "done"
 
-const canRetry = (a: MyAssignment) => a.status === "graded" && a.attempt < a.maxAttempts
 const TAB_OF = (a: MyAssignment): TabId =>
-  a.status === "submitted" ? "waiting" : a.status === "graded" ? (canRetry(a) ? "retry" : "done") : "todo"
-
-const DAY = 864e5
-const dayDiff = (iso: string) => Math.round((startOfDay(new Date(iso)).getTime() - startOfDay(TODAY).getTime()) / DAY)
-const isOverdue = (a: MyAssignment) => a.status !== "submitted" && a.status !== "graded" && new Date(a.due) < TODAY && dayDiff(a.due) < 0
-const stars = (s: number) => (s >= 9 ? 3 : s >= 7 ? 2 : 1)
-
-function groupOf(a: MyAssignment): { key: string; label: string; order: number; late?: boolean } {
-  if (isOverdue(a)) return { key: "late", label: "Trễ hạn", order: -1e6, late: true }
-  const d = dayDiff(a.due)
-  if (d === 0) return { key: "d0", label: "Hôm nay", order: 0 }
-  if (d === 1) return { key: "d1", label: "Ngày mai", order: 1 }
-  if (d === -1) return { key: "d-1", label: "Hôm qua", order: -1 }
-  const date = new Date(a.due)
-  const nextWeek = startOfWeek(addDays(TODAY, 7))
-  if (date >= nextWeek && date < addDays(nextWeek, 7)) return { key: "nw", label: "Tuần sau", order: 7 }
-  const label = `${DAY_LABELS[(date.getDay() + 6) % 7]}, ${date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}`
-  return { key: `d${d}`, label, order: d }
-}
-
-function dueLabel(a: MyAssignment) {
-  const d = dayDiff(a.due)
-  if (isOverdue(a)) return { text: `Trễ ${-d} ngày`, late: true }
-  const t = timeLabel(a.due)
-  if (d === 0) return { text: `Hạn: ${t} hôm nay` }
-  if (d === 1) return { text: `Hạn: ${t} ngày mai` }
-  return { text: `Hạn: ${t}, ${new Date(a.due).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}` }
-}
+  a.status === "submitted" ? "waiting" : a.status === "graded" ? (a.canRetry ? "retry" : "done") : "todo"
 
 /** Card entrance + one gentle red pulse for overdue cards. */
 const lateVariants = {
@@ -66,21 +35,14 @@ const EMPTY: Record<TabId, { emoji: string; title: string; text: string }> = {
   done: { emoji: "📚", title: "Chưa có bài nào xong", text: "Làm xong bài đầu tiên để thấy ở đây nhé." },
 }
 
-export default function StudentAssignments() {
+export default function StudentAssignments({ items, week }: AssignmentsView) {
   const reduced = useReducedMotion()
-  const [items, setItems] = useState(myAssignments)
+  const { navigate } = useAppNavigation()
   const [tab, setTab] = useState<TabId>("todo")
   const [subject, setSubject] = useState<SubjectId | "all">("all")
-  const [taking, setTaking] = useState<MyAssignment | null>(null)
-  const [paper, setPaper] = useState<MyAssignment | null>(null)
-  const [viewing, setViewing] = useState<MyAssignment | null>(null)
-  const [saved, setSaved] = useState<Record<string, Record<string, unknown>>>({})
-  const update = (id: string, patch: Partial<MyAssignment>) => setItems((p) => p.map((a) => (a.id === id ? { ...a, ...patch } : a)))
 
   // Weekly summary
-  const ws = startOfWeek(TODAY)
-  const thisWeek = items.filter((a) => new Date(a.due) >= ws && new Date(a.due) < addDays(ws, 7))
-  const weekDone = thisWeek.filter((a) => a.status === "submitted" || a.status === "graded").length
+  const { done: weekDone, total: weekTotal } = week
 
   const counts = { todo: 0, waiting: 0, retry: 0, done: 0 } as Record<TabId, number>
   items.forEach((a) => counts[TAB_OF(a)]++)
@@ -94,68 +56,20 @@ export default function StudentAssignments() {
   const visible = items
     .filter((a) => TAB_OF(a) === tab && (subject === "all" || a.subject === subject))
     .sort((a, b) => (tab === "todo" ? a.due.localeCompare(b.due) : b.due.localeCompare(a.due)))
-  const groups: { key: string; label: string; late?: boolean; items: MyAssignment[] }[] = []
+  const groups: (AssignmentGroup & { items: MyAssignment[] })[] = []
   for (const a of visible) {
-    const g = groupOf(a)
+    const g = a.group
     const last = groups.find((x) => x.key === g.key)
     if (last) last.items.push(a)
     else groups.push({ ...g, items: [a] })
   }
 
-  const startRetry = (a: MyAssignment) => {
-    setViewing(null)
-    setSaved((p) => ({ ...p, [a.id]: {} }))
-    const next = { ...a, status: "in-progress" as const, progress: 0, attempt: 2 as const, previousScore: a.score, score: undefined }
-    update(a.id, next)
-    setTaking(next)
-  }
+  const startRetry = (a: MyAssignment) => navigate(a.mode === "paper" ? studentPaths.paper(a.id) : studentPaths.take(a.id))
+  const viewResult = (a: MyAssignment) => { if (a.resultId) navigate(studentPaths.result(a.resultId)) }
   const open = (a: MyAssignment) => {
     if (a.status === "submitted") return
-    if (a.status === "graded") return setViewing(a)
-    if (a.mode === "paper") return setPaper(a)
-    update(a.id, { status: "in-progress", progress: a.progress ?? 0 })
-    setTaking(a)
-  }
-
-  if (taking)
-    return (
-      <TakeAssignment
-        title={taking.title}
-        subject={taking.subject}
-        questions={takeQuestions}
-        initialAnswers={saved[taking.id]}
-        onExit={(answers, progress) => {
-          setSaved((p) => ({ ...p, [taking.id]: answers }))
-          update(taking.id, { status: "in-progress", progress })
-          setTaking(null)
-          toast("Đã lưu bài làm. Em làm tiếp sau nhé!")
-        }}
-        onSubmit={() => {
-          update(taking.id, { status: "submitted" })
-          setTaking(null)
-          toast.success("Em đã nộp bài, giỏi quá! 🎉")
-        }}
-      />
-    )
-  if (paper)
-    return (
-      <PaperSubmit
-        title={paper.title}
-        subject={paper.subject}
-        onClose={() => setPaper(null)}
-        onSubmitted={() => { update(paper.id, { status: "submitted" }); setPaper(null) }}
-      />
-    )
-  if (viewing) {
-    const base = resultForTitle(viewing.title)
-    const score = viewing.score ?? base.score
-    return (
-      <ResultDetail
-        result={{ ...base, title: viewing.title, subject: viewing.subject, score, attempt: viewing.attempt, maxAttempts: viewing.maxAttempts, previousScore: viewing.previousScore, stars: stars(score) }}
-        onRetry={() => startRetry(viewing)}
-        onHome={() => setViewing(null)}
-      />
-    )
+    if (a.status === "graded") return viewResult(a)
+    navigate(a.mode === "paper" ? studentPaths.paper(a.id) : studentPaths.take(a.id))
   }
 
   const action = (a: MyAssignment) => <Press>{actionButton(a)}</Press>
@@ -165,15 +79,15 @@ export default function StudentAssignments() {
     if (a.status === "submitted")
       return <Button disabled className={cn(big, "bg-violet-100 text-violet-700 disabled:opacity-100")}><Hourglass />Đang chờ bố mẹ chấm</Button>
     if (a.status === "graded")
-      return canRetry(a) ? (
+      return a.canRetry ? (
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button className={big} onClick={(e) => go(e, () => startRetry(a))}><RotateCcw />Làm lại lần 2</Button>
-          <Button variant="outline" className={cn(big, "border-2 bg-white")} onClick={(e) => go(e, () => setViewing(a))}><Trophy />Xem kết quả</Button>
+          <Button variant="outline" className={cn(big, "border-2 bg-white")} onClick={(e) => go(e, () => viewResult(a))}><Trophy />Xem kết quả</Button>
         </div>
       ) : (
-        <Button className={cn(big, "bg-emerald-600 hover:bg-emerald-700")} onClick={(e) => go(e, () => setViewing(a))}><Trophy />Xem kết quả</Button>
+        <Button className={cn(big, "bg-emerald-600 hover:bg-emerald-700")} onClick={(e) => go(e, () => viewResult(a))}><Trophy />Xem kết quả</Button>
       )
-    if (a.mode === "paper") return <Button className={big} onClick={(e) => go(e, () => setPaper(a))}><Camera />Nộp bài giấy</Button>
+    if (a.mode === "paper") return <Button className={big} onClick={(e) => go(e, () => open(a))}><Camera />Nộp bài giấy</Button>
     if (a.status === "in-progress")
       return <Button className={cn(big, "bg-amber-500 hover:bg-amber-600")} onClick={(e) => go(e, () => open(a))}><Play className="fill-current" />Làm tiếp</Button>
     return <Button className={big} onClick={(e) => go(e, () => open(a))}><Play className="fill-current" />Bắt đầu</Button>
@@ -185,10 +99,10 @@ export default function StudentAssignments() {
         <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Bài của em</h1>
         <div className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
           <p className="text-lg font-bold text-slate-700">
-            Tuần này: <span className="text-indigo-600">{weekDone}/{thisWeek.length}</span> bài đã xong {weekDone === thisWeek.length && "🎉"}
+            Tuần này: <span className="text-indigo-600">{weekDone}/{weekTotal}</span> bài đã xong {weekTotal > 0 && weekDone === weekTotal && "🎉"}
           </p>
-          <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={weekDone} aria-valuemax={thisWeek.length}>
-            <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all" style={{ width: `${thisWeek.length ? (weekDone / thisWeek.length) * 100 : 0}%` }} />
+          <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={weekDone} aria-valuemax={weekTotal}>
+            <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all" style={{ width: `${weekTotal ? (weekDone / weekTotal) * 100 : 0}%` }} />
           </div>
         </div>
       </div>
@@ -246,7 +160,7 @@ export default function StudentAssignments() {
               <AnimatePresence mode="popLayout">
               {g.items.map((a) => {
                 const s = SUBJECTS[a.subject]
-                const due = dueLabel(a)
+                const due = { text: a.dueText, late: a.late }
                 return (
                   <motion.article
                     key={a.id}
@@ -279,7 +193,7 @@ export default function StudentAssignments() {
                           <span className={cn("rounded-2xl px-3 py-1.5 text-xl font-black tabular-nums", scoreBadge(a.score))}>
                             {fmtScore(a.score)}<span className="text-sm font-bold opacity-70">/10</span>
                           </span>
-                          <span className="text-sm" aria-label={`${stars(a.score)} sao`}>{"⭐".repeat(stars(a.score))}</span>
+                          <span className="text-sm" aria-label={`${starsFor(a.score)} sao`}>{"⭐".repeat(starsFor(a.score))}</span>
                         </div>
                       )}
                     </div>

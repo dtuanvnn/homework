@@ -4,15 +4,14 @@ import { Card } from '@/components/ui/card'
 import SectionHeader from '@/components/shared/SectionHeader'
 import StatusBadge from '@/components/shared/StatusBadge'
 import SubjectIcon from '@/components/shared/SubjectIcon'
-import { getExerciseSet } from '@/data/mock-data'
 import { formatTime } from '@/lib/format'
 import { SUBJECTS } from '@/lib/subjects'
 import { cn } from '@/lib/utils'
-import type { Assignment } from '@/lib/types'
+import type { TodayItem } from '@/server/analytics'
 
 interface TodayAssignmentListProps {
   studentName: string
-  items: Assignment[]
+  items: TodayItem[]
   onOpenSchedule: () => void
   className?: string
 }
@@ -38,13 +37,12 @@ export default function TodayAssignmentList({ studentName, items, onOpenSchedule
         ) : (
           <ul className="divide-y divide-slate-100">
             {items.map((a) => {
-              const set = getExerciseSet(a.exerciseSetId)
-              const subject = SUBJECTS[set.subject]
+              const subject = SUBJECTS[a.subject]
               return (
                 <li key={a.id} className="flex min-h-16 items-center gap-3 px-3 py-3">
-                  <SubjectIcon subject={set.subject} />
+                  <SubjectIcon subject={a.subject} />
                   <div className="min-w-0 flex-1">
-                    <div className="line-clamp-2 leading-snug font-semibold text-slate-900">{set.title}</div>
+                    <div className="line-clamp-2 leading-snug font-semibold text-slate-900">{a.title}</div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
                       <span className="inline-flex items-center gap-1.5">
                         <span className={cn('size-2 rounded-full', subject.bg)} aria-hidden />

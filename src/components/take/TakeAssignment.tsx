@@ -3,13 +3,15 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Press from "@/components/fun/Press"
 import { pop, questionSlide, softSpring } from "@/lib/animations"
 import { play } from "@/hooks/useSound"
-import { Check, ChevronLeft, ChevronRight, CloudCheck, Grid3x3, Loader2, Send, Timer, X } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, CloudAlert, CloudCheck, Grid3x3, Loader2, Send, Timer, X } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
-import type { Question, QuestionType, SubjectId } from "@/lib/types"
+import type { QuestionType, SubjectId } from "@/lib/types"
+import type { TakeQuestion } from "@/lib/views/student"
 import { Essay, FillBlank, Matching, MultipleChoice, Ordering, ShortAnswer, TrueFalse, type EssayValue } from "./questions"
 
 const TYPE_LABEL: Record<QuestionType, string> = {
@@ -22,12 +24,15 @@ const TYPE_LABEL: Record<QuestionType, string> = {
   "tu-luan": "Tự luận",
 }
 
-type Answers = Record<string, unknown>
+export type Answers = Record<string, unknown>
 
-function isAnswered(q: Question, a: unknown): boolean {
+/** Debounce before an autosave after the last change. */
+const SAVE_DELAY = 800
+
+function isAnswered(q: TakeQuestion, a: unknown): boolean {
   if (a === undefined || a === null) return false
   switch (q.type) {
-    case "dien-cho-trong": return (a as string[]).filter((s) => s?.trim()).length === q.answers.length
+    case "dien-cho-trong": return (a as string[]).filter((s) => s?.trim()).length === q.blanks
     case "tra-loi-ngan": return Boolean((a as string).trim())
     case "noi": return Object.keys(a as object).length === q.pairs.length
     case "sap-xep": return (a as number[]).length === q.tokens.length
@@ -43,15 +48,23 @@ export default function TakeAssignment({
   subject,
   questions,
   initialAnswers = {},
+  onSave,
   onExit,
   onSubmit,
+  onSubmitted,
 }: {
   title: string
   subject: SubjectId
-  questions: Question[]
+  questions: TakeQuestion[]
   initialAnswers?: Answers
-  onExit: (answers: Answers, progress: number) => void
-  onSubmit: () => void
+  /** Persists the answers; resolves false when saving failed. */
+  onSave: (answers: Answers) => Promise<boolean>
+  /** Called after the answers were saved on "Lưu và thoát". */
+  onExit: () => void
+  /** Hands the work in; resolves null when it failed (the caller shows the error). */
+  onSubmit: (answers: Answers, elapsedSeconds: number) => Promise<{ graded: boolean } | null>
+  /** Called once the "sent" animation finished. */
+  onSubmitted: () => void
 }) {
   const tone = SUBJECTS[subject]
   const [answers, setAnswers] = useState<Answers>(initialAnswers)
@@ -71,9 +84,55 @@ export default function TakeAssignment({
   const [confirmExit, setConfirmExit] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveFailed, setSaveFailed] = useState(false)
+  const [exiting, setExiting] = useState(false)
+  const [graded, setGraded] = useState(false)
   const [showTimer, setShowTimer] = useState(true)
   const [elapsed, setElapsed] = useState(0)
   const saveTimer = useRef<number>(undefined)
+  const savedTimer = useRef<number>(undefined)
+  const latest = useRef<Answers>(initialAnswers)
+  const dirty = useRef(false)
+  const queue = useRef<Promise<boolean>>(Promise.resolve(true))
+  const onSaveRef = useRef(onSave)
+  useEffect(() => { onSaveRef.current = onSave })
+
+  /** Saves the latest answers if they changed; saves run one at a time. */
+  const flush = () => {
+    window.clearTimeout(saveTimer.current)
+    if (!dirty.current) return queue.current
+    dirty.current = false
+    const snapshot = latest.current
+    setSaving(true)
+    const mine = queue.current.then(async () => {
+      const ok = await onSaveRef.current(snapshot).catch(() => false)
+      if (!ok) dirty.current = true
+      return ok
+    })
+    queue.current = mine
+    void mine.then((ok) => {
+      if (queue.current !== mine) return
+      setSaving(false)
+      setSaveFailed(!ok)
+      setJustSaved(ok)
+      window.clearTimeout(savedTimer.current)
+      if (ok) savedTimer.current = window.setTimeout(() => setJustSaved(false), 1400)
+    })
+    return mine
+  }
+  const flushRef = useRef(flush)
+  useEffect(() => { flushRef.current = flush })
+
+  // Leaving any other way (back button, closing the tab) still saves.
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden") void flushRef.current() }
+    document.addEventListener("visibilitychange", onHide)
+    return () => {
+      document.removeEventListener("visibilitychange", onHide)
+      window.clearTimeout(savedTimer.current)
+      void flushRef.current()
+    }
+  }, [])
 
   useEffect(() => {
     const id = window.setInterval(() => setElapsed((s) => s + 1), 1000)
@@ -83,14 +142,20 @@ export default function TakeAssignment({
   }, [])
 
   const set = (id: string, v: unknown) => {
-    setAnswers((a) => ({ ...a, [id]: v }))
-    setSaving(true)
+    latest.current = { ...latest.current, [id]: v }
+    setAnswers(latest.current)
+    dirty.current = true
     window.clearTimeout(saveTimer.current)
-    saveTimer.current = window.setTimeout(() => {
-      setSaving(false)
-      setJustSaved(true)
-      saveTimer.current = window.setTimeout(() => setJustSaved(false), 1400)
-    }, 500)
+    saveTimer.current = window.setTimeout(() => void flush(), SAVE_DELAY)
+  }
+
+  const exit = async () => {
+    setExiting(true)
+    const ok = await flush()
+    setExiting(false)
+    if (ok) return onExit()
+    setConfirmExit(false)
+    toast.error("Chưa lưu được bài làm. Em kiểm tra mạng rồi thử lại nhé!")
   }
 
   const answeredCount = questions.filter((q) => isAnswered(q, answers[q.id])).length
@@ -106,15 +171,27 @@ export default function TakeAssignment({
     prevAnswered.current = answeredCount
   }, [answeredCount])
 
-  const submit = () => {
+  const submit = async () => {
     setConfirmSubmit(false)
+    window.clearTimeout(saveTimer.current)
+    dirty.current = false
     play("submit")
     setFlight("flying")
-    window.setTimeout(() => setFlight("done"), reduced ? 200 : 750)
-    window.setTimeout(onSubmit, reduced ? 1000 : 1900)
+    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
+    const flown = wait(reduced ? 200 : 750)
+    const result = await queue.current.then(() => onSubmit(latest.current, elapsed)).catch(() => null)
+    await flown
+    if (!result) {
+      setFlight("idle")
+      return
+    }
+    setGraded(result.graded)
+    setFlight("done")
+    await wait(reduced ? 800 : 1150)
+    onSubmitted()
   }
 
-  const renderQuestion = (q: Question) => {
+  const renderQuestion = (q: TakeQuestion) => {
     const tactile = q.type === "trac-nghiem" || q.type === "dung-sai" || q.type === "noi" || q.type === "sap-xep"
     const p = { value: answers[q.id] as never, onChange: (v: unknown) => { if (tactile) play("select"); set(q.id, v) }, tone }
     switch (q.type) {
@@ -152,6 +229,10 @@ export default function TakeAssignment({
                     <CloudCheck className="size-4" />
                   </motion.span>
                   Đã lưu
+                </motion.span>
+              ) : saveFailed ? (
+                <motion.span key="failed" className="inline-flex items-center gap-1.5 text-amber-600" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <CloudAlert className="size-4" /><span className="hidden sm:inline">Chưa lưu được</span>
                 </motion.span>
               ) : null}
             </AnimatePresence>
@@ -280,7 +361,10 @@ export default function TakeAssignment({
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button variant="outline" className="h-12 text-base" onClick={() => setConfirmExit(false)}>Ở lại làm tiếp</Button>
-            <Button className="h-12 text-base" onClick={() => onExit(answers, Math.round(pct))}>Lưu và thoát</Button>
+            <Button className="h-12 text-base" disabled={exiting} onClick={() => void exit()}>
+              {exiting && <Loader2 className="animate-spin" />}
+              Lưu và thoát
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -295,7 +379,7 @@ export default function TakeAssignment({
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button variant="outline" className="h-12 text-base" onClick={() => setConfirmSubmit(false)}>Kiểm tra lại</Button>
-            <Button className="h-12 bg-emerald-600 text-base hover:bg-emerald-700" onClick={submit}>
+            <Button className="h-12 bg-emerald-600 text-base hover:bg-emerald-700" onClick={() => void submit()}>
               <Check />
               Nộp bài
             </Button>
@@ -318,7 +402,7 @@ export default function TakeAssignment({
               <motion.div className="flex flex-col items-center gap-3 text-center" variants={pop} initial="initial" animate="animate">
                 <span className="text-7xl" aria-hidden>📬</span>
                 <p className="text-4xl font-extrabold text-emerald-700">Đã nộp!</p>
-                <p className="text-lg text-slate-500">Bố mẹ sẽ chấm sớm nhé.</p>
+                <p className="text-lg text-slate-500">{graded ? "Cùng xem điểm của em nào!" : "Bố mẹ sẽ chấm sớm nhé."}</p>
               </motion.div>
             )}
           </motion.div>
@@ -328,7 +412,7 @@ export default function TakeAssignment({
   )
 }
 
-function QuestionGrid({ questions, answers, current, onPick, toneBg }: { questions: Question[]; answers: Answers; current: number; onPick: (i: number) => void; toneBg: string }) {
+function QuestionGrid({ questions, answers, current, onPick, toneBg }: { questions: TakeQuestion[]; answers: Answers; current: number; onPick: (i: number) => void; toneBg: string }) {
   return (
     <div className="grid w-full max-w-md grid-cols-5 gap-2.5 mx-auto">
       {questions.map((q, i) => {

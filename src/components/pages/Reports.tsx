@@ -1,3 +1,5 @@
+"use client"
+
 import { useMemo, useState } from "react"
 import {
   Area,
@@ -13,10 +15,13 @@ import {
   YAxis,
 } from "recharts"
 import {
+  ArrowDownRight,
   ArrowUpRight,
   CalendarCheck,
   CheckCircle2,
   Clock3,
+  Check,
+  Loader2,
   Plus,
   RotateCcw,
   Sparkles,
@@ -26,25 +31,16 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import AssignSheet from "@/components/schedule/AssignSheet"
-import { TODAY } from "@/data/mock-data"
-import {
-  AI_STEPS,
-  AI_SUMMARY,
-  AVG_MINUTES,
-  KPIS,
-  RANGE_WEEKS,
-  RETRIES,
-  SKILLS,
-  activity,
-  weeklyScores,
-  type RangeId,
-} from "@/data/report-data"
+import { toast } from "sonner"
+import { useStudent } from "@/components/layout/AppFrame"
+import { buildReport, rangePeriod, summarize, type RangeId, type ReportInput } from "@/lib/analytics"
 import { addDays } from "@/lib/dates"
+import { formatDayMonth, formatShortDate, formatVietnameseDate } from "@/lib/format"
 import { dateInput } from "@/lib/schedule"
 import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 import type { SubjectId } from "@/lib/types"
+import { useLibrary } from "@/state/library-store"
 
 const fmt = (n: number, digits = 1) =>
   n.toLocaleString("vi-VN", { minimumFractionDigits: digits, maximumFractionDigits: digits })
@@ -55,6 +51,14 @@ const RANGES: { id: RangeId; label: string }[] = [
   { id: "hk", label: "Học kỳ" },
   { id: "custom", label: "Tùy chọn" },
 ]
+
+/** "+1,5" / "−0,5" / "±0" */
+const signed = (n: number, digits = 1) => `${n > 0 ? "+" : n < 0 ? "−" : "±"}${fmt(Math.abs(n), digits)}`
+
+const deltaOf = (cur: number | null, prev: number | null) => (cur !== null && prev !== null ? cur - prev : null)
+
+/** Lowest y-axis value: 5 unless some score falls below it. */
+const scoreFloor = (values: (number | undefined)[]) => (values.some((v) => v !== undefined && v < 5) ? 0 : 5)
 
 const skillColor = (v: number) => (v < 60 ? "#ef4444" : v <= 80 ? "#f59e0b" : "#10b981")
 
@@ -92,47 +96,70 @@ function ChartTooltip({ active, payload, label, suffix = "" }: { active?: boolea
   )
 }
 
-export default function Reports() {
+export default function Reports({ input, now: nowIso }: { input: ReportInput; now: string }) {
+  const student = useStudent()
+  const { assignSet: quickAssign } = useLibrary()
+  const now = useMemo(() => new Date(nowIso), [nowIso])
   const [range, setRange] = useState<RangeId>("4w")
   const [subjects, setSubjects] = useState<SubjectId[]>(SUBJECT_LIST.map((s) => s.id))
-  const [from, setFrom] = useState(dateInput(addDays(TODAY, -56)))
-  const [to, setTo] = useState(dateInput(TODAY))
-  const [assignSet, setAssignSet] = useState<string | null>(null)
+  const [from, setFrom] = useState(() => dateInput(addDays(now, -55)))
+  const [to, setTo] = useState(() => dateInput(now))
+  const [assigning, setAssigning] = useState<string | null>(null)
+  const [assigned, setAssigned] = useState<Set<string>>(new Set())
 
-  const weeks = range === "custom"
-    ? Math.max(2, Math.min(26, Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (7 * 864e5))))
-    : RANGE_WEEKS[range]
-  const trend = useMemo(() => weeklyScores(weeks), [weeks])
-  const heat = useMemo(() => activity(Math.min(weeks, 18)), [weeks])
+  const period = useMemo(
+    () => rangePeriod(range, now, range === "custom" && from && to ? { from, to } : undefined),
+    [range, now, from, to],
+  )
+  const report = useMemo(() => buildReport(input, period, now, subjects), [input, period, now, subjects])
+  const review = useMemo(() => summarize(report, student.name), [report, student.name])
   const active = SUBJECT_LIST.filter((s) => subjects.includes(s.id))
-  const kpi = KPIS[range]
+  const kpi = report.kpis
+  const prev = report.previous
 
-  const averages = active.map((s) => ({
-    name: s.name,
-    id: s.id,
-    color: s.color,
-    value: Math.round((trend.reduce((sum, w) => sum + w[s.id], 0) / trend.length) * 10) / 10,
+  const trend = report.weekly.map((w) => ({
+    week: formatDayMonth(w.weekStart),
+    toan: w.toan,
+    "tieng-viet": w["tieng-viet"],
+    "tieng-anh": w["tieng-anh"],
   }))
-  const skills = SKILLS.filter((s) => subjects.includes(s.subject)).sort((a, b) => a.accuracy - b.accuracy)
-  const retries = RETRIES.filter((r) => subjects.includes(r.subject))
+  const trendFloor = scoreFloor(report.weekly.flatMap((w) => active.map((s) => w[s.id])))
+  const averages = active
+    .filter((s) => report.subjectAverages[s.id] !== undefined)
+    .map((s) => ({ name: s.name, id: s.id, color: s.color, value: report.subjectAverages[s.id]! }))
+  const skills = report.skills
+  const retries = report.retries.slice(0, 6)
+  const heat = report.activity
   const activeDays = heat.flat().filter((d) => d.count > 0).length
   const pastDays = heat.flat().filter((d) => d.count >= 0).length
 
   const toggleSubject = (id: SubjectId) =>
     setSubjects((cur) => (cur.includes(id) ? (cur.length > 1 ? cur.filter((s) => s !== id) : cur) : [...cur, id]))
 
-  const kpis = [
-    { label: "Bài đã hoàn thành", value: String(kpi.completed), delta: `+${kpi.deltas.completed} bài`, icon: CheckCircle2, tone: "bg-indigo-50 text-indigo-600" },
-    { label: "Điểm trung bình", value: fmt(kpi.average), delta: `+${fmt(kpi.deltas.average)} điểm`, icon: Star, tone: "bg-amber-50 text-amber-600" },
-    { label: "Tỷ lệ đúng hạn", value: `${kpi.onTime}%`, delta: `+${kpi.deltas.onTime}%`, icon: CalendarCheck, tone: "bg-emerald-50 text-emerald-600" },
-    { label: "Cải thiện lần 2", value: `+${fmt(kpi.retryGain)}`, unit: "điểm", delta: `+${fmt(kpi.deltas.retryGain)} điểm`, icon: RotateCcw, tone: "bg-violet-50 text-violet-600" },
+  const handleAssign = async (setId: string) => {
+    setAssigning(setId)
+    const created = await quickAssign(setId)
+    setAssigning(null)
+    if (!created) return
+    setAssigned((cur) => new Set(cur).add(setId))
+    const title = input.sets.find((s) => s.id === setId)?.title
+    toast.success("Đã giao bài luyện tập", {
+      description: `${title ? `“${title}” · ` : ""}Hạn ${formatVietnameseDate(created.dueDate)}`,
+    })
+  }
+
+  const kpis: { label: string; value: string; unit?: string; delta: number | null; deltaText: (d: number) => string; icon: typeof Star; tone: string }[] = [
+    { label: "Bài đã hoàn thành", value: String(kpi.completed), delta: kpi.completed - prev.completed, deltaText: (d) => `${signed(d, 0)} bài`, icon: CheckCircle2, tone: "bg-indigo-50 text-indigo-600" },
+    { label: "Điểm trung bình", value: kpi.average === null ? "–" : fmt(kpi.average), delta: deltaOf(kpi.average, prev.average), deltaText: (d) => `${signed(d)} điểm`, icon: Star, tone: "bg-amber-50 text-amber-600" },
+    { label: "Tỷ lệ đúng hạn", value: kpi.onTime === null ? "–" : `${kpi.onTime}%`, delta: deltaOf(kpi.onTime, prev.onTime), deltaText: (d) => `${signed(d, 0)}%`, icon: CalendarCheck, tone: "bg-emerald-50 text-emerald-600" },
+    { label: "Cải thiện lần 2", value: kpi.retryGain === null ? "–" : signed(kpi.retryGain), unit: kpi.retryGain === null ? undefined : "điểm", delta: deltaOf(kpi.retryGain, prev.retryGain), deltaText: (d) => `${signed(d)} điểm`, icon: RotateCcw, tone: "bg-violet-50 text-violet-600" },
   ]
 
   return (
     <div className="flex flex-col gap-5 pb-16">
       <div>
         <h1 className="hidden text-3xl font-bold tracking-tight text-slate-900 md:block">Báo cáo</h1>
-        <p className="text-slate-500 md:mt-1.5">Theo dõi sự tiến bộ của Minh An qua từng tuần.</p>
+        <p className="text-slate-500 md:mt-1.5">Theo dõi sự tiến bộ của {student.name} qua từng tuần.</p>
       </div>
 
       {/* Filters */}
@@ -193,10 +220,19 @@ export default function Reports() {
               </p>
               <p className="text-sm text-slate-500">{k.label}</p>
             </div>
-            <p className="inline-flex items-center gap-0.5 text-xs font-medium text-emerald-600">
-              <ArrowUpRight className="size-3.5" />
-              {k.delta} so với kỳ trước
-            </p>
+            {k.delta === null ? (
+              <p className="text-xs font-medium text-slate-400">Chưa có dữ liệu kỳ trước</p>
+            ) : (
+              <p
+                className={cn(
+                  "inline-flex items-center gap-0.5 text-xs font-medium",
+                  k.delta > 0 ? "text-emerald-600" : k.delta < 0 ? "text-red-600" : "text-slate-500",
+                )}
+              >
+                {k.delta < 0 ? <ArrowDownRight className="size-3.5" /> : <ArrowUpRight className="size-3.5" />}
+                {k.deltaText(k.delta)} so với kỳ trước
+              </p>
+            )}
           </Card>
         ))}
       </div>
@@ -217,10 +253,10 @@ export default function Reports() {
                 </defs>
                 <CartesianGrid vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#94a3b8" }} minTickGap={16} />
-                <YAxis domain={[5, 10]} ticks={[5, 6, 7, 8, 9, 10]} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#94a3b8" }} />
+                <YAxis domain={[trendFloor, 10]} ticks={trendFloor === 0 ? [0, 2, 4, 6, 8, 10] : [5, 6, 7, 8, 9, 10]} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#94a3b8" }} />
                 <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#c7d2fe", strokeDasharray: 4 }} labelFormatter={(l) => `Tuần ${l}`} />
                 {active.map((s) => (
-                  <Area key={s.id} type="monotone" dataKey={s.id} name={s.name} stroke={s.color} strokeWidth={2.5} fill={`url(#grad-${s.id})`} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }} />
+                  <Area key={s.id} type="monotone" dataKey={s.id} name={s.name} stroke={s.color} strokeWidth={2.5} fill={`url(#grad-${s.id})`} dot={false} connectNulls activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }} />
                 ))}
               </AreaChart>
             </ResponsiveContainer>
@@ -273,7 +309,7 @@ export default function Reports() {
                 <YAxis type="category" dataKey="skill" width={128} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#334155" }} />
                 <Tooltip content={<ChartTooltip suffix="%" />} cursor={{ fill: "#f8fafc" }} />
                 <Bar dataKey="accuracy" name="Tỷ lệ đúng" radius={[0, 8, 8, 0]} background={{ fill: "#f1f5f9", radius: 8 }}>
-                  {skills.map((s) => <Cell key={s.skill} fill={skillColor(s.accuracy)} />)}
+                  {skills.map((s) => <Cell key={`${s.subject}|${s.skill}`} fill={skillColor(s.accuracy)} />)}
                   <LabelList dataKey="accuracy" position="right" formatter={(v: unknown) => `${v}%`} style={{ fontSize: 12, fontWeight: 600, fill: "#334155" }} />
                 </Bar>
               </BarChart>
@@ -290,16 +326,17 @@ export default function Reports() {
           <ul className="space-y-3.5">
             {retries.map((r) => {
               const color = SUBJECTS[r.subject].color
-              const pos = (v: number) => `${((v - 4) / 6) * 100}%`
+              const pos = (v: number) => `${(Math.max(0, Math.min(10, v)) / 10) * 100}%`
+              const gain = r.second - r.first
               return (
-                <li key={r.title}>
+                <li key={r.assignmentId}>
                   <div className="mb-1.5 flex items-baseline justify-between gap-2 text-sm">
                     <span className="truncate text-slate-700">{r.title}</span>
-                    <span className="shrink-0 font-semibold tabular-nums text-emerald-600">+{fmt(r.second - r.first)}</span>
+                    <span className={cn("shrink-0 font-semibold tabular-nums", gain > 0 ? "text-emerald-600" : gain < 0 ? "text-red-600" : "text-slate-500")}>{signed(gain)}</span>
                   </div>
                   <div className="relative h-3" aria-label={`${r.title}: lần 1 ${fmt(r.first)}, lần 2 ${fmt(r.second)}`}>
                     <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-100" />
-                    <span className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full opacity-40" style={{ left: pos(r.first), width: `calc(${pos(r.second)} - ${pos(r.first)})`, background: color }} />
+                    <span className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full opacity-40" style={{ left: pos(Math.min(r.first, r.second)), width: `calc(${pos(Math.max(r.first, r.second))} - ${pos(Math.min(r.first, r.second))})`, background: color }} />
                     <span className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-white" style={{ left: pos(r.first), borderColor: color }} />
                     <span className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white" style={{ left: pos(r.second), background: color }} />
                   </div>
@@ -311,6 +348,7 @@ export default function Reports() {
               )
             })}
           </ul>
+          {retries.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Chưa có bài làm lại trong kỳ này.</p>}
         </Section>
 
         {/* 6. Habits */}
@@ -324,12 +362,12 @@ export default function Reports() {
                 <div key={w} className="grid grid-rows-7 gap-1">
                   {week.map(({ date, count }) => (
                     <span
-                      key={date.toISOString()}
-                      title={count < 0 ? "" : `${date.toLocaleDateString("vi-VN")}: ${count} bài`}
+                      key={date}
+                      title={count < 0 ? "" : `${formatShortDate(date)}: ${count} bài`}
                       className={cn(
                         "size-4 rounded-[4px] md:size-5",
-                        count < 0 ? "bg-transparent" : ["bg-slate-100", "bg-indigo-200", "bg-indigo-400", "bg-indigo-600"][count],
-                        dateInput(date) === dateInput(TODAY) && "ring-2 ring-indigo-600 ring-offset-1",
+                        count < 0 ? "bg-transparent" : ["bg-slate-100", "bg-indigo-200", "bg-indigo-400", "bg-indigo-600"][Math.min(count, 3)],
+                        dateInput(new Date(date)) === dateInput(now) && "ring-2 ring-indigo-600 ring-offset-1",
                       )}
                     />
                   ))}
@@ -347,7 +385,7 @@ export default function Reports() {
               <span className="inline-flex items-center gap-1 text-sm text-slate-500"><Clock3 className="size-4" />TB mỗi bài:</span>
               {active.map((s) => (
                 <span key={s.id} className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", s.softBg, s.text)}>
-                  {s.name} {AVG_MINUTES[s.id]} phút
+                  {s.name} {report.minutes[s.id] ?? "–"} phút
                 </span>
               ))}
             </div>
@@ -359,35 +397,40 @@ export default function Reports() {
           <div className="flex items-center gap-2">
             <span className="flex size-9 items-center justify-center rounded-xl bg-indigo-600 text-white"><Sparkles className="size-5" /></span>
             <div>
-              <h2 className="font-semibold text-slate-900 md:text-lg">Nhận xét của AI</h2>
-              <p className="text-xs text-slate-500">Tổng kết tuần {TODAY.toLocaleDateString("vi-VN")}</p>
+              <h2 className="font-semibold text-slate-900 md:text-lg">Nhận xét tự động</h2>
+              <p className="text-xs text-slate-500">Tổng hợp từ kết quả đến {formatShortDate(now)}</p>
             </div>
           </div>
-          <p className="text-sm leading-relaxed text-slate-700">{AI_SUMMARY}</p>
+          <p className="text-sm leading-relaxed text-slate-700">{review.summary}</p>
           <ol className="space-y-2">
-            {AI_STEPS.map((step, i) => {
+            {review.steps.map((step, i) => {
               const s = SUBJECTS[step.subject]
+              const done = step.setId !== undefined && assigned.has(step.setId)
               return (
-                <li key={step.setId} className="flex items-center gap-3 rounded-xl border border-white bg-white/80 p-3 shadow-sm">
+                <li key={`${step.subject}|${step.text}`} className="flex items-center gap-3 rounded-xl border border-white bg-white/80 p-3 shadow-sm">
                   <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold", s.softBg, s.text)}>{i + 1}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold leading-snug text-slate-800">{step.text}</p>
                     <p className="text-xs text-slate-500">{step.detail}</p>
                   </div>
-                  <Button size="sm" variant="outline" className="h-9 shrink-0 rounded-full border-indigo-200 text-indigo-700" onClick={() => setAssignSet(step.setId)}>
-                    <Plus />
-                    Giao bài
-                  </Button>
+                  {step.setId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 shrink-0 rounded-full border-indigo-200 text-indigo-700"
+                      disabled={done || assigning !== null}
+                      onClick={() => handleAssign(step.setId!)}
+                    >
+                      {done ? <Check /> : assigning === step.setId ? <Loader2 className="animate-spin" /> : <Plus />}
+                      {done ? "Đã giao" : "Giao bài"}
+                    </Button>
+                  )}
                 </li>
               )
             })}
           </ol>
         </Card>
       </div>
-
-      {assignSet && (
-        <AssignSheet date={new Date(TODAY)} setId={assignSet} onClose={() => setAssignSet(null)} onCreated={() => setAssignSet(null)} />
-      )}
     </div>
   )
 }

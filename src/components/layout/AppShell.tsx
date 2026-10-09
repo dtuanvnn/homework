@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { parentPage, studentPage } from '@/lib/animations'
 import { setSoundMode } from '@/hooks/useSound'
+import { useMediaQuery } from '@/lib/use-media-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AppMode, Student } from '@/lib/types'
 import BottomTabBar from './BottomTabBar'
@@ -25,10 +26,9 @@ interface AppShellProps {
 
 export default function AppShell({ student, mode, onModeChange, items, activeTab, onTabChange, children, pageTitle, onBack }: AppShellProps) {
   // Collapsed by default on iPad portrait so content keeps a 2-column grid.
-  const [collapsed, setCollapsed] = useState(false)
-  useEffect(() => {
-    if (window.innerWidth < 1024) setCollapsed(true)
-  }, [])
+  const narrow = useMediaQuery('(max-width: 1023px)')
+  const [userCollapsed, setCollapsed] = useState<boolean | null>(null)
+  const collapsed = userCollapsed ?? narrow
   const activeItem = items.find((i) => i.id === activeTab) ?? items[0]
 
   const reduced = useReducedMotion()

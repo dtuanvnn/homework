@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react"
+"use client"
+
+import { useEffect } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import CountUp from "@/components/fun/CountUp"
 import Mascot from "@/components/fun/Mascot"
@@ -14,20 +16,12 @@ import {
   RotateCcw,
   Trophy,
 } from "lucide-react"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { TODAY, student } from "@/data/mock-data"
-import { takeQuestions, todayItems, upcoming, type TodayItem } from "@/data/student-today"
-import TakeAssignment from "@/components/take/TakeAssignment"
-import PaperSubmit from "@/components/paper/PaperSubmit"
-import ResultDetail from "@/components/results/ResultDetail"
-import { resultForTitle } from "@/data/student-results"
-import { formatVietnameseDate } from "@/lib/format"
+import { useAppNavigation } from "@/components/layout/AppFrame"
+import { studentPaths } from "@/components/layout/routes"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
-
-const STARS = 46
-const STREAK = 5
+import type { TodayItem, TodayView } from "@/lib/views/student"
 
 const STATUS_CHIP: Record<TodayItem["status"], { label: string; cls: string }> = {
   "not-started": { label: "Chưa làm", cls: "bg-white text-slate-600" },
@@ -38,23 +32,24 @@ const STATUS_CHIP: Record<TodayItem["status"], { label: string; cls: string }> =
 
 const isDone = (i: TodayItem) => i.status === "submitted" || i.status === "graded"
 
-export default function StudentToday() {
+export default function StudentToday({
+  studentName,
+  stars,
+  dateLabel,
+  items,
+  upcoming,
+  streak,
+}: TodayView & { studentName: string; stars: number }) {
   const reduced = useReducedMotion()
-  const [items, setItems] = useState(todayItems)
-  const [stars, setStars] = useState(STARS)
-  const [taking, setTaking] = useState<TodayItem | null>(null)
-  const [paper, setPaper] = useState<TodayItem | null>(null)
-  const [viewing, setViewing] = useState<TodayItem | null>(null)
-  const [saved, setSaved] = useState<Record<string, Record<string, unknown>>>({})
-  const update = (id: string, patch: Partial<TodayItem>) =>
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
+  const { navigate } = useAppNavigation()
   const remaining = items.filter((i) => !isDone(i))
   const allDone = remaining.length === 0
+  const celebrateDone = allDone && items.length > 0
   useEffect(() => {
-    if (!allDone) return
+    if (!celebrateDone) return
     play("celebrate")
     celebrate("big")
-  }, [allDone])
+  }, [celebrateDone])
   const ordered = [...remaining, ...items.filter(isDone)]
 
   const action = (item: TodayItem) => <Press>{actionButton(item)}</Press>
@@ -70,12 +65,12 @@ export default function StudentToday() {
     if (item.status === "graded")
       return (
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Button className={cn(big, "bg-emerald-600 hover:bg-emerald-700")} onClick={() => setViewing(item)}>
+          <Button className={cn(big, "bg-emerald-600 hover:bg-emerald-700")} onClick={() => item.resultId && navigate(studentPaths.result(item.resultId))}>
             <Trophy />
             Xem kết quả
           </Button>
-          {item.attempt < item.maxAttempts && (
-            <Button variant="outline" className={cn(big, "border-2 border-indigo-200 bg-white text-indigo-700")} onClick={() => { update(item.id, { status: "in-progress", progress: 0, attempt: 2 }); setSaved((p) => ({ ...p, [item.id]: {} })); setTaking({ ...item, attempt: 2 }) }}>
+          {item.canRetry && (
+            <Button variant="outline" className={cn(big, "border-2 border-indigo-200 bg-white text-indigo-700")} onClick={() => navigate(item.mode === "paper" ? studentPaths.paper(item.id) : studentPaths.take(item.id))}>
               <RotateCcw />
               Làm lại lần 2
             </Button>
@@ -84,79 +79,25 @@ export default function StudentToday() {
       )
     if (item.mode === "paper")
       return (
-        <Button className={big} onClick={() => setPaper(item)}>
+        <Button className={big} onClick={() => navigate(studentPaths.paper(item.id))}>
           <Camera />
           Nộp bài giấy
         </Button>
       )
     if (item.status === "in-progress")
       return (
-        <Button className={cn(big, "bg-amber-500 hover:bg-amber-600")} onClick={() => setTaking(item)}>
+        <Button className={cn(big, "bg-amber-500 hover:bg-amber-600")} onClick={() => navigate(studentPaths.take(item.id))}>
           <Play className="fill-current" />
           Làm tiếp
         </Button>
       )
     return (
-      <Button className={big} onClick={() => { update(item.id, { status: "in-progress", progress: item.progress ?? 0 }); setTaking(item) }}>
+      <Button className={big} onClick={() => navigate(studentPaths.take(item.id))}>
         <Play className="fill-current" />
         Bắt đầu
       </Button>
     )
   }
-
-  if (paper)
-    return (
-      <PaperSubmit
-        title={paper.title}
-        subject={paper.subject}
-        onClose={() => setPaper(null)}
-        onSubmitted={() => {
-          update(paper.id, { status: "submitted" })
-          setStars((n) => n + 1)
-          setPaper(null)
-        }}
-      />
-    )
-
-  if (viewing) {
-    const base = resultForTitle(viewing.title)
-    const score = viewing.score ?? base.score
-    return (
-      <ResultDetail
-        result={{ ...base, title: viewing.title, subject: viewing.subject, score, attempt: viewing.attempt, maxAttempts: viewing.maxAttempts, previousScore: viewing.attempt === 2 ? base.previousScore : undefined, stars: score >= 9 ? 3 : score >= 7 ? 2 : 1, parentComment: viewing.note ?? base.parentComment }}
-        onRetry={() => {
-          const item = viewing
-          setViewing(null)
-          update(item.id, { status: "in-progress", progress: 0, attempt: 2 })
-          setSaved((p) => ({ ...p, [item.id]: {} }))
-          setTaking({ ...item, attempt: 2 })
-        }}
-        onHome={() => setViewing(null)}
-      />
-    )
-  }
-
-  if (taking)
-    return (
-      <TakeAssignment
-        title={taking.title}
-        subject={taking.subject}
-        questions={takeQuestions}
-        initialAnswers={saved[taking.id]}
-        onExit={(answers, progress) => {
-          setSaved((p) => ({ ...p, [taking.id]: answers }))
-          update(taking.id, { status: "in-progress", progress })
-          setTaking(null)
-          toast("Đã lưu bài làm. Em làm tiếp sau nhé!")
-        }}
-        onSubmit={() => {
-          update(taking.id, { status: "submitted" })
-          setStars((n) => n + 1)
-          setTaking(null)
-          toast.success("Em đã nộp bài, giỏi quá! 🎉")
-        }}
-      />
-    )
 
   return (
     <div className="flex flex-col gap-6 pb-16 text-lg">
@@ -166,8 +107,8 @@ export default function StudentToday() {
         <div className="pointer-events-none absolute -bottom-14 right-20 size-32 rounded-full bg-white/10" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-base font-medium text-indigo-100">{formatVietnameseDate(TODAY)}</p>
-            <h1 className="mt-1 text-3xl font-extrabold tracking-tight md:text-4xl">Chào {student.name}!{" "}
+            <p className="text-base font-medium text-indigo-100">{dateLabel}</p>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight md:text-4xl">Chào {studentName}!{" "}
               <motion.span
                 className="inline-block origin-[70%_80%]"
                 initial={{ rotate: 0 }}
@@ -187,7 +128,7 @@ export default function StudentToday() {
               <motion.span key={stars} initial={reduced ? false : { scale: 1.5, rotate: -30 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 400, damping: 12 }} aria-hidden>⭐</motion.span>
               <span><CountUp value={stars} /> sao</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-400/90 px-3 py-1.5 text-sm font-bold text-white">
+            {streak > 0 && <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-400/90 px-3 py-1.5 text-sm font-bold text-white">
               <motion.span
                 className="inline-block origin-bottom"
                 animate={reduced ? {} : { scaleY: [1, 1.12, 0.94, 1.06, 1], rotate: [0, -3, 2, -1, 0] }}
@@ -196,8 +137,8 @@ export default function StudentToday() {
               >
                 🔥
               </motion.span>
-              {STREAK} ngày liên tiếp
-            </span>
+              {streak} ngày liên tiếp
+            </span>}
           </div>
         </div>
       </section>
@@ -205,7 +146,14 @@ export default function StudentToday() {
       {/* Today */}
       <section className="space-y-4">
         <h2 className="text-2xl font-extrabold text-slate-900">Bài hôm nay</h2>
-        {allDone && (
+        {!items.length && (
+          <div className="flex flex-col items-center gap-2 rounded-[28px] border-2 border-dashed border-indigo-200 bg-white px-6 py-10 text-center">
+            <Mascot mood="cheer" />
+            <p className="text-2xl font-extrabold text-slate-800">Hôm nay em không có bài nào 🌈</p>
+            <p className="text-lg text-slate-600">Đọc sách hoặc chơi thật vui nhé!</p>
+          </div>
+        )}
+        {celebrateDone && (
           <motion.div initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 20 }} className="flex flex-col items-center gap-2 rounded-[28px] border-2 border-dashed border-emerald-300 bg-gradient-to-br from-emerald-50 to-amber-50 px-6 py-10 text-center">
             <Mascot mood="cheer" />
             <p className="text-3xl font-extrabold text-emerald-700">Hoàn thành hết rồi! 🎉</p>
@@ -224,7 +172,7 @@ export default function StudentToday() {
                 variants={listItem(reduced)}
                 {...pressable(reduced)}
                 className={cn(
-                  "flex flex-col gap-4 rounded-[28px] border-2 p-5 md:p-6",
+                  "flex min-w-0 flex-col gap-4 rounded-[28px] border-2 p-5 md:p-6",
                   s.softBg,
                   s.border,
                   isDone(item) && "opacity-80",
@@ -238,12 +186,13 @@ export default function StudentToday() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={cn("text-base font-bold", s.text)}>{s.name}</span>
                       <span className={cn("rounded-full px-2.5 py-0.5 text-sm font-bold", chip.cls)}>{chip.label}</span>
+                      {item.overdue && <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-sm font-bold text-red-700">Trễ hạn</span>}
                       {item.attempt === 2 && <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-sm font-bold text-indigo-700">Lần 2</span>}
                     </div>
                     <h3 className="mt-1 text-xl font-extrabold leading-snug text-slate-900 md:text-2xl">{item.title}</h3>
                     <p className="mt-1 flex flex-wrap items-center gap-x-3 text-base text-slate-600">
                       <span>{item.questions} câu · khoảng {item.minutes} phút</span>
-                      <span className="inline-flex items-center gap-1 text-sm text-slate-500"><Clock3 className="size-4" />Hạn {item.due}</span>
+                      <span className={cn("inline-flex items-center gap-1 text-sm", item.overdue ? "font-bold text-red-600" : "text-slate-500")}><Clock3 className="size-4" />Hạn {item.due}</span>
                     </p>
                   </div>
                 </div>
@@ -285,13 +234,13 @@ export default function StudentToday() {
       </section>
 
       {/* Upcoming */}
-      <section className="space-y-3">
+      {upcoming.length > 0 && <section className="space-y-3">
         <h2 className="text-2xl font-extrabold text-slate-900">Sắp tới</h2>
         <motion.div variants={list} initial="initial" animate="animate" className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0">
           {upcoming.map((u) => {
             const s = SUBJECTS[u.subject]
             return (
-              <motion.div key={u.title} variants={listItem(reduced)} className="flex w-56 shrink-0 snap-start flex-col gap-2 rounded-3xl border-2 border-slate-100 bg-white p-4 md:w-auto">
+              <motion.div key={u.id} variants={listItem(reduced)} className="flex w-56 shrink-0 snap-start flex-col gap-2 rounded-3xl border-2 border-slate-100 bg-white p-4 md:w-auto">
                 <div className="flex items-center gap-2">
                   <span className={cn("flex size-9 items-center justify-center rounded-xl", s.softBg, s.text)}>
                     <s.icon className="size-5" />
@@ -304,7 +253,7 @@ export default function StudentToday() {
             )
           })}
         </motion.div>
-      </section>
+      </section>}
     </div>
   )
 }

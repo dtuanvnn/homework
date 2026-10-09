@@ -1,21 +1,10 @@
-"use client"
+import { notFound } from "next/navigation"
+import { getExerciseSetDetail } from "@/server/queries"
+import ExerciseSetScreen from "./ExerciseSetScreen"
 
-import { use } from "react"
-import { useRouter } from "next/navigation"
-import { useAppNavigation } from "@/components/layout/AppFrame"
-import { TAB_PATHS } from "@/components/layout/routes"
-import ExerciseSetDetail from "@/components/pages/ExerciseSetDetail"
-
-export default function ExerciseSetPage({ params }: { params: Promise<{ setId: string }> }) {
-  const { setId } = use(params)
-  const router = useRouter()
-  const { registerLeaveGuard } = useAppNavigation()
-  return (
-    <ExerciseSetDetail
-      key={setId}
-      setId={decodeURIComponent(setId)}
-      onClose={() => router.push(TAB_PATHS.library)}
-      registerLeaveGuard={registerLeaveGuard}
-    />
-  )
+export default async function ExerciseSetPage({ params }: PageProps<"/parent/library/[setId]">) {
+  const { setId } = await params
+  const detail = await getExerciseSetDetail(decodeURIComponent(setId))
+  if (!detail) notFound()
+  return <ExerciseSetScreen key={detail.set.id} set={detail.set} questions={detail.questions} attachments={detail.attachments} />
 }
