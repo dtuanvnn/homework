@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
 import { parentPage, studentPage } from '@/lib/animations'
 import { setSoundMode } from '@/hooks/useSound'
 import { useMediaQuery } from '@/lib/use-media-query'
@@ -32,6 +32,9 @@ export default function AppShell({ student, mode, onModeChange, items, activeTab
   const activeItem = items.find((i) => i.id === activeTab) ?? items[0]
 
   const reduced = useReducedMotion()
+  const pageKey = `${mode}-${activeItem.id}-${pageTitle ?? ''}`
+  // The first page shows as server-rendered; pages opened later animate in.
+  const [firstPageKey] = useState(pageKey)
 
   useEffect(() => {
     setSoundMode(mode)
@@ -64,17 +67,18 @@ export default function AppShell({ student, mode, onModeChange, items, activeTab
                   : 'mx-auto w-full max-w-6xl px-4 pt-5 pb-[calc(96px+env(safe-area-inset-bottom))] md:px-8 md:pt-10 md:pb-12'
               }
             >
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={`${mode}-${activeItem.id}-${pageTitle ?? ''}`}
-                  variants={mode === 'student' ? studentPage(reduced) : parentPage}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                >
-                  {children}
-                </motion.div>
-              </AnimatePresence>
+              {/*
+                Enter animation only: `children` always renders the current route, so an
+                exiting copy would mount the next page twice and drop what was typed meanwhile.
+              */}
+              <motion.div
+                key={pageKey}
+                variants={mode === 'student' ? studentPage(reduced) : parentPage}
+                initial={pageKey === firstPageKey ? false : 'initial'}
+                animate="animate"
+              >
+                {children}
+              </motion.div>
             </main>
           </div>
         </div>

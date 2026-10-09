@@ -152,7 +152,8 @@ export default function AppFrame({
           >
             {children}
           </AppShell>
-          <Toaster position="top-center" />
+          {/* Phone: keep toasts below the app bar so they never cover the mode toggle. */}
+          <Toaster position="top-center" mobileOffset={{ top: "calc(env(safe-area-inset-top) + 72px)" }} />
         </LibraryProvider>
       </StudentContext.Provider>
     </NavContext.Provider>
