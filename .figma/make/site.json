@@ -1,0 +1,12 @@
+{
+  "title": "Homework Hub",
+  "language": "vi",
+  "description": "Manage and track primary school homework with separate parent and student views featuring assignments, grading, schedules, and progress reports.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
