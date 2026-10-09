@@ -3,14 +3,14 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { parentPage, studentPage } from '@/lib/animations'
 import { setSoundMode } from '@/hooks/useSound'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AppMode } from '@/lib/types'
-import { student } from '@/data/mock-data'
+import type { AppMode, Student } from '@/lib/types'
 import BottomTabBar from './BottomTabBar'
 import Sidebar from './Sidebar'
 import TopAppBar from './TopAppBar'
 import type { NavItem, TabId } from './nav-config'
 
 interface AppShellProps {
+  student: Student
   mode: AppMode
   onModeChange: (mode: AppMode) => void
   items: NavItem[]
@@ -23,7 +23,7 @@ interface AppShellProps {
   onBack?: () => void
 }
 
-export default function AppShell({ mode, onModeChange, items, activeTab, onTabChange, children, pageTitle, onBack }: AppShellProps) {
+export default function AppShell({ student, mode, onModeChange, items, activeTab, onTabChange, children, pageTitle, onBack }: AppShellProps) {
   // Collapsed by default on iPad portrait so content keeps a 2-column grid.
   const [collapsed, setCollapsed] = useState(false)
   useEffect(() => {

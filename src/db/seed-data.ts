@@ -2,9 +2,9 @@
  * Demo library for a Grade 3 student: the 19 sets from the Figma prototype,
  * each with real questions. Used by `pnpm db:seed`.
  */
-import type { Difficulty, ExerciseKind, ExerciseSetStatus, ExerciseSource, Question, SubjectId } from "@/lib/types"
+import type { Difficulty, ExerciseKind, ExerciseSetStatus, ExerciseSource, QuestionContent, SubjectId } from "@/lib/types"
 
-type Q = Omit<Question, "id">
+type Q = QuestionContent
 type Skills = string[]
 
 const mc = (prompt: string, options: string[], correctIndex: number, skills: Skills, points = 1): Q => ({ type: "trac-nghiem", prompt, options, correctIndex, skills, points })

@@ -18,6 +18,18 @@ export const MODE_HOME: Record<AppMode, Route> = {
   student: TAB_PATHS.today,
 }
 
+export const studentPaths = {
+  /** Full-screen take-assignment flow (starts or resumes the current attempt). */
+  take: (assignmentId: string) => `/student/assignments/${encodeURIComponent(assignmentId)}/do` as Route,
+  /** Paper submission: photograph pages and hand in. */
+  paper: (assignmentId: string) => `/student/assignments/${encodeURIComponent(assignmentId)}/paper` as Route,
+  result: (attemptId: string) => `/student/results/${encodeURIComponent(attemptId)}` as Route,
+}
+
+export const gradingPaths = {
+  attempt: (attemptId: string) => `/parent/grading/${encodeURIComponent(attemptId)}` as Route,
+}
+
 export const libraryPaths = {
   set: (id: string) => `/parent/library/${encodeURIComponent(id)}` as Route,
   upload: "/parent/library/upload" as Route,
@@ -29,6 +41,10 @@ const SUB_PAGE_TITLES: [RegExp, string][] = [
   [/^\/parent\/library\/upload$/, "Tải lên tài liệu"],
   [/^\/parent\/library\/generate$/, "Tạo bằng AI"],
   [/^\/parent\/library\/[^/]+$/, "Chi tiết bộ bài tập"],
+  [/^\/parent\/grading\/[^/]+$/, "Chấm bài"],
+  [/^\/student\/assignments\/[^/]+\/do$/, "Làm bài"],
+  [/^\/student\/assignments\/[^/]+\/paper$/, "Nộp bài giấy"],
+  [/^\/student\/results\/[^/]+$/, "Kết quả"],
 ]
 
 export interface RouteInfo {

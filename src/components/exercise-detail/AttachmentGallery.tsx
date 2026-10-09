@@ -22,8 +22,7 @@ export function filesToAttachments(files: FileList | File[]): Attachment[] {
         kind: isPdf ? 'pdf' : 'image',
         sizeKb: Math.max(1, Math.round(file.size / 1024)),
         url: isPdf ? undefined : URL.createObjectURL(file),
-        // Page count isn't read from the PDF in this prototype.
-        pages: isPdf ? 2 : undefined,
+        file,
       }
     })
 }

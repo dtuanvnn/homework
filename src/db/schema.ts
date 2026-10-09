@@ -14,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core"
-import type { Question } from "@/lib/types"
+import type { Question, QuestionContent } from "@/lib/types"
 import type { Response } from "@/lib/grading"
 
 /*
@@ -73,7 +73,7 @@ export const questions = pgTable(
       .notNull()
       .references(() => exerciseSets.id, { onDelete: "cascade" }),
     position: integer().notNull(),
-    content: jsonb().$type<Omit<Question, "id">>().notNull(),
+    content: jsonb().$type<QuestionContent>().notNull(),
   },
   (t) => [uniqueIndex("questions_set_position_idx").on(t.setId, t.position)],
 ).enableRLS()

@@ -146,4 +146,9 @@ export interface Attachment {
   sizeKb: number
   url?: string
   pages?: number
+  /** Client only: a picked file not uploaded yet. */
+  file?: File
 }
+
+/** A question without its id, as stored in the database (distributes over the union). */
+export type QuestionContent = Question extends infer T ? (T extends Question ? Omit<T, "id"> : never) : never

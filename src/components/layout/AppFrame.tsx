@@ -7,9 +7,9 @@ import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { LibraryProvider } from "@/state/library-store"
 import AppShell from "./AppShell"
-import { MODE_LABELS, NAV_BY_MODE, type TabId } from "./nav-config"
+import { MODE_LABELS, navFor, type NavCounts, type TabId } from "./nav-config"
 import { MODE_HOME, TAB_PATHS, resolveRoute } from "./routes"
-import type { AppMode } from "@/lib/types"
+import type { AppMode, Assignment, ExerciseSet, Student } from "@/lib/types"
 
 /** Called before leaving a page with unsaved changes; runs `next` once the user confirms. */
 export type LeaveGuard = (next: () => void) => void
@@ -28,7 +28,15 @@ export function useAppNavigation(): NavigationContext {
   return ctx
 }
 
-export default function AppFrame({ children }: { children: React.ReactNode }) {
+interface AppFrameProps {
+  student: Student
+  navCounts: NavCounts
+  sets: ExerciseSet[]
+  assignments: Assignment[]
+  children: React.ReactNode
+}
+
+export default function AppFrame({ student, navCounts, sets, assignments, children }: AppFrameProps) {
   const pathname = usePathname()
   const router = useRouter()
   const route = resolveRoute(pathname)
@@ -58,7 +66,7 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
     const go = () => {
       router.push(MODE_HOME[next])
       toast.success(`Đã chuyển sang chế độ ${MODE_LABELS[next]}`, {
-        description: next === "student" ? "Chúc Minh An học vui nhé!" : "Quản lý bài tập của con.",
+        description: next === "student" ? `Chúc ${student.name} học vui nhé!` : "Quản lý bài tập của con.",
       })
     }
     if (leaveGuard.current) leaveGuard.current(go)
@@ -69,11 +77,12 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
 
   return (
     <NavContext.Provider value={nav}>
-      <LibraryProvider>
+      <LibraryProvider initialSets={sets} initialAssignments={assignments}>
         <AppShell
+          student={student}
           mode={mode}
           onModeChange={handleModeChange}
-          items={NAV_BY_MODE[mode]}
+          items={navFor(mode, navCounts)}
           activeTab={route.tab}
           onTabChange={(tab: TabId) => navigate(TAB_PATHS[tab])}
           pageTitle={route.subPageTitle}
