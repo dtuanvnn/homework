@@ -1,5 +1,5 @@
 import type { Attachment, Question } from '@/lib/types'
-import type { ScannedQuestion } from '@/data/scan-mock'
+import type { ScannedQuestion } from '@/lib/ai/scan'
 
 export interface ReviewItem extends ScannedQuestion {
   /** Set once the parent edits, merges or confirms the question. */

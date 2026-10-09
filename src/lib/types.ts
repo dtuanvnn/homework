@@ -150,6 +150,8 @@ export interface Attachment {
   pages?: number
   /** Client only: a picked file not uploaded yet. */
   file?: File
+  /** Client only: already uploaded to Storage for a set not saved yet (AI scan); saved as a new file without re-uploading. */
+  uploaded?: { path: string; name: string; kind: "image" | "pdf"; sizeKb: number; pages?: number }
 }
 
 /** A question without its id, as stored in the database (distributes over the union). */

@@ -115,11 +115,14 @@ export function LibraryProvider({
 
   const persist = useCallback(async (set: ExerciseSet, qs: Question[], files: Attachment[]) => {
     try {
-      const fresh = files.filter((f) => f.file)
-      const newFiles = await uploadFiles(
+      const fresh = files.filter((f) => f.file && !f.uploaded)
+      const freshUploads = await uploadFiles(
         fresh.map((f) => f.file!),
         async (names) => unwrap(await requestSetUploads(set.id, names)),
       )
+      // Files the AI scan already uploaded are saved as-is; keep the picked order.
+      let next = 0
+      const newFiles = files.flatMap((f) => (f.uploaded ? [f.uploaded] : f.file ? [freshUploads[next++]] : []))
       const saved = unwrap(await saveExerciseSet({
         set: {
           id: set.id,
@@ -135,10 +138,10 @@ export function LibraryProvider({
           status: set.status,
         },
         questions: qs,
-        keepAttachmentIds: files.filter((f) => !f.file).map((f) => f.id),
+        keepAttachmentIds: files.filter((f) => !f.file && !f.uploaded).map((f) => f.id),
         newFiles,
       }))
-      for (const f of fresh) if (f.url?.startsWith("blob:")) URL.revokeObjectURL(f.url)
+      for (const f of files) if (f.url?.startsWith("blob:")) URL.revokeObjectURL(f.url)
       setSets((prev) => (prev.some((s) => s.id === set.id) ? prev.map((s) => (s.id === set.id ? saved.set : s)) : [saved.set, ...prev]))
       setQuestions((prev) => ({ ...prev, [set.id]: qs }))
       setAttachments((prev) => ({ ...prev, [set.id]: saved.attachments }))

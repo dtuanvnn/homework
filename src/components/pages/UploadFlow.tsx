@@ -1,20 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import ProcessingStep from '@/components/upload/ProcessingStep'
+import ProcessingStep, { type ScanPhase } from '@/components/upload/ProcessingStep'
 import ReviewStep from '@/components/upload/ReviewStep'
 import UploadStep, { type UploadMeta } from '@/components/upload/UploadStep'
 import UploadStepper, { type UploadStepId } from '@/components/upload/UploadStepper'
 import { needsCheck, pagesFromFiles, type ReviewItem } from '@/components/upload/review-utils'
 import { findInvalidQuestion } from '@/components/exercise-detail/question-draft'
-import { mockScan } from '@/data/scan-mock'
-import { formatDayMonth } from '@/lib/format'
-import { SUBJECTS } from '@/lib/subjects'
+import { unwrap } from '@/lib/action-result'
+import type { ScanResult } from '@/lib/ai/scan'
+import { shrinkImage, uploadFiles } from '@/lib/upload-client'
 import { cn } from '@/lib/utils'
+import { scanDocuments } from '@/server/actions/ai-scan'
+import { requestSetUploads } from '@/server/actions/library'
 import { useLibrary } from '@/state/library-store'
-import type { Attachment, Difficulty, ExerciseSet } from '@/lib/types'
+import type { Attachment, ExerciseSet } from '@/lib/types'
 import type { LeaveGuard } from '@/components/layout/AppFrame'
 
 interface UploadFlowProps {
@@ -26,9 +28,11 @@ interface UploadFlowProps {
 const STEP_COPY: Record<UploadStepId, string> = {
   upload: 'Tải ảnh chụp hoặc PDF phiếu bài tập, AI sẽ tách thành từng câu hỏi.',
   processing: 'AI đang đọc tài liệu của bạn.',
-  // The scan is simulated until the AI service is connected (Phase 2).
-  review: 'Đối chiếu với bản gốc và sửa những câu AI chưa chắc chắn. Bản thử nghiệm: câu hỏi hiện là dữ liệu mẫu.',
+  review: 'Đối chiếu với bản gốc và sửa những câu AI chưa chắc chắn.',
 }
+
+/** Set details Claude suggested; the title is edited separately in the review step. */
+type ScanDetails = Omit<ScanResult, 'items' | 'title'>
 
 export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: UploadFlowProps) {
   const library = useLibrary()
@@ -37,12 +41,20 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
   const [meta, setMeta] = useState<UploadMeta>({ subject: 'toan', grade: 3, kind: 'luyen-tap' })
   const [items, setItems] = useState<ReviewItem[]>([])
   const [title, setTitle] = useState('')
+  const [details, setDetails] = useState<ScanDetails | null>(null)
+  // Files are uploaded under this id before the scan, and the set is saved with it.
+  const [setId] = useState(() => crypto.randomUUID())
+  const [phase, setPhase] = useState<ScanPhase>('uploading')
+  const [scanError, setScanError] = useState<string | null>(null)
+  /** Bumped by every scan and by cancel, so the late result of a cancelled scan is ignored. */
+  const scanRun = useRef(0)
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null)
   const [confirmSave, setConfirmSave] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const pages = useMemo(() => pagesFromFiles(files), [files])
   const flaggedCount = items.filter(needsCheck).length
+  const incompleteCount = items.filter((i) => findInvalidQuestion([i.question])).length
   const hasProgress = files.length > 0
 
   useEffect(() => {
@@ -50,43 +62,80 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
     return () => registerLeaveGuard(null)
   }, [hasProgress, registerLeaveGuard])
 
-  const handleScanDone = useCallback(() => {
-    setItems(mockScan(meta.subject, pages.length).map((s) => ({ ...s, reviewed: false })))
-    setTitle(`Phiếu bài tập ${SUBJECTS[meta.subject].name} ${meta.grade} – ${formatDayMonth(new Date())}`)
-    setStep('review')
-  }, [meta.subject, meta.grade, pages.length])
+  const startScan = async () => {
+    const run = ++scanRun.current
+    setScanError(null)
+    setPhase('uploading')
+    setStep('processing')
+    try {
+      // Upload what isn't uploaded yet (a retry reuses earlier uploads).
+      let current = files
+      const pending = files.filter((f) => f.file && !f.uploaded)
+      if (pending.length) {
+        const small = await Promise.all(pending.map((f) => shrinkImage(f.file!)))
+        const uploaded = await uploadFiles(small, async (names) => unwrap(await requestSetUploads(setId, names)))
+        const byId = new Map(pending.map((f, i) => [f.id, uploaded[i]]))
+        const withUploads = (list: Attachment[]) => list.map((f) => (byId.has(f.id) ? { ...f, uploaded: byId.get(f.id) } : f))
+        current = withUploads(files)
+        setFiles(withUploads)
+      }
+      if (run !== scanRun.current) return
+      setPhase('reading')
+      const result = unwrap(await scanDocuments({ setId, files: current.flatMap((f) => (f.uploaded ? [f.uploaded] : [])), ...meta }))
+      if (run !== scanRun.current) return
+      const { items: scanned, title: suggested, ...rest } = result
+      setItems(scanned.map((s) => ({ ...s, reviewed: false })))
+      setTitle(suggested)
+      setDetails(rest)
+      setStep('review')
+    } catch (e) {
+      if (run !== scanRun.current) return
+      const message = e instanceof Error ? e.message : 'Đã có lỗi xảy ra. Vui lòng thử lại.'
+      toast.error('Không quét được tài liệu', { description: message })
+      setScanError(message)
+      setStep('upload')
+    }
+  }
+
+  const cancelScan = () => {
+    scanRun.current++
+    setStep('upload')
+  }
 
   const requestCancel = () => (hasProgress ? setPendingLeave(() => onClose) : onClose())
 
-  const save = async () => {
-    if (saving) return
+  /** The server rejects incomplete questions: point to the first one. True when all can be saved. */
+  const checkComplete = () => {
     const questions = items.map((i) => i.question)
     const invalid = findInvalidQuestion(questions)
-    if (invalid) {
-      toast.error(`Câu ${invalid.index + 1} chưa thể lưu`, { description: invalid.hint })
-      document.getElementById(`review-${questions[invalid.index].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      return
-    }
-    const avgDifficulty = Math.round(questions.reduce((s, q) => s + q.points, 0) / Math.max(1, questions.length) + 1.5)
+    if (!invalid) return true
+    toast.error(`Câu ${invalid.index + 1} chưa thể lưu`, { description: `${invalid.hint} Hãy sửa hoặc xóa câu này.` })
+    document.getElementById(`review-${questions[invalid.index].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    return false
+  }
+
+  const save = async () => {
+    if (saving || !checkComplete()) return
+    const questions = items.map((i) => i.question)
     const set: ExerciseSet = {
-      id: crypto.randomUUID(),
+      id: setId,
       title: title.trim() || 'Phiếu bài tập đã quét',
       subject: meta.subject,
       grade: meta.grade,
       kind: meta.kind,
-      topic: questions[0]?.skills[0] ?? '',
-      description: `Quét bằng AI từ ${files.length} tệp (${pages.length} trang).`,
+      topic: details?.topic ?? questions[0]?.skills[0] ?? '',
+      description: details?.description || `Quét bằng AI từ ${files.length} tệp.`,
       source: 'tai-len',
       status: 'nhap',
       questionCount: questions.length,
-      estimatedMinutes: Math.max(10, questions.length * 3),
-      difficulty: Math.min(5, Math.max(1, avgDifficulty)) as Difficulty,
+      estimatedMinutes: details?.estimatedMinutes ?? Math.max(10, questions.length * 3),
+      difficulty: details?.difficulty ?? 3,
       timesAssigned: 0,
       createdAt: new Date().toISOString(),
     }
     setSaving(true)
-    // Picked files carry `file` and are uploaded; the built-in sample documents are demo-only and not stored.
-    const ok = await library.addSet(set, questions, files.filter((f) => f.file))
+    // The files were uploaded for the scan (`uploaded`), so the store saves them without uploading again.
+    const ok = await library.addSet(set, questions, files)
     setSaving(false)
     if (!ok) return
     toast.success('Đã lưu vào kho bài tập', {
@@ -100,6 +149,7 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
       toast.error('Chưa có câu hỏi nào để lưu')
       return
     }
+    if (!checkComplete()) return
     if (flaggedCount > 0) setConfirmSave(true)
     else void save()
   }
@@ -120,18 +170,29 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
         </div>
       </header>
 
-      {step === 'upload' && <UploadStep files={files} onFilesChange={setFiles} meta={meta} onMetaChange={setMeta} onScan={() => setStep('processing')} />}
+      {step === 'upload' && (
+        <UploadStep files={files} onFilesChange={setFiles} meta={meta} onMetaChange={setMeta} onScan={() => void startScan()} error={scanError} />
+      )}
 
-      {step === 'processing' && <ProcessingStep pages={pages} onDone={handleScanDone} onCancel={() => setStep('upload')} />}
+      {step === 'processing' && <ProcessingStep pages={pages} phase={phase} onCancel={cancelScan} />}
 
       {step === 'review' && (
         <>
           <ReviewStep pages={pages} items={items} onItemsChange={setItems} meta={meta} title={title} onTitleChange={setTitle} />
 
           <div className="sticky bottom-0 z-30 -mx-4 border-t border-slate-200/80 bg-white/95 px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(15,23,42,0.06)] backdrop-blur md:bottom-4 md:mx-0 md:flex md:items-center md:justify-between md:gap-4 md:rounded-2xl md:border md:p-3 md:pl-5">
-            <p className={cn('mb-2 flex items-center gap-1.5 text-sm font-medium md:mb-0', flaggedCount ? 'text-amber-700' : 'text-emerald-700')}>
-              {flaggedCount ? <AlertTriangle className="size-4" /> : <CheckCircle2 className="size-4" />}
-              {flaggedCount ? `Còn ${flaggedCount} câu cần kiểm tra` : 'Tất cả câu hỏi đã sẵn sàng'}
+            <p
+              className={cn(
+                'mb-2 flex items-center gap-1.5 text-sm font-medium md:mb-0',
+                incompleteCount ? 'text-red-700' : flaggedCount ? 'text-amber-700' : 'text-emerald-700',
+              )}
+            >
+              {incompleteCount || flaggedCount ? <AlertTriangle className="size-4 shrink-0" /> : <CheckCircle2 className="size-4 shrink-0" />}
+              {incompleteCount
+                ? `${incompleteCount} câu chưa đủ thông tin – sửa hoặc xóa trước khi lưu`
+                : flaggedCount
+                  ? `Còn ${flaggedCount} câu cần kiểm tra`
+                  : 'Tất cả câu hỏi đã sẵn sàng'}
             </p>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1 md:flex-none" disabled={saving} onClick={requestCancel}>

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { TAB_PATHS } from "@/components/layout/routes"
-import { uploadFiles } from "@/lib/upload-client"
+import { shrinkImage, uploadFiles } from "@/lib/upload-client"
 import type { SubjectId } from "@/lib/types"
 import { requestAttemptUploads, submitPaper } from "@/server/actions/attempts"
 import { unwrap } from "@/lib/action-result"
@@ -19,7 +19,8 @@ export default function PaperRoute({ assignmentId, title, subject }: { assignmen
       onClose={() => router.push(TAB_PATHS.today)}
       onSubmit={async (files) => {
         try {
-          const uploaded = await uploadFiles(files, async (names) => unwrap(await requestAttemptUploads(assignmentId, names)))
+          const photos = await Promise.all(files.map((f) => shrinkImage(f)))
+          const uploaded = await uploadFiles(photos, async (names) => unwrap(await requestAttemptUploads(assignmentId, names)))
           const res = await submitPaper(assignmentId, uploaded)
           if (!res.ok) toast.error(res.error)
           return res.ok

@@ -1,12 +1,16 @@
-"use client"
+import { getQuestions, listExerciseSets } from "@/server/queries"
+import GenerateScreen from "./GenerateScreen"
 
-import { useRouter } from "next/navigation"
-import { useAppNavigation } from "@/components/layout/AppFrame"
-import { TAB_PATHS } from "@/components/layout/routes"
-import AIGenerate from "@/components/pages/AIGenerate"
+// generateSet() waits for Claude, which can take a minute or two.
+export const maxDuration = 300
 
-export default function GeneratePage() {
-  const router = useRouter()
-  const { registerLeaveGuard } = useAppNavigation()
-  return <AIGenerate onClose={() => router.push(TAB_PATHS.library)} registerLeaveGuard={registerLeaveGuard} />
+export default async function GeneratePage() {
+  const sets = await listExerciseSets()
+  // Skill tags per set, offered as topic chips next to the sets' topics.
+  const entries = await Promise.all(
+    sets
+      .filter((s) => s.questionCount > 0)
+      .map(async (s) => [s.id, [...new Set((await getQuestions(s.id)).flatMap((q) => q.skills))]] as [string, string[]]),
+  )
+  return <GenerateScreen skillsBySet={Object.fromEntries(entries)} />
 }

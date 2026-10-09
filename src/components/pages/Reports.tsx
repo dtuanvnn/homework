@@ -35,7 +35,10 @@ import { toast } from "sonner"
 import { useStudent } from "@/components/layout/AppFrame"
 import { buildReport, rangePeriod, summarize, type RangeId, type ReportInput } from "@/lib/analytics"
 import { addDays } from "@/lib/dates"
-import { formatDayMonth, formatShortDate, formatVietnameseDate } from "@/lib/format"
+import { formatDayMonth, formatShortDate, formatTime, formatVietnameseDate } from "@/lib/format"
+import { unwrap } from "@/lib/action-result"
+import type { AiSummary } from "@/lib/ai/summary"
+import { summarizeProgress } from "@/server/actions/ai-summary"
 import { dateInput } from "@/lib/schedule"
 import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
@@ -106,6 +109,9 @@ export default function Reports({ input, now: nowIso }: { input: ReportInput; no
   const [to, setTo] = useState(() => dateInput(now))
   const [assigning, setAssigning] = useState<string | null>(null)
   const [assigned, setAssigned] = useState<Set<string>>(new Set())
+  /** The AI review and the filters it was made for; shown only while those filters stay selected. */
+  const [aiReview, setAiReview] = useState<{ key: string; data: AiSummary } | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
 
   const period = useMemo(
     () => rangePeriod(range, now, range === "custom" && from && to ? { from, to } : undefined),
@@ -113,6 +119,21 @@ export default function Reports({ input, now: nowIso }: { input: ReportInput; no
   )
   const report = useMemo(() => buildReport(input, period, now, subjects), [input, period, now, subjects])
   const review = useMemo(() => summarize(report, student.name), [report, student.name])
+  const custom = range === "custom" && from && to ? { from, to } : undefined
+  const filterKey = JSON.stringify([range, custom ?? null, [...subjects].sort()])
+  const ai = aiReview?.key === filterKey ? aiReview.data : null
+
+  const generateAiReview = async () => {
+    setAiBusy(true)
+    try {
+      const data = unwrap(await summarizeProgress({ rangeId: range, subjects, custom }))
+      setAiReview({ key: filterKey, data })
+    } catch (e) {
+      toast.error("Chưa tạo được nhận xét bằng AI", { description: e instanceof Error ? e.message : "Vui lòng thử lại." })
+    } finally {
+      setAiBusy(false)
+    }
+  }
   const active = SUBJECT_LIST.filter((s) => subjects.includes(s.id))
   const kpi = report.kpis
   const prev = report.previous
@@ -397,18 +418,25 @@ export default function Reports({ input, now: nowIso }: { input: ReportInput; no
           <div className="flex items-center gap-2">
             <span className="flex size-9 items-center justify-center rounded-xl bg-indigo-600 text-white"><Sparkles className="size-5" /></span>
             <div>
-              <h2 className="font-semibold text-slate-900 md:text-lg">Nhận xét tự động</h2>
-              <p className="text-xs text-slate-500">Tổng hợp từ kết quả đến {formatShortDate(now)}</p>
+              <h2 className="font-semibold text-slate-900 md:text-lg">{ai ? "Nhận xét của AI" : "Nhận xét tự động"}</h2>
+              <p className="text-xs text-slate-500">
+                {ai
+                  ? `Tạo lúc ${formatTime(ai.generatedAt)}, ${formatShortDate(ai.generatedAt)}`
+                  : `Tổng hợp từ kết quả đến ${formatShortDate(now)}`}
+              </p>
             </div>
           </div>
-          <p className="text-sm leading-relaxed text-slate-700">{review.summary}</p>
+          <p className="text-sm leading-relaxed text-slate-700" aria-live="polite">{ai ? ai.summary : review.summary}</p>
           <ol className="space-y-2">
-            {review.steps.map((step, i) => {
-              const s = SUBJECTS[step.subject]
+            {(ai
+              ? ai.steps.map((s) => ({ text: s.text, detail: s.detail, subject: s.subject, setId: s.setId ?? undefined }))
+              : review.steps
+            ).map((step, i) => {
+              const tone = step.subject ? cn(SUBJECTS[step.subject].softBg, SUBJECTS[step.subject].text) : "bg-indigo-50 text-indigo-700"
               const done = step.setId !== undefined && assigned.has(step.setId)
               return (
-                <li key={`${step.subject}|${step.text}`} className="flex items-center gap-3 rounded-xl border border-white bg-white/80 p-3 shadow-sm">
-                  <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold", s.softBg, s.text)}>{i + 1}</span>
+                <li key={`${i}|${step.text}`} className="flex items-center gap-3 rounded-xl border border-white bg-white/80 p-3 shadow-sm">
+                  <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold", tone)}>{i + 1}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold leading-snug text-slate-800">{step.text}</p>
                     <p className="text-xs text-slate-500">{step.detail}</p>
@@ -429,6 +457,24 @@ export default function Reports({ input, now: nowIso }: { input: ReportInput; no
               )
             })}
           </ol>
+          <div className="flex flex-wrap items-center gap-2 border-t border-indigo-100 pt-3">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-10 rounded-full border-indigo-200 bg-white text-indigo-700"
+              disabled={aiBusy || kpi.completed === 0}
+              onClick={generateAiReview}
+            >
+              {aiBusy ? <Loader2 className="animate-spin" /> : <Sparkles />}
+              {aiBusy ? "AI đang viết nhận xét…" : ai ? "Tạo lại bằng AI" : "Tạo nhận xét bằng AI"}
+            </Button>
+            {ai && !aiBusy && (
+              <Button size="sm" variant="ghost" className="h-10 rounded-full text-slate-500" onClick={() => setAiReview(null)}>
+                Xem nhận xét tự động
+              </Button>
+            )}
+            {aiBusy && <span className="text-xs text-slate-500">Thường mất dưới 1 phút.</span>}
+          </div>
         </Card>
       </div>
     </div>

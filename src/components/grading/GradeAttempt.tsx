@@ -25,6 +25,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { useAppNavigation, useStudent } from "@/components/layout/AppFrame"
 import { TAB_PATHS } from "@/components/layout/routes"
 import { gradeAttempt } from "@/server/actions/grading"
+import { gradePaperWithAI, suggestAllEssayGrades, suggestEssayGrade } from "@/server/actions/ai-grading"
+import { LOW_CONFIDENCE, type AiMark, type AiPaperMark } from "@/lib/ai/grading"
 import { unwrap } from "@/lib/action-result"
 import { scoreOutOf10 } from "@/lib/grading"
 import { QUESTION_TYPES } from "@/lib/questions"
@@ -40,6 +42,7 @@ import {
   type GradingDetail,
 } from "@/lib/views/grading"
 import ScanViewer from "./ScanViewer"
+import { AiAssistCard, AiReadout } from "./AiAssist"
 import { fmt, scoreTone, submittedLabel } from "./format"
 
 const QUICK_COMMENTS = ["Giỏi lắm!", "Trình bày rõ ràng", "Con đọc kỹ đề nhé", "Kiểm tra lại phép tính", "Viết cẩn thận hơn nhé", "Cần giải thích thêm"]
@@ -60,6 +63,15 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
   const canRetry = d.attemptNo < d.maxAttempts && !d.retryUsed
   const [retry, setRetry] = useState(canRetry && d.retryAllowed)
   const [saving, setSaving] = useState(false)
+  /** Answers whose marks came from AI and the parent has not edited since. */
+  const [aiSuggested, setAiSuggested] = useState<Record<string, boolean>>({})
+  /** What AI read from the scan, per answer (paper attempts). */
+  const [aiReads, setAiReads] = useState<Record<string, Pick<AiPaperMark, "studentAnswer" | "note" | "confidence">>>({})
+  /** AI feedback draft kept aside when the parent already wrote "Nhận xét chung". */
+  const [aiFeedback, setAiFeedback] = useState<string | null>(null)
+  /** "paper", "essays" or the answer id the AI is working on. */
+  const [aiBusy, setAiBusy] = useState<string | null>(null)
+  const essays = d.answers.filter((a) => a.question.type === "tu-luan")
   const tone = SUBJECTS[d.subject]
   const paper = d.mode === "paper"
 
@@ -68,7 +80,68 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
   const score = scoreOutOf10(awarded, total)
   const st = scoreTone(score)
 
-  const patch = (id: string, value: Partial<Mark>) => setMarks((m) => ({ ...m, [id]: { ...m[id], ...value } }))
+  const patch = (id: string, value: Partial<Mark>) => {
+    setMarks((m) => ({ ...m, [id]: { ...m[id], ...value } }))
+    setAiSuggested((s) => (s[id] ? { ...s, [id]: false } : s))
+  }
+
+  /** Fills marks from AI (the parent reviews them), with an undo in the toast. */
+  const applyAi = (suggested: Record<string, AiMark>, message: string, description?: string) => {
+    const before = marks
+    const ids = Object.keys(suggested)
+    setMarks((m) => ({
+      ...m,
+      ...Object.fromEntries(ids.map((id) => [id, { isCorrect: suggested[id].isCorrect, pointsAwarded: suggested[id].pointsAwarded, comment: suggested[id].comment }])),
+    }))
+    setAiSuggested((s) => ({ ...s, ...Object.fromEntries(ids.map((id) => [id, true])) }))
+    toast.success(message, {
+      description: description ?? "Hãy kiểm tra lại trước khi hoàn tất chấm bài.",
+      action: {
+        label: "Hoàn tác",
+        onClick: () => {
+          setMarks(before)
+          setAiSuggested((s) => ({ ...s, ...Object.fromEntries(ids.map((id) => [id, false])) }))
+        },
+      },
+    })
+  }
+
+  const runAi = async (key: string, run: () => Promise<void>) => {
+    setAiBusy(key)
+    try {
+      await run()
+    } catch (e) {
+      toast.error("AI chưa chấm được", { description: e instanceof Error ? e.message : "Vui lòng thử lại." })
+    } finally {
+      setAiBusy(null)
+    }
+  }
+
+  const suggestOne = (a: GradingAnswer, n: number) =>
+    runAi(a.id, async () => {
+      const mark = unwrap(await suggestEssayGrade(a.id))
+      applyAi({ [a.id]: mark }, `AI gợi ý câu ${n}: ${fmt(mark.pointsAwarded)}/${fmt(a.question.points)} điểm`)
+    })
+
+  const suggestEssays = () =>
+    runAi("essays", async () => {
+      const suggested = unwrap(await suggestAllEssayGrades(d.attemptId))
+      applyAi(suggested, `AI đã gợi ý ${Object.keys(suggested).length}/${essays.length} câu tự luận`)
+    })
+
+  const gradePaper = () =>
+    runAi("paper", async () => {
+      const result = unwrap(await gradePaperWithAI(d.attemptId))
+      const unsure = Object.values(result.marks).filter((m) => m.confidence < LOW_CONFIDENCE).length
+      setAiReads(
+        Object.fromEntries(Object.entries(result.marks).map(([id, m]) => [id, { studentAnswer: m.studentAnswer, note: m.note, confidence: m.confidence }])),
+      )
+      if (result.feedback) {
+        if (!feedback.trim()) setFeedback(result.feedback)
+        else setAiFeedback(result.feedback)
+      }
+      applyAi(result.marks, "AI đã chấm xong từ ảnh scan", unsure ? `${unsure} câu AI chưa chắc – hãy kiểm tra lại các câu được đánh dấu.` : undefined)
+    })
 
   const finish = async () => {
     if (remaining > 0) {
@@ -130,6 +203,12 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
             </span>
           )}
           {ungraded && <span className="ml-auto font-medium text-amber-700">Cần chấm</span>}
+          {!ungraded && aiSuggested[a.id] && (
+            <Badge variant="outline" className={cn("gap-1 border-violet-200 bg-violet-50 text-violet-700", !auto && "ml-auto")}>
+              <Sparkles className="size-3" />
+              AI đề xuất
+            </Badge>
+          )}
         </div>
         <p className="font-medium leading-relaxed text-slate-900 md:text-lg">{q.prompt}</p>
 
@@ -141,7 +220,10 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
           <div className="rounded-xl bg-indigo-50/60 p-3">
             <p className="mb-1 text-xs font-semibold text-indigo-700">Con trả lời</p>
             {paper ? (
-              <p className="text-slate-600">Bài làm trên giấy · xem ảnh scan</p>
+              <>
+                <p className="text-slate-600">Bài làm trên giấy · xem ảnh scan</p>
+                {aiReads[a.id] && <AiReadout read={aiReads[a.id]} />}
+              </>
             ) : (
               <>
                 {answerText && <p className="break-words whitespace-pre-wrap text-slate-800">{answerText}</p>}
@@ -215,11 +297,11 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
               type="button"
               variant="ghost"
               className="h-11 text-violet-700"
-              title="Tính năng AI sẽ có ở giai đoạn sau"
-              onClick={() => toast("Tính năng AI sẽ có ở giai đoạn sau")}
+              disabled={aiBusy !== null}
+              onClick={() => suggestOne(a, n)}
             >
-              <Sparkles />
-              AI gợi ý
+              {aiBusy === a.id ? <Loader2 className="animate-spin" /> : <Sparkles />}
+              {aiBusy === a.id ? "AI đang chấm…" : "AI gợi ý"}
             </Button>
           )}
         </div>
@@ -265,6 +347,32 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
         {paper && <p className="text-sm text-amber-700">Bài làm trên giấy: đối chiếu ảnh scan và chấm từng câu.</p>}
       </Card>
 
+      {paper && (
+        <AiAssistCard
+          heading="Chấm nhanh bằng AI"
+          title="AI chấm từ ảnh scan"
+          description={
+            d.scans.length
+              ? `AI đọc chữ viết tay trên ${d.scans.length} ảnh và đề xuất điểm từng câu. Phụ huynh kiểm tra lại trước khi hoàn tất.`
+              : "Bài làm này chưa có ảnh scan nên AI chưa chấm được."
+          }
+          busyText="AI đang đọc bài làm trên ảnh…"
+          busy={aiBusy === "paper"}
+          disabled={aiBusy !== null || d.scans.length === 0}
+          onRun={gradePaper}
+        />
+      )}
+      {!paper && essays.length > 0 && (
+        <AiAssistCard
+          heading="Chấm tự luận bằng AI"
+          title={essays.length > 1 ? "AI gợi ý tất cả câu tự luận" : "AI gợi ý câu tự luận"}
+          description={`AI đề xuất điểm và nhận xét cho ${essays.length} câu tự luận. Phụ huynh kiểm tra lại trước khi hoàn tất.`}
+          busyText="AI đang chấm các câu tự luận…"
+          busy={aiBusy === "essays"}
+          disabled={aiBusy !== null}
+          onRun={suggestEssays}
+        />
+      )}
       <div className={cn("grid grid-cols-1 gap-5", paper && "lg:grid-cols-2 lg:items-start")}>
         {paper && <ScanViewer scans={d.scans} className="min-w-0 h-[60vh] lg:sticky lg:top-4 lg:h-[calc(100vh-8rem)]" />}
         <div className="flex min-w-0 flex-col gap-3">
@@ -280,6 +388,32 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
                 onChange={(e) => setFeedback(e.target.value)}
                 placeholder="Con làm tốt lắm! Lần sau nhớ..."
               />
+              {aiFeedback && (
+                <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-3 text-sm">
+                  <p className="mb-1 inline-flex items-center gap-1 text-xs font-semibold text-violet-700">
+                    <Sparkles className="size-3.5" />
+                    AI gợi ý nhận xét chung
+                  </p>
+                  <p className="text-slate-700">{aiFeedback}</p>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9"
+                      onClick={() => {
+                        setFeedback(aiFeedback)
+                        setAiFeedback(null)
+                      }}
+                    >
+                      Dùng nhận xét này
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" className="h-9 text-slate-500" onClick={() => setAiFeedback(null)}>
+                      Bỏ qua
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
             {canRetry && (
               <button
@@ -313,7 +447,7 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
             {!remaining && <Badge variant="outline" className={cn("ml-2 align-middle", st.cls)}>{st.label}</Badge>}
           </p>
         </div>
-        <Button size="lg" className="h-12 rounded-xl" disabled={saving} onClick={finish}>
+        <Button size="lg" className="h-12 rounded-xl" disabled={saving || aiBusy !== null} onClick={finish}>
           {saving ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
           Hoàn tất chấm bài
         </Button>

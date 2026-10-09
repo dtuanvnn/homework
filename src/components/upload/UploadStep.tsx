@@ -1,21 +1,17 @@
 import { useRef, useState } from 'react'
-import { Camera, FileImage, FolderOpen, Sparkles, UploadCloud } from 'lucide-react'
+import { AlertTriangle, Camera, FolderOpen, Sparkles, UploadCloud } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import AttachmentGallery, { filesToAttachments } from '@/components/exercise-detail/AttachmentGallery'
-import { SAMPLE_UPLOADS } from '@/data/scan-mock'
+import { MAX_SCAN_FILES, type ScanMeta } from '@/lib/ai/scan'
 import { EXERCISE_KINDS, GRADES } from '@/lib/library'
 import { SUBJECT_LIST } from '@/lib/subjects'
 import { cn } from '@/lib/utils'
 import type { Attachment, ExerciseKind, SubjectId } from '@/lib/types'
 
-export interface UploadMeta {
-  subject: SubjectId
-  grade: number
-  kind: ExerciseKind
-}
+export type UploadMeta = ScanMeta
 
 interface UploadStepProps {
   files: Attachment[]
@@ -23,12 +19,15 @@ interface UploadStepProps {
   meta: UploadMeta
   onMetaChange: (meta: UploadMeta) => void
   onScan: () => void
+  /** Why the last scan failed, shown above the scan button. */
+  error?: string | null
 }
 
-export default function UploadStep({ files, onFilesChange, meta, onMetaChange, onScan }: UploadStepProps) {
+export default function UploadStep({ files, onFilesChange, meta, onMetaChange, onScan, error }: UploadStepProps) {
   const fileInput = useRef<HTMLInputElement>(null)
   const cameraInput = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const tooMany = files.length > MAX_SCAN_FILES
 
   const addFiles = (list: FileList | null) => {
     if (list?.length) onFilesChange([...files, ...filesToAttachments(list)])
@@ -72,16 +71,6 @@ export default function UploadStep({ files, onFilesChange, meta, onMetaChange, o
             Chọn tệp
           </Button>
         </div>
-        {files.length === 0 && (
-          <button
-            type="button"
-            onClick={() => onFilesChange(SAMPLE_UPLOADS.map((f) => ({ ...f })))}
-            className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
-          >
-            <FileImage className="size-4" />
-            Dùng tài liệu mẫu
-          </button>
-        )}
         <input ref={fileInput} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
         <input ref={cameraInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
       </div>
@@ -153,12 +142,32 @@ export default function UploadStep({ files, onFilesChange, meta, onMetaChange, o
         </div>
       </Card>
 
+      {error && (
+        <div role="alert" className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-500" aria-hidden />
+          <div>
+            <p className="font-bold">Chưa quét được tài liệu</p>
+            <p>{error}</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col items-stretch gap-2 sm:items-end">
-        <Button size="lg" className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700" disabled={files.length === 0} onClick={onScan}>
+        <Button
+          size="lg"
+          className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700"
+          disabled={files.length === 0 || tooMany}
+          onClick={onScan}
+        >
           <Sparkles className="size-5" />
-          Quét bằng AI
+          {error ? 'Quét lại bằng AI' : 'Quét bằng AI'}
         </Button>
         {files.length === 0 && <p className="text-center text-xs text-slate-400 sm:text-right">Thêm ít nhất một tệp để bắt đầu quét.</p>}
+        {tooMany && (
+          <p className="text-center text-xs font-medium text-amber-700 sm:text-right">
+            Mỗi lần quét tối đa {MAX_SCAN_FILES} tệp – hãy bỏ bớt {files.length - MAX_SCAN_FILES} tệp.
+          </p>
+        )}
       </div>
     </div>
   )

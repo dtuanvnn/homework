@@ -3,6 +3,9 @@ import { notFound } from "next/navigation"
 import GradeAttempt from "@/components/grading/GradeAttempt"
 import { loadGradingDetail } from "../data"
 
+// AI grading (Server Actions on this page) can take 30–120 s.
+export const maxDuration = 300
+
 export default async function GradeAttemptPage({ params }: PageProps<"/parent/grading/[attemptId]">) {
   await connection()
   const { attemptId } = await params

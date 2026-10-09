@@ -5,36 +5,34 @@ import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import type { SourcePage } from './review-utils'
 
-const MS_PER_PAGE = 1200
-const FINISH_MS = 900
+/** Which part of the scan is running: the browser uploading files, or Claude reading them. */
+export type ScanPhase = 'uploading' | 'reading'
+
+/** The scanner shows the next page thumbnail this often while Claude reads. */
+const PAGE_CYCLE_MS = 2500
+/** Time constant of the (estimated) progress curve; a scan usually takes 30 s – 2 min. */
+const PROGRESS_TAU_MS = 45_000
 
 interface ProcessingStepProps {
   pages: SourcePage[]
-  onDone: () => void
+  phase: ScanPhase
   onCancel: () => void
 }
 
-export default function ProcessingStep({ pages, onDone, onCancel }: ProcessingStepProps) {
-  const total = pages.length * MS_PER_PAGE + FINISH_MS
+export default function ProcessingStep({ pages, phase, onCancel }: ProcessingStepProps) {
   const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
     const start = performance.now()
-    const timer = window.setInterval(() => {
-      const t = performance.now() - start
-      setElapsed(Math.min(t, total))
-      if (t >= total) {
-        window.clearInterval(timer)
-        onDone()
-      }
-    }, 80)
+    const timer = window.setInterval(() => setElapsed(performance.now() - start), 250)
     return () => window.clearInterval(timer)
-  }, [total, onDone])
+  }, [])
 
-  const reading = elapsed < pages.length * MS_PER_PAGE
-  const pageNo = Math.min(pages.length, Math.floor(elapsed / MS_PER_PAGE) + 1)
-  const page = pages[pageNo - 1]
-  const percent = Math.round((elapsed / total) * 100)
+  const uploading = phase === 'uploading'
+  const page = pages.length ? pages[Math.floor(elapsed / PAGE_CYCLE_MS) % pages.length] : undefined
+  // The request gives no real progress, so ease towards 95% and let completion jump to the review step.
+  const percent = uploading ? Math.min(10, Math.round(elapsed / 500)) : Math.round(10 + 85 * (1 - Math.exp(-elapsed / PROGRESS_TAU_MS)))
+  const late = elapsed > 40_000
 
   return (
     <div className="flex flex-col gap-6">
@@ -50,20 +48,26 @@ export default function ProcessingStep({ pages, onDone, onCancel }: ProcessingSt
               ))}
             </div>
           )}
-          {reading && (
-            <span className="anim-scan absolute inset-x-0 h-8 -translate-y-1/2 bg-gradient-to-b from-transparent via-indigo-500/25 to-transparent">
-              <span className="absolute inset-x-0 top-1/2 h-0.5 bg-indigo-500 shadow-[0_0_12px_2px_rgba(99,102,241,0.6)]" />
-            </span>
-          )}
+          <span className="anim-scan absolute inset-x-0 h-8 -translate-y-1/2 bg-gradient-to-b from-transparent via-indigo-500/25 to-transparent">
+            <span className="absolute inset-x-0 top-1/2 h-0.5 bg-indigo-500 shadow-[0_0_12px_2px_rgba(99,102,241,0.6)]" />
+          </span>
         </div>
 
         <div aria-live="polite">
           <p className="flex items-center justify-center gap-2 text-lg font-bold text-slate-900">
             <Sparkles className="size-5 text-violet-500" />
-            {reading ? `Đang đọc tài liệu… (trang ${pageNo}/${pages.length})` : 'Đang nhận dạng câu hỏi và đáp án…'}
+            {uploading
+              ? `Đang tải tài liệu lên… (${pages.length} tệp)`
+              : late
+                ? 'Đang nhận dạng câu hỏi và đáp án…'
+                : `Đang đọc tài liệu… (${pages.length} tệp)`}
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            {reading ? page?.file.name : 'Sắp xong rồi! Bạn sẽ được kiểm tra lại trước khi lưu.'}
+            {uploading
+              ? 'Ảnh được thu nhỏ trước khi gửi để quét nhanh hơn.'
+              : late
+                ? 'Sắp xong rồi! Bạn sẽ được kiểm tra lại trước khi lưu.'
+                : 'Thường mất 30 giây đến 2 phút. Hãy giữ màn hình này mở.'}
           </p>
         </div>
 

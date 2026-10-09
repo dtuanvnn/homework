@@ -30,10 +30,11 @@ interface AskOptions<S extends z.ZodType> {
   maxTokens?: number
 }
 
-export async function ask<S extends z.ZodType>({ system, content, schema, effort = "medium", maxTokens = 16000 }: AskOptions<S>): Promise<z.infer<S>> {
+// Streamed so long outputs (many-page scans) don't hit the SDK's non-streaming request timeout guard.
+export async function ask<S extends z.ZodType>({ system, content, schema, effort = "medium", maxTokens = 32000 }: AskOptions<S>): Promise<z.infer<S>> {
   let response
   try {
-    response = await anthropic().beta.messages.parse({
+    const stream = anthropic().beta.messages.stream({
       model: AI_MODEL,
       max_tokens: maxTokens,
       betas: ["server-side-fallback-2026-07-01"],
@@ -42,6 +43,7 @@ export async function ask<S extends z.ZodType>({ system, content, schema, effort
       system,
       messages: [{ role: "user", content }],
     })
+    response = await stream.finalMessage()
   } catch (err) {
     throw new Error(friendlyError(err))
   }
