@@ -25,7 +25,10 @@ interface AppShellProps {
 
 export default function AppShell({ mode, onModeChange, items, activeTab, onTabChange, children, pageTitle, onBack }: AppShellProps) {
   // Collapsed by default on iPad portrait so content keeps a 2-column grid.
-  const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024)
+  const [collapsed, setCollapsed] = useState(false)
+  useEffect(() => {
+    if (window.innerWidth < 1024) setCollapsed(true)
+  }, [])
   const activeItem = items.find((i) => i.id === activeTab) ?? items[0]
 
   const reduced = useReducedMotion()

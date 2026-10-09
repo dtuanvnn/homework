@@ -48,7 +48,7 @@ import type {
   QuestionType,
   SubjectId,
 } from "@/lib/types"
-import type { LeaveGuard } from "./ExerciseSetDetail"
+import type { LeaveGuard } from "@/components/layout/AppFrame"
 
 const EXTRA_TOPICS: Record<SubjectId, string[]> = {
   toan: ["Bảng nhân 6–9", "Đo độ dài"],

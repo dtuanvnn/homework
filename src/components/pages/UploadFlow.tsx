@@ -16,7 +16,7 @@ import { SUBJECTS } from '@/lib/subjects'
 import { cn } from '@/lib/utils'
 import { useLibrary } from '@/state/library-store'
 import type { Attachment, Difficulty } from '@/lib/types'
-import type { LeaveGuard } from './ExerciseSetDetail'
+import type { LeaveGuard } from '@/components/layout/AppFrame'
 
 interface UploadFlowProps {
   onClose: () => void

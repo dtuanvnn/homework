@@ -18,7 +18,7 @@ import { useLibrary } from '@/state/library-store'
 import type { Attachment, ExerciseSet, ExerciseSetStatus, Question } from '@/lib/types'
 
 /** Called by the shell before navigating away; `next` runs once leaving is confirmed. */
-export type LeaveGuard = (next: () => void) => void
+import type { LeaveGuard } from "@/components/layout/AppFrame"
 
 interface ExerciseSetDetailProps {
   setId: string

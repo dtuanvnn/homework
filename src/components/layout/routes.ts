@@ -1,0 +1,50 @@
+import type { Route } from "next"
+import type { AppMode } from "@/lib/types"
+import type { TabId } from "./nav-config"
+
+export const TAB_PATHS: Record<TabId, Route> = {
+  dashboard: "/parent",
+  library: "/parent/library",
+  schedule: "/parent/schedule",
+  grading: "/parent/grading",
+  reports: "/parent/reports",
+  today: "/student",
+  assignments: "/student/assignments",
+  results: "/student/results",
+}
+
+export const MODE_HOME: Record<AppMode, Route> = {
+  parent: TAB_PATHS.dashboard,
+  student: TAB_PATHS.today,
+}
+
+export const libraryPaths = {
+  set: (id: string) => `/parent/library/${encodeURIComponent(id)}` as Route,
+  upload: "/parent/library/upload" as Route,
+  generate: "/parent/library/generate" as Route,
+}
+
+/** Sub-pages of a tab: title shown in the phone app bar, plus a back button and no tab bar. */
+const SUB_PAGE_TITLES: [RegExp, string][] = [
+  [/^\/parent\/library\/upload$/, "Tải lên tài liệu"],
+  [/^\/parent\/library\/generate$/, "Tạo bằng AI"],
+  [/^\/parent\/library\/[^/]+$/, "Chi tiết bộ bài tập"],
+]
+
+export interface RouteInfo {
+  mode: AppMode
+  tab: TabId
+  subPageTitle?: string
+  /** Where the sub-page back button goes. */
+  parentPath?: Route
+}
+
+export function resolveRoute(pathname: string): RouteInfo {
+  const mode: AppMode = pathname.startsWith("/student") ? "student" : "parent"
+  // Longest matching tab path wins, so /parent/library beats /parent.
+  const tab = (Object.entries(TAB_PATHS) as [TabId, string][])
+    .filter(([, path]) => pathname === path || pathname.startsWith(`${path}/`))
+    .sort((a, b) => b[1].length - a[1].length)[0]?.[0] ?? (mode === "parent" ? "dashboard" : "today")
+  const sub = SUB_PAGE_TITLES.find(([re]) => re.test(pathname))
+  return sub ? { mode, tab, subPageTitle: sub[1], parentPath: TAB_PATHS[tab] } : { mode, tab }
+}
