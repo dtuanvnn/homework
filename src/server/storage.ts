@@ -73,6 +73,13 @@ export async function isUploaded(folder: StorageFolder, ownerId: string, path: s
   return Boolean(data)
 }
 
+/** Reads an object server side (e.g. to send a scan to Claude). */
+export async function downloadFromStorage(path: string): Promise<{ data: Buffer; contentType: string }> {
+  const { data, error } = await storage().from(BUCKET).download(path)
+  if (error || !data) throw new Error("Không đọc được tệp đã tải lên")
+  return { data: Buffer.from(await data.arrayBuffer()), contentType: data.type || "application/octet-stream" }
+}
+
 export async function removeFromStorage(paths: string[]) {
   if (!paths.length) return
   const { error } = await storage().from(BUCKET).remove(paths)
