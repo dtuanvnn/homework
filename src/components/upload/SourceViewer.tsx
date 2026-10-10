@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ImageOff, Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { SubjectId } from '@/lib/types'
-import PaperPage from './PaperPage'
 import type { ReviewItem, SourcePage } from './review-utils'
 
 const MIN_ZOOM = 1
@@ -15,19 +13,13 @@ interface SourceViewerProps {
   activePage: number
   onPageChange: (page: number) => void
   items: ReviewItem[]
-  subject: SubjectId
-  grade: number
   className?: string
 }
 
-export default function SourceViewer({ pages, activePage, onPageChange, items, subject, grade, className }: SourceViewerProps) {
+export default function SourceViewer({ pages, activePage, onPageChange, items, className }: SourceViewerProps) {
   const [zoom, setZoom] = useState(1)
   const page = pages[activePage - 1] ?? pages[0]
   const clamp = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
-
-  const pageQuestions = items
-    .map((item, i) => ({ number: i + 1, question: item.question, page: item.page }))
-    .filter((q) => q.page === page?.index)
 
   if (!page) return null
 
@@ -68,7 +60,11 @@ export default function SourceViewer({ pages, activePage, onPageChange, items, s
           {page.file.kind === 'image' && page.file.url ? (
             <img src={page.file.url} alt={`Bản gốc trang ${page.index}: ${page.file.name}`} className="w-full rounded-md shadow-md" draggable={false} />
           ) : (
-            <PaperPage subject={subject} grade={grade} pageNo={page.pageInFile} fileName={page.file.name} questions={pageQuestions} />
+            <div className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
+              <ImageOff className="size-8" aria-hidden />
+              <p className="font-medium">Không có ảnh xem trước</p>
+              <p className="text-sm">{page.file.name}</p>
+            </div>
           )}
         </div>
       </div>

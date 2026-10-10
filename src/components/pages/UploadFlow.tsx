@@ -14,7 +14,8 @@ import type { ScanResult } from '@/lib/ai/scan'
 import { shrinkImage, uploadFiles } from '@/lib/upload-client'
 import { cn } from '@/lib/utils'
 import { scanDocuments } from '@/server/actions/ai-scan'
-import { requestSetUploads } from '@/server/actions/library'
+import { previewSetUploads, requestSetUploads } from '@/server/actions/library'
+import { clearScanDraft, loadScanDraft, saveScanDraft, type ScanDraft } from '@/lib/scan-draft'
 import { useLibrary } from '@/state/library-store'
 import type { Attachment, ExerciseSet } from '@/lib/types'
 import type { LeaveGuard } from '@/components/layout/AppFrame'
@@ -43,7 +44,9 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
   const [title, setTitle] = useState('')
   const [details, setDetails] = useState<ScanDetails | null>(null)
   // Files are uploaded under this id before the scan, and the set is saved with it.
-  const [setId] = useState(() => crypto.randomUUID())
+  const [setId, setSetId] = useState(() => crypto.randomUUID())
+  /** An unsaved scan from an earlier visit (back pressed, tab closed…), offered for restore. */
+  const [restorable, setRestorable] = useState<ScanDraft | null>(() => loadScanDraft())
   const [phase, setPhase] = useState<ScanPhase>('uploading')
   const [scanError, setScanError] = useState<string | null>(null)
   /** Bumped by every scan and by cancel, so the late result of a cancelled scan is ignored. */
@@ -61,6 +64,35 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
     registerLeaveGuard((next) => (hasProgress ? setPendingLeave(() => next) : next()))
     return () => registerLeaveGuard(null)
   }, [hasProgress, registerLeaveGuard])
+
+  // Keep the review state restorable until it's saved or explicitly discarded.
+  useEffect(() => {
+    if (step === 'review' && items.length) saveScanDraft({ setId, meta, title, details, items, files })
+  }, [step, setId, meta, title, details, items, files])
+
+  const restoreDraft = async (draft: ScanDraft) => {
+    setRestorable(null)
+    setSetId(draft.setId)
+    setMeta(draft.meta)
+    setTitle(draft.title)
+    setDetails(draft.details)
+    setItems(draft.items)
+    setFiles(draft.files)
+    setStep('review')
+    // Blob previews are gone; show the uploaded copies instead.
+    const paths = draft.files.flatMap((f) => (f.uploaded ? [f.uploaded.path] : []))
+    try {
+      const urls = unwrap(await previewSetUploads(draft.setId, paths))
+      setFiles((list) => list.map((f) => (f.uploaded && urls[f.uploaded.path] ? { ...f, url: urls[f.uploaded.path] } : f)))
+    } catch {
+      toast('Không tải được ảnh xem trước', { description: 'Các câu hỏi vẫn được giữ nguyên.' })
+    }
+  }
+
+  const discardDraft = () => {
+    clearScanDraft()
+    setRestorable(null)
+  }
 
   const startScan = async () => {
     const run = ++scanRun.current
@@ -138,6 +170,7 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
     const ok = await library.addSet(set, questions, files)
     setSaving(false)
     if (!ok) return
+    clearScanDraft()
     toast.success('Đã lưu vào kho bài tập', {
       description: `“${set.title}” · ${questions.length} câu · lưu ở dạng Nháp`,
     })
@@ -224,11 +257,30 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
               onClick={() => {
                 const next = pendingLeave
                 setPendingLeave(null)
+                clearScanDraft()
                 next?.()
               }}
             >
               Hủy tải lên
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={restorable !== null} onOpenChange={(open) => !open && setRestorable(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Khôi phục kết quả quét?</DialogTitle>
+            <DialogDescription>
+              {restorable &&
+                `“${restorable.title || 'Phiếu bài tập đã quét'}” · ${restorable.items.length} câu, quét lúc ${new Date(restorable.savedAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })} nhưng chưa lưu vào kho.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={discardDraft}>
+              Bỏ đi
+            </Button>
+            <Button onClick={() => restorable && void restoreDraft(restorable)}>Khôi phục</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

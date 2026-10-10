@@ -83,8 +83,6 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
       activePage={activePage}
       onPageChange={setActivePage}
       items={items}
-      subject={meta.subject}
-      grade={meta.grade}
       className={isTablet ? 'h-full' : 'h-[68dvh]'}
     />
   )

@@ -9,7 +9,7 @@ import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { assertAccess } from "../access"
 import { getExerciseSetDetail, getQuestions, getStudent, isUuid, toExerciseSet } from "../queries"
-import { createUploadTargets, isUploaded, removeFromStorage, type UploadTarget } from "../storage"
+import { attachmentUrl, createUploadTargets, isUploaded, removeFromStorage, type UploadTarget } from "../storage"
 
 const { exerciseSets, questions, attachments, assignments } = schema
 
@@ -239,5 +239,17 @@ export async function quickAssign(setId: string): Promise<ActionResult<Assignmen
       { setId, availableFrom: new Date().toISOString(), dueAt: due.toISOString(), mode: "web", maxAttempts: 2 },
     ])
     return created
+  })
+}
+
+/** Preview URLs for files already uploaded under a not-yet-saved set (restoring an unsaved scan). */
+export async function previewSetUploads(setId: string, paths: string[]): Promise<ActionResult<Record<string, string>>> {
+  return runAction(async () => {
+    await assertAccess()
+    if (!isUuid(setId)) throw new Error("Mã bộ bài không hợp lệ")
+    const prefix = `sets/${setId}/`
+    const own = paths.slice(0, 30).filter((p) => p.startsWith(prefix) && !p.includes(".."))
+    const entries = await Promise.all(own.map(async (p) => [p, await attachmentUrl({ storagePath: p, externalUrl: null })] as const))
+    return Object.fromEntries(entries.filter((e): e is readonly [string, string] => Boolean(e[1])))
   })
 }
