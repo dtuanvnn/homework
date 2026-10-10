@@ -68,7 +68,7 @@ Transcribe every exercise in the document into questions:
 - Split multi-part exercises into one question per part when each part has its own answer; repeat shared context (e.g. the word problem's facts or the instruction) in each part's prompt so it stands alone.
 - Choose the question type that matches how the child answers. Open-ended writing (essays, paragraphs, explaining in words) is tu-luan with a rubric for the parent.
 - Skip headers, names/date lines, general instructions and example items that are not questions.
-- If the document shows answers (answer key, filled-in answers, circled options), use them. Otherwise solve the exercise yourself as a teacher of this grade would expect, lower confidence to at most 0.7, and say in the note that you supplied the answer.
+- Use a printed answer key when there is one. Handwritten or circled answers may be a child's own work and can be wrong: check each one, use the correct answer, and when the written one was wrong say so in the note. When no answer is shown, solve the exercise yourself as a teacher of this grade would expect and say in the note "AI tự giải".
 - Report low confidence and a short note when text is hard to read, cut off or ambiguous. Never invent questions that are not in the document.
 - page is the number N of the "Tệp N" label above the file the question comes from.
 

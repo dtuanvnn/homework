@@ -11,8 +11,10 @@ import { downloadFromStorage } from "../storage"
  * DeepSeek when DEEPSEEK_API_KEY is set, else Claude):
  *
  * - "deepseek": deepseek-flash through DeepSeek's Anthropic-compatible
- *   endpoint. It has no structured outputs, so the schema is sent as a
- *   forced tool and the tool input is validated (one retry on mismatch).
+ *   endpoint. It has no structured outputs, so the schema is sent as a tool
+ *   the model is told to call, and the tool input is validated (one retry
+ *   when the call is missing or invalid). Forced tool_choice is rejected in
+ *   thinking mode, and thinking helps with handwriting, so choice stays "auto".
  *   Images only — no PDF document blocks (the browser turns PDFs into page
  *   images before upload).
  * - "anthropic": Claude with structured outputs and server-side refusal fallback.
@@ -81,7 +83,7 @@ async function askStructured<S extends z.ZodType>({ system, content, schema, eff
 
 const RESULT_TOOL = "submit_result"
 
-/** DeepSeek: the schema becomes a forced tool; its input is the result. */
+/** DeepSeek: the schema becomes a tool the model must call; its input is the result. */
 async function askViaTool<S extends z.ZodType>({ system, content, schema, effort = "medium", maxTokens = 32000 }: AskOptions<S>): Promise<z.infer<S>> {
   const { $schema: _, ...inputSchema } = z.toJSONSchema(schema) as Record<string, unknown>
   const tool: Anthropic.Tool = {
@@ -96,10 +98,12 @@ async function askViaTool<S extends z.ZodType>({ system, content, schema, effort
       .messages.stream({
         model: MODELS.deepseek,
         max_tokens: maxTokens,
-        system,
+        system: `${system}
+
+Always finish by calling the ${RESULT_TOOL} tool exactly once with the complete result; do not answer in plain text.`,
         messages,
         tools: [tool],
-        tool_choice: { type: "tool", name: RESULT_TOOL },
+        tool_choice: { type: "auto" },
         output_config: { effort },
       })
       .finalMessage()
@@ -107,8 +111,14 @@ async function askViaTool<S extends z.ZodType>({ system, content, schema, effort
     const call = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === RESULT_TOOL)
     const parsed = schema.safeParse(call?.input)
     if (parsed.success) return parsed.data
-    if (!call) throw new AiError("AI không trả về kết quả. Vui lòng thử lại.")
     // Tell the model what was wrong once, then give up.
+    if (!call) {
+      messages.push(
+        { role: "assistant", content: response.content as Anthropic.ContentBlockParam[] },
+        { role: "user", content: `Call the ${RESULT_TOOL} tool now with the complete result.` },
+      )
+      continue
+    }
     messages.push(
       { role: "assistant", content: response.content as Anthropic.ContentBlockParam[] },
       {

@@ -40,10 +40,11 @@ describe("toQuestion", () => {
     expect(r.notes).toEqual([])
   })
 
-  it("adds blanks when the prompt has none but answers exist", () => {
-    const r = toQuestion(ai({ type: "dien-cho-trong", prompt: "234 × 2 = ; 312 × 3 =", answers: ["468", "936"] }), "q")
-    expect(r.question.prompt).toBe("234 × 2 = ; 312 × 3 = ___ ; ___")
-    expect(r.confidence).toBe(REPAIRED_CONFIDENCE)
+  it("appends blanks when the prompt has none, without lowering confidence", () => {
+    const r = toQuestion(ai({ type: "dien-cho-trong", prompt: "6 × 10 =", answers: ["60"] }), "q")
+    expect(r.question.prompt).toBe("6 × 10 = ___")
+    expect(r.confidence).toBe(0.9)
+    expect(r.notes).toEqual([])
   })
 
   it("pads missing blank answers and flags them", () => {

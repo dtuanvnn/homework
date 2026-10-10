@@ -73,10 +73,9 @@ function draft(ai: AiQuestion, issues: string[]): QuestionContent {
       let prompt = normalizeBlanks(base.prompt)
       const answers = ai.answers ?? []
       const blanks = prompt.split(BLANK).length - 1
-      if (blanks === 0 && answers.length > 0) {
-        prompt = `${prompt} ${Array(answers.length).fill(BLANK).join(" ; ")}`
-        issues.push("Đã thêm chỗ trống vào cuối câu")
-      } else if (blanks !== answers.length) issues.push(`Số chỗ trống (${blanks}) khác số đáp án (${answers.length})`)
+      // "6 × 10 =" with one answer is common and harmless: append the blank without flagging it.
+      if (blanks === 0 && answers.length > 0) prompt = `${prompt} ${Array(answers.length).fill(BLANK).join(" ; ")}`
+      else if (blanks !== answers.length) issues.push(`Số chỗ trống (${blanks}) khác số đáp án (${answers.length})`)
       const filled = Array.from({ length: Math.max(blanks, answers.length, 1) }, (_, i) => answers[i]?.trim() ?? "")
       if (filled.some((a) => !a)) issues.push("Còn chỗ trống chưa có đáp án")
       return { ...base, prompt, type: "dien-cho-trong", answers: filled }
