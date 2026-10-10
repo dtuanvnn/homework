@@ -1,6 +1,6 @@
 import "server-only"
 import { drizzle } from "drizzle-orm/node-postgres"
-import { Pool } from "pg"
+import { Pool, types } from "pg"
 import * as schema from "./schema"
 
 const globalForDb = globalThis as unknown as { pgPool?: Pool }
@@ -12,6 +12,15 @@ const globalForDb = globalThis as unknown as { pgPool?: Pool }
  * pooler hangs on. pg runs one query at a time per connection, so the
  * transaction pooler works. Few connections per instance, closed when idle.
  */
+/*
+ * pg parses json/jsonb itself and Drizzle JSON.parses any string it gets
+ * back, so a stored string like "9875" came out as the number 9875. Hand
+ * Drizzle the raw text so it parses once. Global, because Drizzle passes its
+ * own per-query parsers that fall back to pg's global ones.
+ */
+types.setTypeParser(types.builtins.JSON, (value) => value)
+types.setTypeParser(types.builtins.JSONB, (value) => value)
+
 function createPool() {
   const url = process.env.DATABASE_URL!
   const local = /@(127\.0\.0\.1|localhost)[:/]/.test(url)
