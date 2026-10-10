@@ -53,6 +53,7 @@ Env vars live in `.env.local` (see `.env.example`): `DATABASE_URL`, `SUPABASE_UR
 
 - Time zone: "today", due times and week boundaries are Vietnam time. `src/instrumentation.ts` sets `process.env.TZ = "Asia/Ho_Chi_Minh"` on the server; scripts set it themselves (see `src/db/seed.ts`). Local-time helpers in `src/lib/dates.ts` rely on this.
 - Raw `sql` templates with postgres-js reject `Date` parameters; pass `date.toISOString()`.
+- Supabase cloud Storage rejects the new `sb_secret_…` keys ("Invalid Compact JWS"): `SUPABASE_SECRET_KEY` in production must be the legacy `service_role` JWT. The local stack accepts either.
 - Test files can't import modules that import `"server-only"`; keep testable logic in `src/lib/`.
 - Don't add mock data for screens — load real data.
 - E2E and `pnpm db:seed` wipe the local database.
