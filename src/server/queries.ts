@@ -192,7 +192,9 @@ export async function listGradedAnswers() {
 
 /** Counts shown as badges in the navigation. */
 export async function getNavCounts(now = new Date()) {
-  const [row] = await db.execute<{ awaiting: number; open: number }>(sql`
+  const {
+    rows: [row],
+  } = await db.execute<{ awaiting: number; open: number }>(sql`
     with latest as (
       select distinct on (t.assignment_id) t.assignment_id, t.submitted_at, t.graded_at
       from ${attempts} t order by t.assignment_id, t.attempt_no desc

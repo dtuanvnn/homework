@@ -82,7 +82,7 @@ async function loadSetSkills(): Promise<SetSkills[]> {
       group by q.set_id
     `),
   ])
-  const skillsBySet = new Map(skillRows.map((r) => [r.set_id, r.skills]))
+  const skillsBySet = new Map(skillRows.rows.map((r) => [r.set_id, r.skills]))
   return sets.map((s) => ({ id: s.id, title: s.title, subject: s.subject, status: s.status, kind: s.kind, skills: skillsBySet.get(s.id) ?? [] }))
 }
 

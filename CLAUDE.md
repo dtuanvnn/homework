@@ -47,12 +47,12 @@ Env vars live in `.env.local` (see `.env.example`): `DATABASE_URL`, `SUPABASE_UR
 
 **AI.** Every model call goes through `ask()` in `src/server/ai/llm.ts`, which returns an object validated by a zod schema and throws Vietnamese error messages. Two providers via `AI_PROVIDER` (default: DeepSeek when `DEEPSEEK_API_KEY` is set): DeepSeek `deepseek-flash` through its Anthropic-compatible endpoint, where the schema is sent as a forced tool and the tool input is validated (one retry), images only — no PDFs; or Claude with structured outputs and refusal fallback. PDFs are split into page images in the browser (`src/lib/pdf-client.ts`) before scanning. Prompts, output schemas and response mapping live as pure, tested code in `src/lib/ai/*`; question output uses the flat `aiQuestionSchema` and `toQuestion()` (repairs + confidence capping). Scans are sent from Storage via `storageFileBlocks()`; photos are downscaled in the browser with `shrinkImage()` before upload. Pages whose actions call AI export `maxDuration = 300`.
 
-**Database.** Drizzle + postgres-js against Supabase Postgres (`src/db/schema.ts`, migrations in `drizzle/`). RLS is enabled on every table with no policies, so nothing is reachable through Supabase's public REST API; the app connects directly from the server. In production use Supabase's **session** pooler (port 5432): postgres-js pipelines queries and the transaction pooler (6543) hangs on them (see `src/db/index.ts`).
+**Database.** Drizzle + node-postgres (`pg`) against Supabase Postgres (`src/db/schema.ts`, migrations in `drizzle/`). RLS is enabled on every table with no policies, so nothing is reachable through Supabase's public REST API; the app connects directly from the server. In production use Supabase's **transaction** pooler (port 6543): the session pooler caps clients at 15, which serverless instances exhaust, and postgres-js (still used by `src/db/seed.ts`) pipelines queries, which the transaction pooler hangs on; `pg` doesn't (see `src/db/index.ts`).
 
 ## Gotchas
 
 - Time zone: "today", due times and week boundaries are Vietnam time. `src/instrumentation.ts` sets `process.env.TZ = "Asia/Ho_Chi_Minh"` on the server; scripts set it themselves (see `src/db/seed.ts`). Local-time helpers in `src/lib/dates.ts` rely on this.
-- Raw `sql` templates with postgres-js reject `Date` parameters; pass `date.toISOString()`.
+- `db.execute()` returns a node-postgres result (`.rows`); pass dates in raw `sql` templates as `date.toISOString()`.
 - Supabase cloud Storage rejects the new `sb_secret_…` keys ("Invalid Compact JWS"): `SUPABASE_SECRET_KEY` in production must be the legacy `service_role` JWT. The local stack accepts either.
 - Test files can't import modules that import `"server-only"`; keep testable logic in `src/lib/`.
 - Don't add mock data for screens — load real data.
