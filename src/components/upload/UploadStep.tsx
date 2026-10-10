@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { AlertTriangle, Camera, FolderOpen, Loader2, Sparkles, UploadCloud } from 'lucide-react'
+import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { AlertTriangle, Camera, FolderOpen, Loader2, Sparkles, Trash2, UploadCloud } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -17,7 +17,8 @@ export type UploadMeta = ScanMeta
 
 interface UploadStepProps {
   files: Attachment[]
-  onFilesChange: (files: Attachment[]) => void
+  /** Receives an updater too, so files added after async PDF conversion append to the latest list. */
+  onFilesChange: Dispatch<SetStateAction<Attachment[]>>
   meta: UploadMeta
   onMetaChange: (meta: UploadMeta) => void
   onScan: () => void
@@ -37,13 +38,13 @@ export default function UploadStep({ files, onFilesChange, meta, onMetaChange, o
     if (!list?.length) return
     const picked = Array.from(list)
     if (!picked.some((f) => f.type === 'application/pdf')) {
-      onFilesChange([...files, ...filesToAttachments(picked)])
+      onFilesChange((prev) => [...prev, ...filesToAttachments(picked)])
       return
     }
     setConverting(true)
     try {
       const expanded = (await Promise.all(picked.map((f) => (f.type === 'application/pdf' ? pdfToImages(f) : [f])))).flat()
-      onFilesChange([...files, ...filesToAttachments(expanded)])
+      onFilesChange((prev) => [...prev, ...filesToAttachments(expanded)])
     } catch {
       toast.error('Không đọc được tệp PDF', { description: 'Hãy thử tệp khác hoặc chụp ảnh từng trang.' })
     } finally {
@@ -101,9 +102,15 @@ export default function UploadStep({ files, onFilesChange, meta, onMetaChange, o
 
       {files.length > 0 && (
         <section className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between">
+          <div className="flex items-center justify-between">
             <h2 className="font-bold text-slate-900">Tệp đã chọn</h2>
-            <span className="text-sm text-slate-500">{files.length} tệp</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-500">{files.length} tệp</span>
+              <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => onFilesChange([])}>
+                <Trash2 className="size-4" />
+                Xóa tất cả
+              </Button>
+            </div>
           </div>
           <AttachmentGallery attachments={files} onChange={onFilesChange} showAdd={false} />
         </section>
