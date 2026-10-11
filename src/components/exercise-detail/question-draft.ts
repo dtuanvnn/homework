@@ -66,6 +66,19 @@ export function toDraft(q: Question): QuestionDraft {
   }
 }
 
+/**
+ * Switches an existing question to another type, keeping the prompt, points
+ * and skills. A short answer becomes the grading hint when switching to an
+ * essay (e.g. a scanned word problem the child should write out), and back.
+ */
+export function changeDraftType(d: QuestionDraft, type: QuestionType): QuestionDraft {
+  if (type === d.type) return d
+  const next = { ...d, type }
+  if (type === 'tu-luan' && !d.rubric.trim() && d.shortAnswer.trim()) next.rubric = `Đáp số: ${d.shortAnswer.trim()}`
+  if (type === 'tra-loi-ngan' && !d.shortAnswer.trim() && d.rubric.trim()) next.shortAnswer = d.rubric.trim().replace(/^Đáp số:\s*/i, '')
+  return next
+}
+
 export function orderingTokens(text: string): string[] {
   return text
     .split('/')

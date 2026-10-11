@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Eraser, Keyboard, PenLine, Trash2, Undo2 } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { Textarea } from "@/components/ui/textarea"
+import { isLongPrompt } from "@/lib/questions"
 import { cn } from "@/lib/utils"
 import type { SubjectStyle } from "@/lib/subjects"
 import type { TakeQuestion } from "@/lib/views/student"
@@ -91,7 +92,12 @@ export function TrueFalse({ value, onChange }: Props<Q<"dung-sai">, boolean>) {
 export function FillBlank({ q, value = [], onChange, tone }: Props<Q<"dien-cho-trong">, string[]>) {
   const parts = q.prompt.split("___")
   return (
-    <p className="rounded-3xl bg-white p-6 text-2xl leading-[2.4] font-semibold text-slate-800 md:text-3xl">
+    <p
+      className={cn(
+        "rounded-3xl bg-white p-6 font-semibold break-words whitespace-pre-line text-slate-800",
+        isLongPrompt(q.prompt) ? "text-xl leading-[2.4] md:text-2xl md:leading-[2.4]" : "text-2xl leading-[2.4] md:text-3xl md:leading-[2.4]",
+      )}
+    >
       {parts.map((p, i) => (
         <span key={i}>
           {p}
@@ -117,14 +123,26 @@ export function FillBlank({ q, value = [], onChange, tone }: Props<Q<"dien-cho-t
 export function ShortAnswer({ value = "", onChange, tone, math }: Props<Q<"tra-loi-ngan">, string> & { math: boolean }) {
   return (
     <div className="space-y-3">
-      <input
-        aria-label="Câu trả lời"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        inputMode={math ? "decimal" : "text"}
-        placeholder="Nhập câu trả lời…"
-        className={cn("h-20 w-full rounded-3xl border-2 bg-white px-6 text-3xl font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:ring-4", tone.border, tone.ring)}
-      />
+      {math ? (
+        <input
+          aria-label="Câu trả lời"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          inputMode="decimal"
+          placeholder="Nhập câu trả lời…"
+          className={cn("h-20 w-full rounded-3xl border-2 bg-white px-6 text-3xl font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:ring-4", tone.border, tone.ring)}
+        />
+      ) : (
+        // Answers in words are often a whole sentence: let them wrap.
+        <Textarea
+          aria-label="Câu trả lời"
+          rows={2}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Nhập câu trả lời…"
+          className={cn("min-h-28 rounded-3xl border-2 bg-white px-6 py-4 text-2xl leading-relaxed font-bold text-slate-900 placeholder:text-slate-300 focus-visible:ring-4 md:text-2xl", tone.border, tone.ring)}
+        />
+      )}
       {math && (
         <p className="flex items-center gap-2 text-base text-slate-500">
           <Keyboard className="size-5" />

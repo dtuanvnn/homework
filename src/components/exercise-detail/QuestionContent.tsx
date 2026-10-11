@@ -6,7 +6,7 @@ import type { Question } from '@/lib/types'
 const correctChip = 'border-emerald-300 bg-emerald-50 text-emerald-800'
 
 function Prompt({ children }: { children: React.ReactNode }) {
-  return <p className="text-base leading-relaxed font-medium text-slate-900">{children}</p>
+  return <p className="text-base leading-relaxed font-medium break-words whitespace-pre-line text-slate-900">{children}</p>
 }
 
 function AnswerBox({ label = 'Đáp án', children }: { label?: string; children: React.ReactNode }) {

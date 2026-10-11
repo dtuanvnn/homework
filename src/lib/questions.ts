@@ -37,6 +37,11 @@ export function countBlanks(prompt: string): number {
   return prompt.split(BLANK).length - 1
 }
 
+/** Reading passages, letters and dialogues: shown as body text instead of a big heading. */
+export function isLongPrompt(prompt: string): boolean {
+  return prompt.includes('\n') || prompt.length > 140
+}
+
 let idCounter = 0
 export function uid(prefix: string): string {
   idCounter += 1

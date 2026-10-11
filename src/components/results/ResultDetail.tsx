@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import type { ResultView } from "@/lib/views/student"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
+import { isLongPrompt } from "@/lib/questions"
 
 export const fmtScore = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 2 })
 
@@ -193,7 +194,7 @@ export default function ResultDetail({
                 </motion.span>
                 <div className="min-w-0 flex-1 space-y-2">
                   <p className="text-sm font-bold text-slate-400">Câu {n}</p>
-                  <p className="text-xl leading-snug font-bold text-slate-900">{q.prompt}</p>
+                  <p className={cn("leading-snug break-words whitespace-pre-line text-slate-900", isLongPrompt(q.prompt) ? "text-lg font-medium leading-relaxed" : "text-xl font-bold")}>{q.prompt}</p>
                   <p className="text-lg text-slate-600">
                     Em trả lời:{" "}
                     <span className={cn("font-bold", q.correct ? "text-emerald-700" : "text-red-600 line-through decoration-2")}>{q.answer}</span>

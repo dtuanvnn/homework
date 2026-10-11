@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { SUBJECTS } from "@/lib/subjects"
+import { isLongPrompt } from "@/lib/questions"
 import { cn } from "@/lib/utils"
 import type { QuestionType, SubjectId } from "@/lib/types"
 import type { TakeQuestion } from "@/lib/views/student"
@@ -32,8 +33,8 @@ const SAVE_DELAY = 800
 function isAnswered(q: TakeQuestion, a: unknown): boolean {
   if (a === undefined || a === null) return false
   switch (q.type) {
-    case "dien-cho-trong": return (a as string[]).filter((s) => s?.trim()).length === q.blanks
-    case "tra-loi-ngan": return Boolean((a as string).trim())
+    case "dien-cho-trong": return Array.isArray(a) && a.filter((s) => typeof s === "string" && s.trim()).length === q.blanks
+    case "tra-loi-ngan": return typeof a === "string" && Boolean(a.trim())
     case "noi": return Object.keys(a as object).length === q.pairs.length
     case "sap-xep": return (a as number[]).length === q.tokens.length
     case "tu-luan": return Boolean((a as EssayValue).text?.trim() || (a as EssayValue).drawing)
@@ -198,7 +199,7 @@ export default function TakeAssignment({
       case "trac-nghiem": return <MultipleChoice q={q} {...p} />
       case "dung-sai": return <TrueFalse q={q} {...p} />
       case "dien-cho-trong": return <FillBlank q={q} {...p} />
-      case "tra-loi-ngan": return <ShortAnswer q={q} {...p} math={subject === "toan" || /\d/.test(q.prompt)} />
+      case "tra-loi-ngan": return <ShortAnswer q={q} {...p} math={subject === "toan"} />
       case "noi": return <Matching key={q.id} q={q} {...p} />
       case "sap-xep": return <Ordering q={q} {...p} />
       case "tu-luan": return <Essay q={q} {...p} />
@@ -299,9 +300,14 @@ export default function TakeAssignment({
                 <span className={cn("inline-flex rounded-full px-3 py-1 text-sm font-bold", tone.softBg, tone.text)}>
                   {TYPE_LABEL[q.type]} · {q.points.toLocaleString("vi-VN")} điểm
                 </span>
-                {q.type !== "dien-cho-trong" && (
-                  <h2 className="text-3xl leading-snug font-extrabold text-slate-900 md:text-4xl">{q.prompt}</h2>
-                )}
+                {q.type !== "dien-cho-trong" &&
+                  (isLongPrompt(q.prompt) ? (
+                    <h2 className="rounded-3xl bg-white p-5 text-xl leading-relaxed font-semibold break-words whitespace-pre-line text-slate-900 md:p-6 md:text-2xl md:leading-relaxed">
+                      {q.prompt}
+                    </h2>
+                  ) : (
+                    <h2 className="text-3xl leading-snug font-extrabold break-words whitespace-pre-line text-slate-900 md:text-4xl">{q.prompt}</h2>
+                  ))}
                 {q.type === "dien-cho-trong" && <h2 className="text-xl font-bold text-slate-600">Em điền từ thích hợp vào chỗ trống:</h2>}
               </div>
               {renderQuestion(q)}

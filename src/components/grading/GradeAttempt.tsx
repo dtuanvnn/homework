@@ -210,7 +210,7 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
             </Badge>
           )}
         </div>
-        <p className="font-medium leading-relaxed text-slate-900 md:text-lg">{q.prompt}</p>
+        <p className="font-medium leading-relaxed break-words whitespace-pre-line text-slate-900 md:text-lg">{q.prompt}</p>
 
         <div className="grid gap-2 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-emerald-50/70 p-3">

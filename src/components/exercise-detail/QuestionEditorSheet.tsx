@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { ArrowLeft, ChevronRight, TextCursorInput } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -10,7 +11,7 @@ import { BLANK, QUESTION_TYPES, QUESTION_TYPE_LIST, uid } from '@/lib/questions'
 import type { Question, QuestionType } from '@/lib/types'
 import QuestionTypeFields from './QuestionTypeFields'
 import SkillTagInput from './SkillTagInput'
-import { emptyDraft, fromDraft, toDraft, validateDraft, type QuestionDraft } from './question-draft'
+import { changeDraftType, emptyDraft, fromDraft, toDraft, validateDraft, type QuestionDraft } from './question-draft'
 
 const POINT_OPTIONS = [0.5, 1, 1.5, 2, 3]
 
@@ -127,6 +128,31 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
             </SheetHeader>
 
             <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 pb-5 md:px-6">
+              {editing && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="q-type">Dạng câu</Label>
+                  <Select value={draft.type} onValueChange={(v) => setDraft((d) => (d ? changeDraftType(d, v as QuestionType) : d))}>
+                    <SelectTrigger id="q-type" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {QUESTION_TYPE_LIST.map(({ type, label }) => (
+                        <SelectItem key={type} value={type}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {draft.type !== editing.type && (
+                    <p className="text-xs text-slate-500">
+                      {draft.type === 'tu-luan'
+                        ? 'Học sinh sẽ viết bài giải vào ô nhiều dòng; câu tự luận do phụ huynh chấm.'
+                        : 'Kiểm tra lại đáp án bên dưới cho dạng câu mới.'}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor="q-prompt">{promptCopy?.label ?? 'Câu hỏi'}</Label>
@@ -140,7 +166,7 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
                 <Textarea
                   id="q-prompt"
                   ref={promptRef}
-                  rows={3}
+                  rows={draft.prompt.includes('\n') || draft.prompt.length > 160 ? 8 : 3}
                   value={draft.prompt}
                   onChange={(e) => patch({ prompt: e.target.value })}
                   placeholder={promptCopy?.placeholder}

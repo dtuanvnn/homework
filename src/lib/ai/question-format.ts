@@ -14,9 +14,13 @@ const QUESTION_TYPES = ["trac-nghiem", "dung-sai", "dien-cho-trong", "tra-loi-ng
 
 export const aiQuestionSchema = z.object({
   type: z.enum(QUESTION_TYPES).describe(
-    "trac-nghiem = multiple choice; dung-sai = true/false; dien-cho-trong = fill in the blanks; tra-loi-ngan = short answer; noi = matching; sap-xep = put words in order; tu-luan = open-ended/essay",
+    "trac-nghiem = multiple choice; dung-sai = true/false; dien-cho-trong = fill in the blanks; tra-loi-ngan = one short exact answer (number, word, phrase); noi = matching; sap-xep = put words in order; tu-luan = written-out answer graded by the parent (essay, worked solution of a word problem, sentences)",
   ),
-  prompt: z.string().describe("Question text in the document's language. For dien-cho-trong mark every blank as ___ (three underscores)."),
+  prompt: z
+    .string()
+    .describe(
+      "Question text in the document's language, keeping its line breaks as \\n (passages, poems, letters, one line per dialogue turn). For dien-cho-trong mark every blank as ___ (three underscores).",
+    ),
   points: z.number().describe("Points for the question; 1 if the document doesn't say"),
   skills: z.array(z.string()).describe("1-2 short Vietnamese skill tags, e.g. \"Bảng nhân 7\", \"Toán có lời văn\", \"Dấu hỏi/ngã\""),
   options: z.array(z.string()).nullable().describe("trac-nghiem: the options without their A/B/C letters"),
@@ -29,7 +33,10 @@ export const aiQuestionSchema = z.object({
     .nullable()
     .describe("noi: correctly matched pairs"),
   tokens: z.array(z.string()).nullable().describe("sap-xep: the words/phrases in the CORRECT order"),
-  rubric: z.string().nullable().describe("tu-luan: what a good answer contains, for the parent grading it"),
+  rubric: z
+    .string()
+    .nullable()
+    .describe("tu-luan: what a good answer contains, for the parent grading it; for a math problem the model solution and the final answer (\"Đáp số: …\")"),
   confidence: z.number().describe("0-1: how sure you are the question and its answer are read/written correctly"),
   page: z.number().int().describe("1-based page/image the question comes from (1 when generating)"),
   note: z.string().nullable().describe("Short Vietnamese note for the parent when something is unclear (e.g. answer missing in the document); null otherwise"),

@@ -33,7 +33,7 @@ export default function PrintableExercise({
       <ol className="mt-6 space-y-6">
         {questions.map((q, i) => (
           <li key={q.id} className="break-inside-avoid">
-            <p className="font-semibold">
+            <p className="font-semibold whitespace-pre-line">
               Câu {i + 1}. {q.prompt}
             </p>
             {q.type === "trac-nghiem" && (
