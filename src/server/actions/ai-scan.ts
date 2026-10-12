@@ -40,7 +40,7 @@ function payloadBytes(blocks: ContentBlock[]): number {
  */
 export async function scanDocuments(input: ScanInput): Promise<ActionResult<ScanResult>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     const { setId, files, ...meta } = scanInputSchema.parse(input)
     for (const f of files) {
       if (!(await isUploaded("sets", setId, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)

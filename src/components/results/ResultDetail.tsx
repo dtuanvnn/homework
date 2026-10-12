@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import CountUp from "@/components/fun/CountUp"
 import Mascot from "@/components/fun/Mascot"
@@ -14,12 +14,13 @@ function DrawnCheck({ reduced }: { reduced: boolean | null }) {
     </svg>
   )
 }
-import { ArrowRight, ArrowUp, Home, MessageCircle, RotateCcw, X } from "lucide-react"
+import { ArrowRight, ArrowUp, Home, Lightbulb, Loader2, Lock, MessageCircle, RotateCcw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { ResultView } from "@/lib/views/student"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 import { isLongPrompt } from "@/lib/questions"
+import { explainMistakes } from "@/server/actions/ai-hints"
 
 export const fmtScore = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 2 })
 
@@ -61,6 +62,18 @@ export default function ResultDetail({
   const s = SUBJECTS[r.subject]
   const wrong = r.review.filter((q) => !q.correct)
   const list = filter === "all" ? r.review : wrong
+
+  // While a retry is open the answers stay hidden; wrong answers get AI hints, written once and saved.
+  const [hints, setHints] = useState<Record<string, string>>({})
+  const [hintsLoading, setHintsLoading] = useState(r.hintsPending)
+  const asked = useRef<string | null>(null)
+  useEffect(() => {
+    if (!r.hintsPending || asked.current === r.id) return
+    asked.current = r.id
+    explainMistakes(r.id)
+      .then((res) => { if (res.ok) setHints(res.data) })
+      .finally(() => setHintsLoading(false))
+  }, [r.id, r.hintsPending])
 
   return (
     <div className="flex flex-col gap-6 pb-8 text-lg">
@@ -171,6 +184,14 @@ export default function ResultDetail({
             ))}
           </div>
         </div>
+        {!r.answersRevealed && wrong.length > 0 && (
+          <p className="flex items-start gap-3 rounded-3xl border-2 border-amber-200 bg-amber-50 px-4 py-3 text-lg leading-relaxed font-medium text-amber-900">
+            <Lock className="mt-1 size-5 shrink-0 text-amber-500" />
+            {r.canRetry
+              ? "Đáp án đúng sẽ hiện sau khi em làm lại lần 2. Em đọc gợi ý ở các câu sai rồi thử lại nhé!"
+              : "Đáp án đúng sẽ hiện khi bài làm lại của em được chấm xong."}
+          </p>
+        )}
         {list.length === 0 && (
           <p className="rounded-3xl bg-emerald-50 p-6 text-center text-xl font-bold text-emerald-700">Không có câu nào sai, tuyệt vời! 🎉</p>
         )}
@@ -199,11 +220,22 @@ export default function ResultDetail({
                     Em trả lời:{" "}
                     <span className={cn("font-bold", q.correct ? "text-emerald-700" : "text-red-600 line-through decoration-2")}>{q.answer}</span>
                   </p>
-                  {!q.correct && q.correctAnswer && (
+                  {!q.correct && r.answersRevealed && q.correctAnswer && (
                     <p className="text-lg text-slate-600">
                       Đáp án đúng: <span className="rounded-lg bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700">{q.correctAnswer}</span>
                     </p>
                   )}
+                  {!q.correct && !r.answersRevealed && (q.hint ?? hints[q.id] ? (
+                    <p className="flex items-start gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-900">
+                      <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber-500" />
+                      <span><span className="font-bold">Gợi ý: </span>{q.hint ?? hints[q.id]}</span>
+                    </p>
+                  ) : hintsLoading ? (
+                    <p className="flex items-center gap-2 text-base text-slate-500">
+                      <Loader2 className="size-4 animate-spin" />
+                      Đang chuẩn bị gợi ý cho em…
+                    </p>
+                  ) : null)}
                   {q.comment && (
                     <p className="flex items-start gap-2 rounded-2xl bg-indigo-50 px-3 py-2 text-base text-indigo-900">
                       <MessageCircle className="mt-0.5 size-5 shrink-0 text-indigo-500" />

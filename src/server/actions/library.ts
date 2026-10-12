@@ -48,7 +48,7 @@ export type SavePayload = z.input<typeof savePayloadSchema>
 /** Questions of one set, fetched lazily by the library store. */
 export async function loadQuestions(setId: string): Promise<ActionResult<Question[]>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     return isUuid(setId) ? getQuestions(setId) : []
   })
 }
@@ -56,7 +56,7 @@ export async function loadQuestions(setId: string): Promise<ActionResult<Questio
 /** Creates an empty draft set (the "Soạn thủ công" entry point). */
 export async function createExerciseSet(): Promise<ActionResult<ExerciseSet>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     const student = await getStudent()
     const [row] = await db
       .insert(exerciseSets)
@@ -70,7 +70,7 @@ export async function createExerciseSet(): Promise<ActionResult<ExerciseSet>> {
 /** One-time upload URLs for files of a (possibly not yet saved) set. */
 export async function requestSetUploads(setId: string, names: string[]): Promise<ActionResult<UploadTarget[]>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     if (!isUuid(setId)) throw new Error("Mã bộ bài không hợp lệ")
     return createUploadTargets("sets", setId, names.slice(0, 30))
   })
@@ -82,7 +82,7 @@ export async function requestSetUploads(setId: string, names: string[]): Promise
  */
 export async function saveExerciseSet(payload: SavePayload): Promise<ActionResult<{ set: ExerciseSet; attachments: Attachment[] }>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
     for (const f of newFiles) {
       if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
@@ -126,7 +126,7 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
 
 export async function duplicateExerciseSet(id: string): Promise<ActionResult<ExerciseSet>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     if (!isUuid(id)) throw new Error("Mã bộ bài không hợp lệ")
     const original = await db.query.exerciseSets.findFirst({ where: eq(exerciseSets.id, id) })
     if (!original) throw new Error("Không tìm thấy bộ bài")
@@ -155,7 +155,7 @@ export async function duplicateExerciseSet(id: string): Promise<ActionResult<Exe
 
 export async function deleteExerciseSet(id: string): Promise<ActionResult<void>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     if (!isUuid(id)) throw new Error("Mã bộ bài không hợp lệ")
     const used = await db.$count(assignments, eq(assignments.setId, id))
     if (used > 0) throw new Error("Bộ bài đã được giao nên không thể xóa. Hãy chuyển về Nháp nếu không dùng nữa.")
@@ -223,7 +223,7 @@ async function insertAssignments(items: NewAssignment[]): Promise<Assignment[]> 
 
 export async function createAssignments(items: NewAssignment[]): Promise<ActionResult<Assignment[]>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     return insertAssignments(items)
   })
 }
@@ -234,7 +234,7 @@ export async function quickAssign(setId: string): Promise<ActionResult<Assignmen
     const due = new Date()
     due.setDate(due.getDate() + 1)
     due.setHours(20, 0, 0, 0)
-    await assertAccess()
+    await assertAccess("parent")
     const [created] = await insertAssignments([
       { setId, availableFrom: new Date().toISOString(), dueAt: due.toISOString(), mode: "web", maxAttempts: 2 },
     ])
@@ -245,7 +245,7 @@ export async function quickAssign(setId: string): Promise<ActionResult<Assignmen
 /** Preview URLs for files already uploaded under a not-yet-saved set (restoring an unsaved scan). */
 export async function previewSetUploads(setId: string, paths: string[]): Promise<ActionResult<Record<string, string>>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     if (!isUuid(setId)) throw new Error("Mã bộ bài không hợp lệ")
     const prefix = `sets/${setId}/`
     const own = paths.slice(0, 30).filter((p) => p.startsWith(prefix) && !p.includes(".."))

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Homework Hub: a mobile-first (iPad/phone) web app a parent uses to assign, grade and track homework for **one** primary-school child (Grade 3 now, growing to 4–7+; Toán, Tiếng Việt, Tiếng Anh). No authentication — only an optional `APP_PIN` gate. All UI text is Vietnamese. The UI started as a Figma Make export (prompts in `docs/figma-prompts.md`) and was migrated to Next.js; keep its visual language, animations and sounds when changing screens.
+Homework Hub: a mobile-first (iPad/phone) web app a parent uses to assign, grade and track homework for **one** primary-school child (Grade 3 now, growing to 4–7+; Toán, Tiếng Việt, Tiếng Anh). No authentication — only optional PINs per mode (`APP_PIN` for Student, `PARENT_PIN` for Parent). All UI text is Vietnamese. The UI started as a Figma Make export (prompts in `docs/figma-prompts.md`) and was migrated to Next.js; keep its visual language, animations and sounds when changing screens.
 
 Roadmap: Phase 1 = core flows on a real database. Phase 2 = AI features (DeepSeek or Claude), all in `src/server/actions/ai-*.ts`: scanning images/PDFs into questions (`ai-scan`), AI-generated sets (`ai-generate`), AI grading of essays and scanned paper work (`ai-grading`), AI progress summaries on Reports (`ai-summary`). AI only suggests: scanned/generated sets go through the review/editor UI, and AI marks are applied to the grading form for the parent to confirm with the normal `gradeAttempt` action.
 
@@ -27,7 +27,7 @@ pnpm exec playwright test e2e/smoke.spec.ts --project=ipad
 pnpm db:generate              # after editing src/db/schema.ts, then review the SQL in drizzle/
 ```
 
-Env vars live in `.env.local` (see `.env.example`): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `STORAGE_BUCKET`, `APP_PIN`, `DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY`, `AI_PROVIDER`.
+Env vars live in `.env.local` (see `.env.example`): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `STORAGE_BUCKET`, `APP_PIN`, `PARENT_PIN`, `DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY`, `AI_PROVIDER`.
 
 ## Architecture
 
@@ -35,11 +35,13 @@ Env vars live in `.env.local` (see `.env.example`): `DATABASE_URL`, `SUPABASE_UR
 
 **Page pattern.** Each `page.tsx` is an async server component that loads data through `src/server/queries.ts`, shapes it with pure builders (`src/lib/views/*`, `src/lib/analytics.ts`), and passes serializable props (plus a `now` ISO string for date math) to a client component in `src/components/pages/`. Read-side DB access goes through `queries.ts`, which returns the UI's own types from `src/lib/types.ts`.
 
-**Mutations.** Server Actions live in `src/server/actions/*`. Each one: calls `assertAccess()` first (PIN check — actions are reachable by direct POST), validates input with zod, writes via Drizzle, calls `refresh()` from `next/cache`, and returns `ActionResult<T>` via `runAction()` (`src/lib/action-result.ts`) because production Next hides thrown error messages. Client code calls `unwrap(await action(...))`. The library/assignment cache on the client is `src/state/library-store.tsx` (`useLibrary()`), re-synced from layout props after `refresh()`.
+**Mutations.** Server Actions live in `src/server/actions/*`. Each one: calls `assertAccess("parent" | "student")` first (PIN check for the mode it belongs to — actions are reachable by direct POST), validates input with zod, writes via Drizzle, calls `refresh()` from `next/cache`, and returns `ActionResult<T>` via `runAction()` (`src/lib/action-result.ts`) because production Next hides thrown error messages. Client code calls `unwrap(await action(...))`. The library/assignment cache on the client is `src/state/library-store.tsx` (`useLibrary()`), re-synced from layout props after `refresh()`.
 
 **Domain rules that span files.**
 - Assignment status is never stored: `deriveAssignmentState()` (`src/lib/assignment-status.ts`) computes scheduled / not-started / in-progress / submitted / graded, overdue and retry eligibility from the assignment, its attempts and the current time. `src/server/views.ts` maps that to the parent-facing status enum.
 - An assignment has at most 2 attempts. A draft attempt (no `submittedAt`) holds autosaved answers; submitting grades objective questions on the server with `src/lib/grading.ts` (pure, heavily tested); essays and all paper work leave `isCorrect = null` until the parent grades, and the parent's grade recomputes the score server-side. Scores are on a 10-point scale in quarter points.
+- PIN gate (`src/lib/pin.ts`, `src/proxy.ts`): the `hh_pin` cookie holds a hash of the last PIN entered and opens one mode at a time; `/parent/*` needs the parent PIN, `/student/*` the student PIN, and switching modes is a full page load that asks again.
+- The child sees correct answers only once no retry is left (`answersRevealed` in `buildResultDetail`); until then wrong answers show AI hints (`explainMistakes` in `ai-hints.ts`, saved in `answers.hint`, filtered by `leaksAnswer()`), and parent-only actions such as `loadQuestions` return answer keys, so they must stay `assertAccess("parent")`.
 - `answers.question` snapshots the question at submit time, so results and analytics survive later edits to a set. Analytics read skills from those snapshots.
 - Question JSON shapes are the `Question` union in `src/lib/types.ts`, stored in `questions.content`; runtime validation is `src/lib/question-schema.ts`. Student response shapes per type are documented at the top of `src/lib/grading.ts`.
 

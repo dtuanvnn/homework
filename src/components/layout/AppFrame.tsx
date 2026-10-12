@@ -21,15 +21,13 @@ import { usePathname, useRouter } from "next/navigation"
 
 import type { Route } from "next"
 
-import { toast } from "sonner"
-
 import { Toaster } from "@/components/ui/sonner"
 
 import { LibraryProvider } from "@/state/library-store"
 
 import AppShell from "./AppShell"
 
-import { MODE_LABELS, navFor, type NavCounts, type TabId } from "./nav-config"
+import { navFor, type NavCounts, type TabId } from "./nav-config"
 
 import { MODE_HOME, TAB_PATHS, resolveRoute } from "./routes"
 
@@ -114,16 +112,9 @@ export default function AppFrame({
   const handleModeChange = (next: AppMode) => {
     if (next === mode) return
 
-    const go = () => {
-      router.push(MODE_HOME[next])
-
-      toast.success(`Đã chuyển sang chế độ ${MODE_LABELS[next]}`, {
-        description:
-          next === "student"
-            ? `Chúc ${student.name} học vui nhé!`
-            : "Quản lý bài tập của con.",
-      })
-    }
+    // Full page load: each mode has its own PIN (proxy.ts asks for it), and
+    // the other mode's pages must not linger in the client router cache.
+    const go = () => window.location.assign(MODE_HOME[next])
 
     if (leaveGuard.current) leaveGuard.current(go)
     else go()

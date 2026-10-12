@@ -35,7 +35,7 @@ export type GradeInput = z.input<typeof gradeInputSchema>
  */
 export async function gradeAttempt(attemptId: string, input: GradeInput): Promise<ActionResult<{ score: number }>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     if (!isUuid(attemptId)) throw new Error("Mã bài làm không hợp lệ")
     const parsed = gradeInputSchema.safeParse(input)
     if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dữ liệu chấm bài không hợp lệ")

@@ -167,22 +167,52 @@ describe("answerText", () => {
 })
 
 describe("buildResultDetail", () => {
-  const row = (q: Question, response: AnswerRecord["response"], isCorrect: boolean | null, comment: string | null = null): AnswerRecord => ({
-    id: `ans-${q.id}`, attemptId: "x", questionId: q.id, position: 0, question: q, response, isCorrect, pointsAwarded: isCorrect ? q.points : 0, comment,
+  const row = (q: Question, response: AnswerRecord["response"], isCorrect: boolean | null, comment: string | null = null, hint: string | null = null): AnswerRecord => ({
+    id: `ans-${q.id}`, attemptId: "x", questionId: q.id, position: 0, question: q, response, isCorrect, pointsAwarded: isCorrect ? q.points : 0, comment, hint,
   })
 
-  it("builds the review and only offers a retry on the latest attempt", () => {
+  it("hides correct answers while a retry is open and shows hints instead", () => {
     const first = graded(6, { feedback: "Cố lên nhé!" })
     const record = assignment("a", { attempts: [first] })
     const view = buildResultDetail(
-      { attempt: { ...first, assignmentId: "a" }, assignment: record, answers: [row(mc, 1, true), row(sa, "24", false, "Nhớ ghi đơn vị")] },
+      { attempt: { ...first, assignmentId: "a" }, assignment: record, answers: [row(mc, 1, true), row(sa, "24", false, "Nhớ ghi đơn vị", "Em xem lại đơn vị nhé")] },
       now,
     )
-    expect(view).toMatchObject({ score: 6, stars: 1, attempt: 1, maxAttempts: 2, canRetry: true, parentComment: "Cố lên nhé!" })
+    expect(view).toMatchObject({ score: 6, stars: 1, attempt: 1, maxAttempts: 2, canRetry: true, answersRevealed: false, hintsPending: false, parentComment: "Cố lên nhé!" })
     expect(view?.review).toEqual([
-      { id: "ans-q1", prompt: mc.prompt, answer: "500", correct: true, correctAnswer: undefined, comment: undefined },
-      { id: "ans-q4", prompt: sa.prompt, answer: "24", correct: false, correctAnswer: "24 kg", comment: "Nhớ ghi đơn vị" },
+      { id: "ans-q1", prompt: mc.prompt, answer: "500", correct: true, correctAnswer: undefined, comment: undefined, hint: undefined },
+      { id: "ans-q4", prompt: sa.prompt, answer: "24", correct: false, correctAnswer: undefined, comment: "Nhớ ghi đơn vị", hint: "Em xem lại đơn vị nhé" },
     ])
+  })
+
+  it("asks for hints when wrong answers have none yet", () => {
+    const first = graded(6)
+    const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { attempts: [first] }), answers: [row(sa, "24", false)] }, now)
+    expect(view?.hintsPending).toBe(true)
+  })
+
+  it("reveals correct answers once no attempt is left", () => {
+    const first = graded(5)
+    const second = graded(8, { attemptNo: 2 })
+    const record = assignment("a", { attempts: [first, second] })
+    for (const a of [first, second]) {
+      const view = buildResultDetail({ attempt: { ...a, assignmentId: "a" }, assignment: record, answers: [row(sa, "24", false)] }, now)
+      expect(view).toMatchObject({ answersRevealed: true, hintsPending: false })
+      expect(view?.review[0].correctAnswer).toBe("24 kg")
+    }
+    // Parent turned the retry off: nothing left to redo either.
+    const closed = graded(5, { retryAllowed: false })
+    const view = buildResultDetail({ attempt: { ...closed, assignmentId: "a" }, assignment: assignment("a", { attempts: [closed] }), answers: [row(sa, "24", false)] }, now)
+    expect(view?.answersRevealed).toBe(true)
+  })
+
+  it("keeps answers hidden while the retry waits for grading", () => {
+    const first = graded(5)
+    const second = { ...attempt(), attemptNo: 2, submittedAt: now }
+    const record = assignment("a", { attempts: [first, second] })
+    const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: record, answers: [row(sa, "24", false)] }, now)
+    expect(view?.answersRevealed).toBe(false)
+    expect(view?.review[0].correctAnswer).toBeUndefined()
   })
 
   it("refuses ungraded attempts and reports the previous score", () => {

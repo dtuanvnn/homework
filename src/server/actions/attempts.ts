@@ -90,7 +90,7 @@ function answerRows(attemptId: string, questions: Question[], responses: Record<
 
 /** Autosave: replaces the draft's answers. Creates the attempt on first save. */
 export async function saveDraft(assignmentId: string, responses: Record<string, unknown>): Promise<Result<{ attemptId: string }>> {
-  await assertAccess()
+  await assertAccess("student")
   const parsed = parseResponses(responses)
   if (!parsed) return { ok: false, error: "Bài làm không hợp lệ." }
   const loaded = await loadWebAssignment(assignmentId)
@@ -116,7 +116,7 @@ export async function submitAttempt(
   responses: Record<string, unknown>,
   durationSeconds: number,
 ): Promise<Result<{ attemptId: string; graded: boolean; score: number | null }>> {
-  await assertAccess()
+  await assertAccess("student")
   const parsed = parseResponses(responses)
   if (!parsed) return { ok: false, error: "Bài làm không hợp lệ." }
   const loaded = await loadWebAssignment(assignmentId)
@@ -167,7 +167,7 @@ async function loadPaperAssignment(assignmentId: string) {
 /** One-time upload URLs for photographed pages (stored under the assignment until the attempt exists). */
 export async function requestAttemptUploads(assignmentId: string, names: string[]): Promise<ActionResult<UploadTarget[]>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("student")
     const record = await loadPaperAssignment(assignmentId)
     if (!record || !canTake(stateOf(record, new Date()))) throw new Error(ERR_CLOSED)
     return createUploadTargets("attempts", assignmentId, z.array(z.string().max(200)).max(30).parse(names))
@@ -189,7 +189,7 @@ const newFilesSchema = z
 
 /** Hands in paper work: a submitted attempt with empty answers (the parent marks them) and the page photos. */
 export async function submitPaper(assignmentId: string, files: NewFile[]): Promise<Result<{ attemptId: string }>> {
-  await assertAccess()
+  await assertAccess("student")
   const parsed = newFilesSchema.safeParse(files)
   if (!parsed.success) return { ok: false, error: "Em cần chụp ít nhất một trang." }
   const record = await loadPaperAssignment(assignmentId)

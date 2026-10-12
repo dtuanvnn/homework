@@ -29,7 +29,7 @@ export type SummarizeInput = z.input<typeof inputSchema>
  */
 export async function summarizeProgress(input: SummarizeInput): Promise<ActionResult<AiSummary>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     const { rangeId, subjects, custom } = inputSchema.parse(input)
     const now = new Date()
     const period = rangePeriod(rangeId, now, rangeId === "custom" ? custom : undefined)

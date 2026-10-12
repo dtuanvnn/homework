@@ -152,6 +152,8 @@ export const answers = pgTable(
     isCorrect: boolean("is_correct"),
     pointsAwarded: doublePrecision("points_awarded"),
     comment: text(),
+    /** AI guidance for a wrong answer, shown to the child instead of the answer while a retry is open. */
+    hint: text(),
   },
   (t) => [uniqueIndex("answers_attempt_question_idx").on(t.attemptId, t.questionId)],
 ).enableRLS()

@@ -22,7 +22,7 @@ import { getQuestions, listExerciseSets } from "../queries"
  */
 export async function generateSet(input: GenerateInput): Promise<ActionResult<GenerateResult>> {
   return runAction(async () => {
-    await assertAccess()
+    await assertAccess("parent")
     const parsed = generateInputSchema.parse(input)
     const ids = new Set(parsed.referenceSetIds)
     const sets = ids.size ? (await listExerciseSets()).filter((s) => ids.has(s.id)) : []

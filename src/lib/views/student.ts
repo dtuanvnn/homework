@@ -97,8 +97,11 @@ export interface ReviewItem {
   prompt: string
   answer: string
   correct: boolean
+  /** Only once answers are revealed (see ResultView.answersRevealed). */
   correctAnswer?: string
   comment?: string
+  /** AI guidance for a wrong answer: what went wrong and how to solve it, without the answer. */
+  hint?: string
 }
 
 export interface ResultView {
@@ -114,6 +117,13 @@ export interface ResultView {
   stars: 0 | 1 | 2 | 3
   parentComment: string
   canRetry: boolean
+  /**
+   * Correct answers are shown only when no more attempts are possible, so the
+   * child can't copy them into the retry. Until then wrong answers get hints.
+   */
+  answersRevealed: boolean
+  /** Wrong answers still without a hint (the page asks the AI for them). */
+  hintsPending: boolean
   review: ReviewItem[]
 }
 
@@ -341,6 +351,8 @@ export function buildResultDetail(
   const state = stateOf(assignment, now)
   const latest = assignment.attempts.at(-1)
   const first = assignment.attempts.find((a) => a.attemptNo === 1)
+  // Every attempt is used up (or the parent closed the retry) and graded.
+  const answersRevealed = state.status === "graded" && !state.canRetry
   return {
     id: attempt.id,
     assignmentId: assignment.id,
@@ -353,6 +365,8 @@ export function buildResultDetail(
     stars: starsFor(g.score),
     parentComment: attempt.feedback ?? "",
     canRetry: latest?.id === attempt.id && state.canRetry,
+    answersRevealed,
+    hintsPending: !answersRevealed && answers.some((a) => a.isCorrect === false && !a.hint && a.question.type !== "tu-luan"),
     review: answers.map((row) => {
       const correct = row.isCorrect === true
       return {
@@ -360,8 +374,9 @@ export function buildResultDetail(
         prompt: row.question.prompt,
         answer: answerText(row.question, row.response, attempt.mode),
         correct,
-        correctAnswer: correct ? undefined : correctAnswerText(row.question),
+        correctAnswer: correct || !answersRevealed ? undefined : correctAnswerText(row.question),
         comment: row.comment ?? undefined,
+        hint: correct ? undefined : (row.hint ?? undefined),
       }
     }),
   }
