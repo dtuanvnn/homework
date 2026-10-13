@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { AiQuestion } from "./question-format"
 import {
   buildGeneratePrompt,
+  GENERATE_SYSTEM_PROMPT,
   generateInputSchema,
   mapGeneratedSet,
   MAX_REFERENCE_QUESTIONS,
@@ -41,6 +42,9 @@ const blank: AiQuestion = {
   confidence: 0.9,
   page: 1,
   note: null,
+  math: null,
+  simplest: null,
+  figure: null,
 }
 const ai = (patch: Partial<AiQuestion> = {}): AiQuestion => ({ ...blank, ...patch })
 const output = (questions: AiQuestion[], patch: Partial<GeneratedSet> = {}): GeneratedSet => ({
@@ -175,4 +179,9 @@ describe("mapGeneratedSet", () => {
     expect(mapGeneratedSet(output([ai()], { estimatedMinutes: 0 }), input({ count: 1 }), ids()).estimatedMinutes).toBe(2)
     expect(mapGeneratedSet(output([ai()], { estimatedMinutes: 999 }), input({ count: 1 }), ids()).estimatedMinutes).toBe(240)
   })
+})
+
+it("asks for LaTeX formulas and no figures", () => {
+  expect(GENERATE_SYSTEM_PROMPT).toContain("$\\frac{3}{4} + \\frac{1}{8}$")
+  expect(GENERATE_SYSTEM_PROMPT).toContain("Never fill figure")
 })

@@ -17,6 +17,9 @@ const blank: AiQuestion = {
   confidence: 0.9,
   page: 1,
   note: null,
+  math: null,
+  simplest: null,
+  figure: null,
 }
 const ai = (patch: Partial<AiQuestion>): AiQuestion => ({ ...blank, ...patch })
 
@@ -77,5 +80,33 @@ describe("answerKey", () => {
     expect(answerKey({ id: "a", type: "trac-nghiem", prompt: "", points: 1, skills: [], options: ["x", "y"], correctIndex: 1 })).toBe("y")
     expect(answerKey({ id: "a", type: "dung-sai", prompt: "", points: 1, skills: [], answer: false })).toBe("Sai")
     expect(answerKey({ id: "a", type: "noi", prompt: "", points: 1, skills: [], pairs: [{ left: "father", right: "bố" }] })).toBe("father – bố")
+  })
+})
+
+describe("math and figures", () => {
+  it("keeps math answers as LaTeX without dollars and sets simplest only with math", () => {
+    const r = toQuestion(ai({ type: "tra-loi-ngan", prompt: "$\\frac{1}{2}+\\frac{1}{4}=?$", answer: "$\\frac{3}{4}$", math: true, simplest: true }), "id-1")
+    expect(r.question).toMatchObject({ answer: "\\frac{3}{4}", math: true, simplest: true })
+    const plain = toQuestion(ai({ type: "tra-loi-ngan", prompt: "Tính", answer: "24 kg", math: null, simplest: true }), "id-2")
+    expect(plain.question).not.toHaveProperty("math")
+    expect(plain.question).not.toHaveProperty("simplest")
+  })
+
+  it("turns math off with a note when an answer can't be evaluated", () => {
+    const r = toQuestion(ai({ type: "tra-loi-ngan", prompt: "Tính", answer: "24 kg", math: true }), "id-1")
+    expect(r.question).not.toHaveProperty("math")
+    expect(r.notes).toContain("Đáp án dạng toán chưa đọc được – kiểm tra lại")
+    expect(r.confidence).toBeLessThanOrEqual(REPAIRED_CONFIDENCE)
+  })
+
+  it("returns a repaired figure box on the question's page", () => {
+    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "Hình nào là hình vuông?", options: ["A", "B"], correctIndex: 0, page: 2, figure: { box: [500, 600, 100, 200] } }), "id-1")
+    expect(r.figure).toEqual({ page: 2, box: [100, 200, 500, 600] })
+  })
+
+  it("drops a broken figure box with a note", () => {
+    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "Hình nào?", options: ["A", "B"], correctIndex: 0, figure: { box: [0, 0, 1000, 1000] } }), "id-1")
+    expect(r.figure).toBeUndefined()
+    expect(r.notes).toContain("Chưa xác định được vị trí hình – hãy thêm hình bằng tay")
   })
 })

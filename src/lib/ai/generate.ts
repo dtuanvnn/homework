@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { aiQuestionSchema, answerKey, QUESTION_TYPE_NAMES, toQuestion } from "@/lib/ai/question-format"
+import { aiQuestionSchema, answerKey, MATH_NOTATION_RULES, QUESTION_TYPE_NAMES, toQuestion } from "@/lib/ai/question-format"
 import type { Question, QuestionType, SubjectId } from "@/lib/types"
 
 /*
@@ -85,6 +85,8 @@ Rules:
 - Tag each question with 1-2 skills, reusing the given topic names where they fit.
 - Points: 1 per question, 2 for tu-luan, unless the parent asks otherwise.
 - Reference questions, when given, show the expected style and level. Match them but never copy them verbatim; change numbers, words and contexts.
+${MATH_NOTATION_RULES}
+- Never fill figure; set it to null.
 - Use note only to warn the parent about something to check; otherwise null. Set page to 1.`
 
 function formatReferences(references: readonly ReferenceSet[]): string {

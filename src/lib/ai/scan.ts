@@ -1,6 +1,7 @@
 import { z } from "zod"
-import { aiQuestionSchema, toQuestion } from "@/lib/ai/question-format"
+import { MATH_NOTATION_RULES, aiQuestionSchema, toQuestion } from "@/lib/ai/question-format"
 import type { Difficulty, ExerciseKind, Question, SubjectId } from "@/lib/types"
+import type { Box } from "@/lib/figure-crop"
 
 /*
  * AI document scan ("Tải lên tài liệu" → "Quét bằng AI"): prompt pieces, the
@@ -27,6 +28,7 @@ export interface ScannedQuestion {
   /** 1-based index of the uploaded file the question comes from. */
   page: number
   note?: string
+  figure?: { page: number; box: Box }
 }
 
 export interface ScanResult {
@@ -71,6 +73,8 @@ Transcribe every exercise in the document into questions:
 - Skip headers, names/date lines, general instructions and example items that are not questions.
 - Use a printed answer key when there is one. Handwritten or circled answers may be a child's own work and can be wrong: check each one, use the correct answer, and when the written one was wrong say so in the note. When no answer is shown, solve the exercise yourself as a teacher of this grade would expect and say in the note "AI tự giải".
 - Report low confidence and a short note when text is hard to read, cut off or ambiguous. Never invent questions that are not in the document.
+${MATH_NOTATION_RULES}
+- When the child needs a picture, diagram, drawn table or chart to answer (geometry figures, objects to count, clocks, charts), fill figure with its box on that page: [x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels, not the question text. Parts of one exercise that share a picture repeat the same box. Use null when no picture is needed.
 - page is the number N of the "Tệp N" label above the file the question comes from.
 
 Write the title, topic, description, skill tags and notes in Vietnamese.`
@@ -124,6 +128,7 @@ export function toScanResult(res: ScanResponse, meta: ScanMeta, fileCount: numbe
         confidence: converted.confidence,
         page: Math.min(Math.max(1, fileCount), converted.page),
         ...(note ? { note } : {}),
+        ...(converted.figure ? { figure: { page: Math.min(Math.max(1, fileCount), converted.figure.page), box: converted.figure.box } } : {}),
       }
     })
   const topic = res.topic.trim() || items[0]?.question.skills[0] || ""

@@ -32,6 +32,9 @@ const blank: AiQuestion = {
   confidence: 0.9,
   page: 1,
   note: null,
+  math: null,
+  simplest: null,
+  figure: null,
 }
 const q = (patch: Partial<AiQuestion>): AiQuestion => ({ ...blank, ...patch })
 
@@ -169,5 +172,20 @@ describe("mergeScanResults", () => {
     expect(r.difficulty).toBe(2)
     const long = mergeScanResults([part({ estimatedMinutes: 200, questions: found() }, newId), part({ estimatedMinutes: 200, questions: found() }, newId)])
     expect(long.estimatedMinutes).toBe(240)
+  })
+
+  it("carries figure boxes to the review items", () => {
+    const r = toScanResult(
+      response({ questions: [q({ type: "trac-nghiem", prompt: "Hình nào?", options: ["A", "B"], correctIndex: 0, page: 2, figure: { box: [100, 100, 400, 400] } })] }),
+      meta,
+      3,
+      ids(),
+    )
+    expect(r.items[0].figure).toEqual({ page: 2, box: [100, 100, 400, 400] })
+  })
+
+  it("asks for LaTeX formulas and figure boxes", () => {
+    expect(SCAN_SYSTEM_PROMPT).toContain("$\\frac{3}{4} + \\frac{1}{8}$")
+    expect(SCAN_SYSTEM_PROMPT).toContain("fill figure")
   })
 })
