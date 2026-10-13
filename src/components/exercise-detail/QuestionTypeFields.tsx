@@ -98,7 +98,7 @@ function FillBlankFields({ draft, onChange }: Props) {
   if (n === 0)
     return (
       <p className="rounded-xl bg-slate-50 px-3.5 py-3 text-sm text-slate-500">
-        Gõ <code className="rounded bg-white px-1 font-mono text-slate-700">{BLANK}</code> hoặc nhấn “Chèn chỗ trống” trong câu để tạo ô cần điền.
+        Gõ <code className="rounded bg-white px-1 font-mono text-slate-700">{BLANK}</code> hoặc nhấn &quot;Chèn chỗ trống&quot; trong câu để tạo ô cần điền.
       </p>
     )
   return (
@@ -270,7 +270,7 @@ function OrderingFields({ draft, onChange }: Props) {
   const tokens = orderingTokens(draft.orderingText)
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor="ordering">Câu đúng · ngăn cách các phần bằng “/”</Label>
+      <Label htmlFor="ordering">Câu đúng · ngăn cách các phần bằng &quot;/&quot;</Label>
       <Input
         id="ordering"
         value={draft.orderingText}
@@ -306,7 +306,8 @@ function EssayFields({ draft, onChange }: Props) {
         onChange={(e) => onChange({ rubric: e.target.value })}
         placeholder="Giới thiệu được tên bạn (0,5đ) · Tả ngoại hình hoặc tính tình (0,5đ) · …"
       />
-      <p className="text-xs text-slate-500">Ngăn cách các tiêu chí bằng dấu “·”. Câu tự luận do phụ huynh chấm.</p>
+      <FormulaPreview text={draft.rubric} />
+      <p className="text-xs text-slate-500">Ngăn cách các tiêu chí bằng dấu &quot;·&quot;. Câu tự luận do phụ huynh chấm.</p>
     </div>
   )
 }
