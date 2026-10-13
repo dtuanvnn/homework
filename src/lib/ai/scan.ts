@@ -80,12 +80,33 @@ export function scanFileLabel(index: number, file: { name: string; kind: "image"
   return `Tệp ${index + 1} (${file.kind === "pdf" ? "PDF" : "ảnh"}: ${file.name})`
 }
 
-/** Opening text of the user message: who the questions are for. */
-export function scanRequestText(meta: ScanMeta, fileCount: number): string {
-  return [
-    `Subject: ${SUBJECT_NAMES[meta.subject]}. Grade ${meta.grade} (Vietnamese primary school). The parent says this is ${KIND_NAMES[meta.kind]}.`,
-    `${fileCount} file${fileCount > 1 ? "s" : ""} follow${fileCount > 1 ? "" : "s"}, each preceded by its "Tệp N" label. Transcribe all exercises into questions.`,
-  ].join("\n")
+/**
+ * Files per scan request. Batches run in parallel: one request for a whole
+ * many-page document outlasts the 300 s function limit (and the output cap).
+ */
+export const SCAN_BATCH_FILES = 3
+
+/** A range of file indexes, end exclusive. */
+export interface ScanBatch {
+  start: number
+  end: number
+}
+
+export function scanBatches(fileCount: number): ScanBatch[] {
+  const batches: ScanBatch[] = []
+  for (let start = 0; start < fileCount; start += SCAN_BATCH_FILES) {
+    batches.push({ start, end: Math.min(fileCount, start + SCAN_BATCH_FILES) })
+  }
+  return batches
+}
+
+/** Opening text of the user message: who the questions are for, and which files this request holds. */
+export function scanRequestText(meta: ScanMeta, fileCount: number, batch?: ScanBatch): string {
+  const files =
+    batch && batch.end - batch.start < fileCount
+      ? `This request holds files ${batch.start + 1}–${batch.end} of a ${fileCount}-file document, each preceded by its "Tệp N" label; the other files are scanned separately. Transcribe all exercises in these files into questions; when an exercise starts on an earlier file, transcribe the part shown here.`
+      : `${fileCount} file${fileCount > 1 ? "s" : ""} follow${fileCount > 1 ? "" : "s"}, each preceded by its "Tệp N" label. Transcribe all exercises into questions.`
+  return [`Subject: ${SUBJECT_NAMES[meta.subject]}. Grade ${meta.grade} (Vietnamese primary school). The parent says this is ${KIND_NAMES[meta.kind]}.`, files].join("\n")
 }
 
 const clampInt = (n: number, min: number, max: number, fallback: number) =>
@@ -113,5 +134,18 @@ export function toScanResult(res: ScanResponse, meta: ScanMeta, fileCount: numbe
     difficulty: clampInt(res.difficulty, 1, 5, 3) as Difficulty,
     estimatedMinutes: clampInt(res.estimatedMinutes, 5, 240, Math.max(10, items.length * 3)),
     items,
+  }
+}
+
+/** Joins the results of a document's batches, in file order, into one scan result. */
+export function mergeScanResults(parts: ScanResult[]): ScanResult {
+  const withItems = parts.filter((p) => p.items.length)
+  const scored = withItems.length ? withItems : parts
+  const lead = scored[0]
+  return {
+    ...lead,
+    difficulty: clampInt(scored.reduce((sum, p) => sum + p.difficulty, 0) / scored.length, 1, 5, 3) as Difficulty,
+    estimatedMinutes: Math.min(240, scored.reduce((sum, p) => sum + p.estimatedMinutes, 0)),
+    items: parts.flatMap((p) => p.items),
   }
 }

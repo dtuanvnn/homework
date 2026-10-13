@@ -5,7 +5,9 @@ import { runAction, type ActionResult } from "@/lib/action-result"
 import {
   MAX_SCAN_BASE64_BYTES,
   MAX_SCAN_FILES,
+  mergeScanResults,
   SCAN_SYSTEM_PROMPT,
+  scanBatches,
   scanFileLabel,
   scanRequestText,
   scanResponseSchema,
@@ -35,8 +37,9 @@ function payloadBytes(blocks: ContentBlock[]): number {
 }
 
 /**
- * Reads uploaded photos/PDFs of a (not yet saved) set with Claude and returns
- * the transcribed questions plus suggested set details for the review step.
+ * Reads uploaded photos/PDFs of a (not yet saved) set with AI, a few files per
+ * request in parallel, and returns the transcribed questions plus suggested set
+ * details for the review step.
  */
 export async function scanDocuments(input: ScanInput): Promise<ActionResult<ScanResult>> {
   return runAction(async () => {
@@ -45,20 +48,25 @@ export async function scanDocuments(input: ScanInput): Promise<ActionResult<Scan
     for (const f of files) {
       if (!(await isUploaded("sets", setId, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
     }
-    const fileBlocks = (await Promise.all(files.map((f, i) => storageFileBlocks(f.path, scanFileLabel(i, f))))).flat()
-    if (payloadBytes(fileBlocks) > MAX_SCAN_BASE64_BYTES) {
+    const perFile = await Promise.all(files.map((f, i) => storageFileBlocks(f.path, scanFileLabel(i, f))))
+    if (payloadBytes(perFile.flat()) > MAX_SCAN_BASE64_BYTES) {
       throw new Error("Tài liệu quá lớn để quét một lần. Hãy bớt tệp hoặc chia PDF thành nhiều phần.")
     }
-    const response = await ask({
-      system: SCAN_SYSTEM_PROMPT,
-      content: [{ type: "text", text: scanRequestText(meta, files.length) }, ...fileBlocks],
-      schema: scanResponseSchema,
-      effort: "high",
-      // Thinking plus every transcribed (and self-solved) question of up to 20 pages
-      // overflows the default 32k; 128k is Claude's streaming cap (DeepSeek allows 384k).
-      maxTokens: 128000,
-    })
-    const result = toScanResult(response, meta, files.length, () => crypto.randomUUID())
+    const newId = () => crypto.randomUUID()
+    const parts = await Promise.all(
+      scanBatches(files.length).map(async (batch) => {
+        const response = await ask({
+          system: SCAN_SYSTEM_PROMPT,
+          content: [{ type: "text", text: scanRequestText(meta, files.length, batch) }, ...perFile.slice(batch.start, batch.end).flat()],
+          schema: scanResponseSchema,
+          effort: "high",
+          // Thinking plus transcribing and solving a few pages' questions can pass the default 32k.
+          maxTokens: 64000,
+        })
+        return toScanResult(response, meta, files.length, newId)
+      }),
+    )
+    const result = mergeScanResults(parts)
     if (!result.items.length) throw new Error("AI không tìm thấy câu hỏi nào trong tài liệu. Hãy thử ảnh rõ hơn.")
     return result
   })
