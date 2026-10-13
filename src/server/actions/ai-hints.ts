@@ -25,7 +25,8 @@ export async function explainMistakes(attemptId: string): Promise<ActionResult<R
     if (!detail || !view || view.answersRevealed) return {}
 
     const items: HintItem[] = detail.answers
-      .filter((a) => a.isCorrect === false && !a.hint && a.question.type !== "tu-luan")
+      // Without an answer key a hint would explain a placeholder.
+      .filter((a) => a.isCorrect === false && !a.hint && a.question.type !== "tu-luan" && a.question.answerStatus !== "missing")
       .map((a) => ({ id: a.id, question: a.question, response: a.response }))
     if (!items.length) return {}
 

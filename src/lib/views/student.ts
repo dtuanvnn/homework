@@ -100,6 +100,8 @@ export interface ReviewItem {
   correct: boolean
   /** Only once answers are revealed (see ResultView.answersRevealed). */
   correctAnswer?: string
+  /** Worked solution, only once answers are revealed. */
+  solution?: string
   comment?: string
   /** AI guidance for a wrong answer: what went wrong and how to solve it, without the answer. */
   hint?: string
@@ -327,8 +329,9 @@ export function answerText(q: Question, response: Response | null | undefined, m
   }
 }
 
-/** The expected answer as plain text; essays have none. */
+/** The expected answer as plain text; essays and questions without an answer key have none. */
 export function correctAnswerText(q: Question): string | undefined {
+  if (q.answerStatus === "missing") return undefined
   switch (q.type) {
     case "trac-nghiem":
       return q.options[q.correctIndex]
@@ -372,7 +375,8 @@ export function buildResultDetail(
     parentComment: attempt.feedback ?? "",
     canRetry: latest?.id === attempt.id && state.canRetry,
     answersRevealed,
-    hintsPending: !answersRevealed && answers.some((a) => a.isCorrect === false && !a.hint && a.question.type !== "tu-luan"),
+    hintsPending:
+      !answersRevealed && answers.some((a) => a.isCorrect === false && !a.hint && a.question.type !== "tu-luan" && a.question.answerStatus !== "missing"),
     review: answers.map((row) => {
       const correct = row.isCorrect === true
       return {
@@ -381,6 +385,7 @@ export function buildResultDetail(
         answer: answerText(row.question, row.response, attempt.mode),
         correct,
         correctAnswer: correct || !answersRevealed ? undefined : correctAnswerText(row.question),
+        solution: answersRevealed ? row.question.solution : undefined,
         comment: row.comment ?? undefined,
         hint: correct ? undefined : (row.hint ?? undefined),
         image: row.question.image,
@@ -392,20 +397,26 @@ export function buildResultDetail(
 
 /* ---------- Taking an assignment ---------- */
 
-/** A question as sent to the browser while taking: answer keys removed. */
+/** Fields no question sent to the child while taking may carry. */
+type KeyInfo = "solution" | "answerStatus"
+
+/** A question as sent to the browser while taking: answer keys and solutions removed. */
 export type TakeQuestion =
-  | Omit<MultipleChoiceQuestion, "correctIndex">
-  | Omit<TrueFalseQuestion, "answer">
-  | (Omit<FillBlankQuestion, "answers"> & { blanks: number })
-  | Omit<ShortAnswerQuestion, "answer">
-  | Extract<Question, { type: "noi" | "sap-xep" }>
-  | Omit<EssayQuestion, "rubric">
+  | Omit<MultipleChoiceQuestion, "correctIndex" | KeyInfo>
+  | Omit<TrueFalseQuestion, "answer" | KeyInfo>
+  | (Omit<FillBlankQuestion, "answers" | KeyInfo> & { blanks: number })
+  | Omit<ShortAnswerQuestion, "answer" | KeyInfo>
+  | Omit<Extract<Question, { type: "noi" }>, KeyInfo>
+  | Omit<Extract<Question, { type: "sap-xep" }>, KeyInfo>
+  | Omit<EssayQuestion, "rubric" | KeyInfo>
 
 function without<T extends object, K extends keyof T>(obj: T, key: K): Omit<T, K> {
   return Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key)) as Omit<T, K>
 }
 
-export function toTakeQuestion(q: Question): TakeQuestion {
+export function toTakeQuestion(question: Question): TakeQuestion {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Dropping the solution and answer status
+  const { solution: _solution, answerStatus: _status, ...q } = question
   switch (q.type) {
     case "trac-nghiem":
       return without(q, "correctIndex")

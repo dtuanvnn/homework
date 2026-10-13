@@ -1,6 +1,7 @@
 import "server-only"
 import { asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { db, schema } from "@/db"
+import { withLaterAnswerKey } from "@/lib/answer-key"
 import { starsFor } from "@/lib/grading"
 import type { Attachment, Difficulty, ExerciseSet, Question, Student } from "@/lib/types"
 import { withImageUrls } from "./question-images"
@@ -174,7 +175,10 @@ export async function getAttemptDetail(attemptId: string) {
     db.select().from(attachments).where(eq(attachments.attemptId, attemptId)).orderBy(asc(attachments.position)),
   ])
   if (!assignment) return null
-  const signed = await withImageUrls(answerRows.map((a) => a.question))
+  // Answer keys solved after the child submitted fill in snapshots taken without one.
+  const keyless = answerRows.some((a) => a.question.answerStatus === "missing")
+  const current = keyless ? new Map((await getQuestions(assignment.setId)).map((q) => [q.id, q])) : undefined
+  const signed = await withImageUrls(answerRows.map((a) => withLaterAnswerKey(a.question, current?.get(a.question.id))))
   return {
     attempt,
     assignment,

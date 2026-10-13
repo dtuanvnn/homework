@@ -210,6 +210,12 @@ describe("buildResultDetail", () => {
       expect(view).toMatchObject({ answersRevealed: true, hintsPending: false })
       expect(view?.review[0].correctAnswer).toBe("24 kg")
     }
+    // Without an answer key there is nothing to reveal but the solution, if any.
+    const keyless = buildResultDetail(
+      { attempt: { ...second, assignmentId: "a" }, assignment: record, answers: [row({ ...sa, answerStatus: "missing", solution: "Lời giải" } as Question, "24", false)] },
+      now,
+    )
+    expect(keyless?.review[0]).toMatchObject({ correctAnswer: undefined, solution: "Lời giải" })
     // Parent turned the retry off: nothing left to redo either.
     const closed = graded(5, { retryAllowed: false })
     const view = buildResultDetail({ attempt: { ...closed, assignmentId: "a" }, assignment: assignment("a", { attempts: [closed] }), answers: [row(sa, "24", false)] }, now)
@@ -223,6 +229,7 @@ describe("buildResultDetail", () => {
     const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: record, answers: [row(sa, "24", false)] }, now)
     expect(view?.answersRevealed).toBe(false)
     expect(view?.review[0].correctAnswer).toBeUndefined()
+    expect(buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: record, answers: [row({ ...sa, solution: "Lời giải" } as Question, "24", false)] }, now)?.review[0].solution).toBeUndefined()
   })
 
   it("refuses ungraded attempts and reports the previous score", () => {
@@ -245,6 +252,9 @@ describe("toTakeQuestion", () => {
     expect(toTakeQuestion(essay)).not.toHaveProperty("rubric")
     expect(toTakeQuestion(fb)).toEqual({ id: "q3", type: "dien-cho-trong", prompt: fb.prompt, points: 1, skills: [], blanks: 2 })
     expect(toTakeQuestion(order)).toEqual(order)
+    const solved = { ...sa, answerStatus: "ai", solution: "Lấy 96 : 4 = 24" } as Question
+    expect(toTakeQuestion(solved)).not.toHaveProperty("solution")
+    expect(toTakeQuestion(solved)).not.toHaveProperty("answerStatus")
   })
 })
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Question } from "@/lib/types"
-import { changeDraftType, emptyDraft, fromDraft, toDraft, validateDraft } from "./question-draft"
+import { changeDraftType, emptyDraft, fromDraft, patchDraft, toDraft, validateDraft } from "./question-draft"
 
 describe("changeDraftType", () => {
   const wordProblem = { ...emptyDraft("tra-loi-ngan"), prompt: "Một cửa hàng bán 285 kg gạo…\nHỏi cả hai buổi bán được bao nhiêu ki-lô-gam?", points: 2, shortAnswer: "605 kg" }
@@ -48,5 +48,40 @@ describe("question drafts with math and figures", () => {
   it("omits simplest unless math is on", () => {
     const d = { ...toDraft({ id: "q", type: "tra-loi-ngan", prompt: "Tính", points: 1, skills: [], answer: "5" }), simplest: true }
     expect(fromDraft(d, "q")).not.toHaveProperty("simplest")
+  })
+})
+
+describe("answer status and solution", () => {
+  const keyless: Question = { id: "q", type: "trac-nghiem", prompt: "7 × 8 = ?", points: 1, skills: [], options: ["54", "56"], correctIndex: 0, answerStatus: "missing" }
+
+  it("opens a question without a key with no option chosen, and saves it still without a key", () => {
+    const d = toDraft(keyless)
+    expect(d.correctIndex).toBe(-1)
+    expect(validateDraft(d)).toEqual([])
+    expect(fromDraft(d, "q")).toMatchObject({ correctIndex: 0, answerStatus: "missing" })
+    const short = toDraft({ id: "s", type: "tra-loi-ngan", prompt: "6 × 7 = ?", points: 1, skills: [], answer: "", answerStatus: "missing" })
+    expect(validateDraft(short)).toEqual([])
+    expect(fromDraft(short, "s")).toMatchObject({ answer: "", answerStatus: "missing" })
+    const fill = toDraft({ id: "f", type: "dien-cho-trong", prompt: "___ + ___ = 5", points: 1, skills: [], answers: ["", ""], answerStatus: "missing" })
+    expect(fromDraft(fill, "f")).toMatchObject({ answers: ["", ""], answerStatus: "missing" })
+  })
+
+  it("becomes the parent's own key once they set an answer", () => {
+    const d = patchDraft(toDraft(keyless), { correctIndex: 1 })
+    expect(d.answerStatus).toBeUndefined()
+    expect(fromDraft(d, "q")).toMatchObject({ correctIndex: 1 })
+    expect(fromDraft(d, "q")).not.toHaveProperty("answerStatus")
+    const ai = toDraft({ ...keyless, correctIndex: 1, answerStatus: "ai-check" })
+    expect(patchDraft(ai, { prompt: "7 × 8 bằng mấy?" }).answerStatus).toBe("ai-check")
+    expect(patchDraft(ai, { correctIndex: 0 }).answerStatus).toBeUndefined()
+    // Removing an option resends the unchanged correctIndex: still no key.
+    expect(patchDraft(toDraft(keyless), { options: ["54"], correctIndex: -1 }).answerStatus).toBe("missing")
+  })
+
+  it("keeps the solution, dropping an empty one", () => {
+    const d = toDraft({ ...keyless, answerStatus: undefined, correctIndex: 1, solution: "7 × 8 = 56" })
+    expect(d.solution).toBe("7 × 8 = 56")
+    expect(fromDraft(d, "q")).toMatchObject({ solution: "7 × 8 = 56" })
+    expect(fromDraft({ ...d, solution: "  " }, "q")).not.toHaveProperty("solution")
   })
 })

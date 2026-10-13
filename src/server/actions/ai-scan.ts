@@ -6,11 +6,11 @@ import {
   MAX_SCAN_BASE64_BYTES,
   MAX_SCAN_FILES,
   mergeScanResults,
-  SCAN_SYSTEM_PROMPT,
   scanBatches,
   scanFileLabel,
   scanRequestText,
   scanResponseSchema,
+  scanSystemPrompt,
   toScanResult,
   type ScanResult,
 } from "@/lib/ai/scan"
@@ -27,6 +27,7 @@ const scanInputSchema = z.object({
   subject: z.enum(["toan", "tieng-viet", "tieng-anh"]),
   grade: z.number().int().min(1).max(12),
   kind: z.enum(["de-thi", "chu-de", "luyen-tap"]),
+  withSolutions: z.boolean().optional(),
 })
 
 export type ScanInput = z.input<typeof scanInputSchema>
@@ -56,11 +57,11 @@ export async function scanDocuments(input: ScanInput): Promise<ActionResult<Scan
     const parts = await Promise.all(
       scanBatches(files.length).map(async (batch) => {
         const response = await ask({
-          system: SCAN_SYSTEM_PROMPT,
+          system: scanSystemPrompt(meta.withSolutions),
           content: [{ type: "text", text: scanRequestText(meta, files.length, batch) }, ...perFile.slice(batch.start, batch.end).flat()],
           schema: scanResponseSchema,
-          effort: "high",
-          // Thinking plus transcribing and solving a few pages' questions can pass the default 32k.
+          // Scans only read (answers are solved separately): "high" once spent 64k tokens and 340 s solving one page.
+          effort: "low",
           maxTokens: 64000,
         })
         return toScanResult(response, meta, files.length, newId)

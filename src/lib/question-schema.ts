@@ -18,6 +18,8 @@ const base = {
   points: z.number().positive().max(100),
   skills: z.array(z.string().trim().min(1)).max(10),
   image: imageSchema.optional(),
+  answerStatus: z.enum(["missing", "ai", "ai-check"]).optional(),
+  solution: z.string().max(10000).optional(),
 }
 
 const mathFlags = { math: z.boolean().optional(), simplest: z.boolean().optional() }
@@ -26,7 +28,10 @@ export const questionContentSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("trac-nghiem"), options: z.array(z.string()).min(2).max(6), correctIndex: z.number().int().min(0) }),
   z.object({ ...base, type: z.literal("dung-sai"), answer: z.boolean() }),
   z.object({ ...base, ...mathFlags, type: z.literal("dien-cho-trong"), answers: z.array(z.string()).min(1) }),
-  z.object({ ...base, ...mathFlags, type: z.literal("tra-loi-ngan"), answer: z.string().trim().min(1) }),
+  // Without an answer key yet ("missing") the answer is an empty placeholder.
+  z
+    .object({ ...base, ...mathFlags, type: z.literal("tra-loi-ngan"), answer: z.string() })
+    .refine((q) => q.answerStatus === "missing" || q.answer.trim() !== "", { path: ["answer"], message: "Câu hỏi cần có đáp án" }),
   z.object({
     ...base,
     type: z.literal("noi"),

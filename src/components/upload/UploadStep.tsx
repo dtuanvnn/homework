@@ -186,6 +186,22 @@ export default function UploadStep({ files, onFilesChange, meta, onMetaChange, o
             </Select>
           </div>
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 has-[:checked]:border-indigo-300 has-[:checked]:bg-indigo-50/60">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-5 shrink-0 accent-indigo-600"
+            checked={Boolean(meta.withSolutions)}
+            onChange={(e) => onMetaChange({ ...meta, withSolutions: e.target.checked })}
+          />
+          <span className="text-sm">
+            <span className="block font-semibold text-slate-900">Tài liệu có sẵn lời giải</span>
+            <span className="block text-slate-500">
+              {meta.withSolutions
+                ? 'AI đọc đáp án và lời giải trong tài liệu, không tự giải, rồi lưu lại để đối chiếu khi chấm.'
+                : 'Không chọn: AI chỉ chép đề. Đáp án giải sau bằng nút “Giải đáp án” trong bộ bài, hoặc bố mẹ chấm tay.'}
+            </span>
+          </span>
+        </label>
       </Card>
 
       {error && (

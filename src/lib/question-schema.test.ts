@@ -28,4 +28,11 @@ describe("question schema", () => {
     expect(parsed).not.toHaveProperty("imageUrl")
     expect(parsed).toHaveProperty("image")
   })
+
+  it("accepts a short answer without a key only while it is marked missing, and keeps the solution", () => {
+    const q = { type: "tra-loi-ngan", prompt: "Tính 6 × 7", points: 1, skills: [], answer: "" }
+    expect(questionContentSchema.safeParse(q).success).toBe(false)
+    expect(questionContentSchema.safeParse({ ...q, answerStatus: "missing" }).success).toBe(true)
+    expect(questionContentSchema.parse({ ...q, answer: "42", answerStatus: "ai", solution: "6 × 7 = 42" })).toMatchObject({ answerStatus: "ai", solution: "6 × 7 = 42" })
+  })
 })

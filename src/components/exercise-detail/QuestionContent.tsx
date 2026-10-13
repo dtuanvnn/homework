@@ -28,7 +28,9 @@ function AnswerBox({ label = 'Đáp án', children }: { label?: string; children
   )
 }
 
+/** Without an answer key (`answerStatus: "missing"`) the placeholder answers are not shown as correct. */
 function QuestionBody({ question: q }: { question: Question }) {
+  const keyless = q.answerStatus === 'missing'
   switch (q.type) {
     case 'trac-nghiem':
       return (
@@ -36,7 +38,7 @@ function QuestionBody({ question: q }: { question: Question }) {
           <Prompt text={q.prompt} />
           <ul className="grid grid-cols-2 gap-2">
             {q.options.map((opt, i) => {
-              const correct = i === q.correctIndex
+              const correct = !keyless && i === q.correctIndex
               return (
                 <li
                   key={i}
@@ -75,7 +77,7 @@ function QuestionBody({ question: q }: { question: Question }) {
           <Prompt text={q.prompt} />
           <div className="flex gap-2">
             {[true, false].map((v) => {
-              const correct = v === q.answer
+              const correct = !keyless && v === q.answer
               const Icon = v ? Check : X
               return (
                 <span
@@ -104,7 +106,7 @@ function QuestionBody({ question: q }: { question: Question }) {
               <RichText text={part} />
               {i < parts.length - 1 && (
                 <span className="mx-1 inline-block rounded-md border-b-2 border-emerald-500 bg-emerald-50 px-2 font-semibold text-emerald-700">
-                  {q.answers[i] ? <RichText text={q.math ? mathText(q.answers[i]) : q.answers[i]} /> : '…'}
+                  {q.answers[i] && !keyless ? <RichText text={q.math ? mathText(q.answers[i]) : q.answers[i]} /> : '…'}
                 </span>
               )}
             </span>
@@ -117,11 +119,13 @@ function QuestionBody({ question: q }: { question: Question }) {
       return (
         <div className="flex flex-col gap-3">
           <Prompt text={q.prompt} />
-          <AnswerBox>
-            <span className="font-bold">
-              <RichText text={q.math ? mathText(q.answer) : q.answer} />
-            </span>
-          </AnswerBox>
+          {!keyless && (
+            <AnswerBox>
+              <span className="font-bold">
+                <RichText text={q.math ? mathText(q.answer) : q.answer} />
+              </span>
+            </AnswerBox>
+          )}
         </div>
       )
 
@@ -135,8 +139,8 @@ function QuestionBody({ question: q }: { question: Question }) {
                 <span className="flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800">
                   <RichText text={pair.left} />
                 </span>
-                <ArrowRight className="size-4 text-emerald-500" aria-label="nối với" />
-                <span className={cn('flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold', correctChip)}>
+                {keyless ? <span className="w-4" /> : <ArrowRight className="size-4 text-emerald-500" aria-label="nối với" />}
+                <span className={cn('flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold', keyless ? 'border-slate-200 text-slate-800' : correctChip)}>
                   {pair.picture && (
                     <span className="text-lg leading-none" aria-hidden>
                       {pair.picture}
@@ -164,11 +168,13 @@ function QuestionBody({ question: q }: { question: Question }) {
               </span>
             ))}
           </div>
-          <AnswerBox>
-            <span className="font-bold">
-              <RichText text={q.tokens.join(' ') + '.'} />
-            </span>
-          </AnswerBox>
+          {!keyless && (
+            <AnswerBox>
+              <span className="font-bold">
+                <RichText text={q.tokens.join(' ') + '.'} />
+              </span>
+            </AnswerBox>
+          )}
         </div>
       )
 
@@ -176,24 +182,39 @@ function QuestionBody({ question: q }: { question: Question }) {
       return (
         <div className="flex flex-col gap-3">
           <Prompt text={q.prompt} />
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-900">
-            <div className="mb-1.5 font-semibold text-emerald-800">Gợi ý chấm</div>
-            <ul className="flex flex-col gap-1">
-              {q.rubric
-                .split('·')
-                .map((r) => r.trim())
-                .filter(Boolean)
-                .map((r, i) => (
-                  <li key={i} className="flex gap-2">
-                    <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden />
-                    <RichText text={r} />
-                  </li>
-                ))}
-            </ul>
-          </div>
+          {q.rubric.trim() && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-900">
+              <div className="mb-1.5 font-semibold text-emerald-800">Gợi ý chấm</div>
+              <ul className="flex flex-col gap-1">
+                {q.rubric
+                  .split('·')
+                  .map((r) => r.trim())
+                  .filter(Boolean)
+                  .map((r, i) => (
+                    <li key={i} className="flex gap-2">
+                      <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden />
+                      <RichText text={r} />
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
         </div>
       )
   }
+}
+
+/** The worked solution, for the parent (and the child once answers are revealed). */
+export function SolutionBox({ text }: { text?: string }) {
+  if (!text?.trim()) return null
+  return (
+    <details className="group rounded-xl border border-violet-200 bg-violet-50/60 px-3.5 py-2.5 text-sm text-slate-800">
+      <summary className="cursor-pointer font-semibold text-violet-800 outline-none">Lời giải</summary>
+      <p className="mt-1.5 leading-relaxed break-words whitespace-pre-line">
+        <RichText text={text} />
+      </p>
+    </details>
+  )
 }
 
 export default function QuestionContent({ question: q }: { question: Question }) {
@@ -201,6 +222,7 @@ export default function QuestionContent({ question: q }: { question: Question })
     <div className="flex flex-col gap-3">
       <QuestionBody question={q} />
       <QuestionPicture question={q} />
+      <SolutionBox text={q.solution} />
     </div>
   )
 }

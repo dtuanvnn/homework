@@ -44,6 +44,8 @@ import {
 import ScanViewer from "./ScanViewer"
 import { AiAssistCard, AiReadout } from "./AiAssist"
 import { fmt, scoreTone, submittedLabel } from "./format"
+import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
+import AnswerStatusBadge from "@/components/question/AnswerStatusBadge"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 
@@ -198,6 +200,7 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
             {QUESTION_TYPES[q.type].label}
           </Badge>
           <span className="text-slate-400">{fmt(q.points)} điểm</span>
+          <AnswerStatusBadge status={q.answerStatus} />
           {auto && initial.isCorrect !== null && (
             <span className={cn("ml-auto inline-flex items-center gap-1 font-medium", initial.isCorrect ? "text-emerald-600" : "text-red-500")}>
               {initial.isCorrect ? <Check className="size-3.5" /> : <X className="size-3.5" />}
@@ -241,6 +244,7 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
             )}
           </div>
         </div>
+        <SolutionBox text={q.solution} />
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-2" role="radiogroup" aria-label={`Kết quả câu ${n}`}>

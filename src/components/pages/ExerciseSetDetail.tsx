@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, CheckCircle2, Loader2, Plus, Save, Send } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowLeft, CheckCircle2, Loader2, Plus, Save, Send, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,10 +9,12 @@ import QuestionEditorSheet from '@/components/exercise-detail/QuestionEditorShee
 import QuestionList from '@/components/exercise-detail/QuestionList'
 import SectionHeader from '@/components/shared/SectionHeader'
 import SubjectIcon from '@/components/shared/SubjectIcon'
+import { unwrap } from '@/lib/action-result'
 import { formatScoreValue, formatVietnameseDate } from '@/lib/format'
 import { totalPoints } from '@/lib/questions'
 import { cn } from '@/lib/utils'
 import { useLibrary } from '@/state/library-store'
+import { solveQuestion } from '@/server/actions/ai-solve'
 import type { Attachment, ExerciseSet, ExerciseSetStatus, Question } from '@/lib/types'
 
 import { useStudent, type LeaveGuard } from '@/components/layout/AppFrame'
@@ -26,7 +28,10 @@ interface ExerciseSetDetailProps {
   registerLeaveGuard: (guard: LeaveGuard | null) => void
 }
 
-type SaveAction = 'nhap' | 'san-sang' | 'assign' | 'leave'
+type SaveAction = 'nhap' | 'san-sang' | 'assign' | 'leave' | 'solve'
+
+/** AI solves this many questions at once (each is its own request). */
+const SOLVE_CONCURRENCY = 3
 
 /** A save that uploads new files, kept until the store returns the stored list. */
 interface InFlightSave {
@@ -91,8 +96,10 @@ export default function ExerciseSetDetail({
     return () => registerLeaveGuard(null)
   }, [dirty, registerLeaveGuard])
 
-  const persist = async (status: ExerciseSetStatus, action: SaveAction): Promise<boolean> => {
+  /** Saves the set; `list` replaces the questions in state (a save right after AI solving, before state catches up). */
+  const persist = async (status: ExerciseSetStatus, action: SaveAction, list: Question[] = questions): Promise<boolean> => {
     if (saving) return false
+    const questions = list
     if (!draft.title.trim()) {
       setTitleError(true)
       document.getElementById('set-title')?.focus()
@@ -140,6 +147,44 @@ export default function ExerciseSetDetail({
     toast.success(`Đã giao bài cho ${student.name}`, {
       description: `“${draft.title.trim()}” · Hạn ${formatVietnameseDate(assignment.dueDate)}`,
     })
+  }
+
+  const [solving, setSolving] = useState<ReadonlySet<string>>(new Set())
+  const latestQuestions = useRef(questions)
+  useEffect(() => {
+    latestQuestions.current = questions
+  }, [questions])
+  const keylessCount = questions.filter((q) => q.answerStatus === 'missing').length
+
+  /** "Giải đáp án": AI solves `targets` a few at a time, then the set is saved with their keys and solutions. */
+  const solve = async (targets: Question[]) => {
+    if (!targets.length || solving.size || saving) return
+    setSolving(new Set(targets.map((q) => q.id)))
+    const solved = new Map<string, Question>()
+    const errors: string[] = []
+    const queue = [...targets]
+    const next = async (): Promise<void> => {
+      const q = queue.shift()
+      if (!q) return
+      try {
+        const result = unwrap(await solveQuestion({ setId, subject: draft.subject, grade: draft.grade, question: q }))
+        solved.set(q.id, result)
+        setQuestions((prev) => prev.map((x) => (x.id === q.id ? result : x)))
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : 'Vui lòng thử lại.')
+      } finally {
+        setSolving((prev) => new Set([...prev].filter((id) => id !== q.id)))
+      }
+      return next()
+    }
+    await Promise.all(Array.from({ length: SOLVE_CONCURRENCY }, next))
+    if (errors.length) toast.error(`Chưa giải được ${errors.length} câu`, { description: errors[0] })
+    if (!solved.size) return
+    // State may not hold the last results yet: apply them to the latest list before saving.
+    if (await persist(draft.status, 'solve', latestQuestions.current.map((x) => solved.get(x.id) ?? x))) {
+      const unsure = [...solved.values()].filter((q) => q.answerStatus === 'ai-check').length
+      toast.success(`Đã giải và lưu ${solved.size} câu`, unsure ? { description: `${unsure} câu AI chưa chắc chắn – xem các câu có nhãn “cần kiểm tra”.` } : undefined)
+    }
   }
 
   const patchDraft = (patch: Partial<ExerciseSet>) => {
@@ -264,10 +309,23 @@ export default function ExerciseSetDetail({
             questions.length ? `${questions.length} câu · ${formatScoreValue(points)} điểm · giữ tay nắm để kéo sắp xếp` : undefined
           }
           action={
-            <Button variant="outline" className="hidden md:inline-flex" onClick={openAdd}>
-              <Plus />
-              Thêm câu hỏi
-            </Button>
+            <div className="flex gap-2">
+              {keylessCount > 0 && (
+                <Button
+                  variant="outline"
+                  className="border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800"
+                  disabled={solving.size > 0 || saving !== null}
+                  onClick={() => void solve(questions.filter((q) => q.answerStatus === 'missing'))}
+                >
+                  {solving.size ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                  {solving.size ? `Đang giải… còn ${solving.size} câu` : `Giải đáp án (${keylessCount} câu)`}
+                </Button>
+              )}
+              <Button variant="outline" className="hidden md:inline-flex" onClick={openAdd}>
+                <Plus />
+                Thêm câu hỏi
+              </Button>
+            </div>
           }
         />
 
@@ -277,7 +335,14 @@ export default function ExerciseSetDetail({
             <p className="mt-1 text-sm text-slate-500">Thêm câu trắc nghiệm, điền chỗ trống, nối, tự luận…</p>
           </div>
         ) : (
-          <QuestionList questions={questions} onReorder={setQuestions} onEdit={openEdit} onDelete={handleDeleteQuestion} />
+          <QuestionList
+            questions={questions}
+            onReorder={setQuestions}
+            onEdit={openEdit}
+            onDelete={handleDeleteQuestion}
+            onSolve={(q) => void solve([q])}
+            solving={solving}
+          />
         )}
 
         <button

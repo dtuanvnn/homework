@@ -2,6 +2,7 @@ import { AlertTriangle, Check, Crop, FileSearch, ImageOff, ImagePlus, Loader2, M
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import QuestionContent from '@/components/exercise-detail/QuestionContent'
+import AnswerStatusBadge from '@/components/question/AnswerStatusBadge'
 import { formatScoreValue } from '@/lib/format'
 import { QUESTION_TYPES } from '@/lib/questions'
 import { cn } from '@/lib/utils'
@@ -49,7 +50,8 @@ export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDe
   const q = item.question
   const typeInfo = QUESTION_TYPES[q.type]
   const flagged = needsCheck(item)
-  const missingAnswer = !hasAnswer(q)
+  // A question scanned without its key on purpose shows the "Chưa có đáp án" badge instead.
+  const missingAnswer = !hasAnswer(q) && q.answerStatus !== 'missing'
 
   return (
     <li
@@ -85,6 +87,7 @@ export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDe
         <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
           {formatScoreValue(q.points)} điểm
         </Badge>
+        <AnswerStatusBadge status={q.answerStatus} />
         {item.reviewed ? (
           <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
             <Check />

@@ -21,6 +21,7 @@ import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 import { isLongPrompt } from "@/lib/questions"
 import { explainMistakes } from "@/server/actions/ai-hints"
+import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 
@@ -234,6 +235,7 @@ export default function ResultDetail({
                       </span>
                     </p>
                   )}
+                  {r.answersRevealed && <SolutionBox text={q.solution} />}
                   {!q.correct && !r.answersRevealed && (q.hint ?? hints[q.id] ? (
                     <p className="flex items-start gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-900">
                       <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber-500" />

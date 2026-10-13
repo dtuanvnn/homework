@@ -91,6 +91,14 @@ export interface QuestionImage {
   height: number
 }
 
+/**
+ * Where a question's answer key stands. Absent: entered by the parent or read
+ * from a document's printed answers. "missing": scanned without answers (the
+ * answer fields hold placeholders and the parent grades it by hand);
+ * "ai"/"ai-check": solved by AI, "ai-check" when the AI wasn't sure.
+ */
+export type AnswerStatus = "missing" | "ai" | "ai-check"
+
 interface QuestionBase {
   id: string
   /** May contain LaTeX between $…$ (see lib/rich-text.ts). */
@@ -100,6 +108,9 @@ interface QuestionBase {
   image?: QuestionImage
   /** Read side only: signed URL of `image`, added when loading. Never stored. */
   imageUrl?: string
+  answerStatus?: AnswerStatus
+  /** Worked solution (may contain LaTeX) for the parent, and for the child once answers are revealed. */
+  solution?: string
 }
 
 /** With `math`, answers are LaTeX (no $) graded by value; `simplest` also requires lowest terms. */

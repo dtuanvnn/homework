@@ -48,6 +48,10 @@ export const aiQuestionSchema = z.object({
     .object({ box: z.array(z.number()).describe("[x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels, without the question text or answer choices") })
     .nullable()
     .describe("The picture, diagram, drawn table or chart the child needs to answer, on this question's page; null when there is none"),
+  solution: z
+    .string()
+    .nullable()
+    .describe("Worked solution / how to solve it, in the document's language with LaTeX formulas; null when there is none"),
   confidence: z.number().describe("0-1: how sure you are the question and its answer are read/written correctly"),
   page: z.number().int().describe("1-based page/image the question comes from (1 when generating)"),
   note: z.string().nullable().describe("Short Vietnamese note for the parent when something is unclear (e.g. answer missing in the document); null otherwise"),
@@ -78,6 +82,69 @@ function normalizeBlanks(prompt: string): string {
 }
 
 const stripDollars = (s: string) => s.trim().replace(/^\$+|\$+$/g, "").trim()
+
+/**
+ * Where answer keys come from: "solve" = the model wrote them (generated sets),
+ * "none" = a transcription-only scan (keys left for later), "document" = read
+ * from the answers printed in the document, where some may be missing.
+ */
+export type AnswerSource = "solve" | "none" | "document"
+
+/** Whether the model gave this question an answer key. */
+function hasKey(ai: AiQuestion): boolean {
+  switch (ai.type) {
+    case "trac-nghiem":
+      return ai.correctIndex !== null && ai.correctIndex >= 0 && ai.correctIndex < (ai.options?.length ?? 0)
+    case "dung-sai":
+      return ai.trueFalseAnswer !== null
+    case "dien-cho-trong":
+      return Boolean(ai.answers?.length && ai.answers.every((a) => a.trim()))
+    case "tra-loi-ngan":
+      return Boolean(ai.answer?.trim())
+    case "noi":
+    case "sap-xep":
+      return true
+    case "tu-luan":
+      return Boolean(ai.rubric?.trim() || ai.solution?.trim())
+  }
+}
+
+/** A question without an answer key: the content as printed, placeholder answers, nothing flagged for the missing key. */
+function keylessDraft(ai: AiQuestion, issues: string[]): QuestionContent {
+  const base = {
+    prompt: ai.prompt.trim(),
+    points: Number.isFinite(ai.points) && ai.points > 0 ? Math.min(ai.points, 100) : 1,
+    skills: ai.skills.map((s) => s.trim()).filter(Boolean).slice(0, 4),
+  }
+  const math = ai.math ? { math: true as const, ...(ai.simplest ? { simplest: true as const } : {}) } : {}
+  switch (ai.type) {
+    case "trac-nghiem":
+      return { ...base, type: "trac-nghiem", options: (ai.options ?? []).map((o) => o.trim()).filter(Boolean), correctIndex: 0 }
+    case "dung-sai":
+      return { ...base, type: "dung-sai", answer: true }
+    case "dien-cho-trong": {
+      const prompt = normalizeBlanks(base.prompt)
+      const blanks = prompt.split(BLANK).length - 1
+      if (!blanks) issues.push(`Chưa thấy chỗ trống (${BLANK}) trong câu`)
+      return { ...base, prompt, type: "dien-cho-trong", answers: Array(Math.max(1, blanks)).fill(""), ...math }
+    }
+    case "tra-loi-ngan":
+      return { ...base, type: "tra-loi-ngan", answer: "", ...math }
+    case "noi": {
+      const pairs = (ai.pairs ?? []).filter((p) => p.left.trim() && p.right.trim())
+      if (pairs.length < 2) issues.push("Cần ít nhất 2 cặp để nối")
+      return { ...base, type: "noi", pairs }
+    }
+    case "sap-xep": {
+      // Printed in jumbled order: show it as printed until the key puts it in order.
+      const tokens = (ai.tokens ?? []).map((t) => t.trim()).filter(Boolean)
+      if (tokens.length < 2) issues.push("Cần ít nhất 2 từ để sắp xếp")
+      return { ...base, type: "sap-xep", tokens, shuffled: tokens.map((_, i) => i) }
+    }
+    case "tu-luan":
+      return { ...base, type: "tu-luan", rubric: "" }
+  }
+}
 
 /** Math flags for answers `answers`; math is turned off (with a note) when one can't be evaluated. */
 function mathFlags(ai: AiQuestion, answers: string[], issues: string[]): { math?: true; simplest?: true } {
@@ -139,9 +206,16 @@ function draft(ai: AiQuestion, issues: string[]): QuestionContent {
   }
 }
 
-export function toQuestion(ai: AiQuestion, id: string): ConvertedQuestion {
+export function toQuestion(ai: AiQuestion, id: string, { answers = "solve" }: { answers?: AnswerSource } = {}): ConvertedQuestion {
   const issues: string[] = []
-  const content = draft(ai, issues)
+  const keyless = answers === "none" || (answers === "document" && !hasKey(ai))
+  const notes = answers === "document" && keyless ? ["Tài liệu không có đáp án câu này"] : []
+  const solution = ai.solution?.trim()
+  const content: QuestionContent = {
+    ...(keyless ? keylessDraft(ai, issues) : draft(ai, issues)),
+    ...(keyless ? { answerStatus: "missing" as const } : {}),
+    ...(solution ? { solution } : {}),
+  }
   if (!issues.length && !questionContentSchema.safeParse(content).success) issues.push("Câu hỏi chưa đủ thông tin")
   const page = Math.max(1, Math.round(ai.page || 1))
   let figure: ConvertedQuestion["figure"]
@@ -155,13 +229,14 @@ export function toQuestion(ai: AiQuestion, id: string): ConvertedQuestion {
     question: { ...content, id } as Question,
     confidence: issues.length ? Math.min(reported, REPAIRED_CONFIDENCE) : reported,
     page,
-    notes: [...(ai.note?.trim() ? [ai.note.trim()] : []), ...issues],
+    notes: [...(ai.note?.trim() ? [ai.note.trim()] : []), ...notes, ...issues],
     ...(figure ? { figure } : {}),
   }
 }
 
 /** Readable answer key of a question, for prompts (generation references, AI grading). */
 export function answerKey(q: Question): string {
+  if (q.answerStatus === "missing" && q.type !== "tu-luan") return "(chưa có đáp án)"
   switch (q.type) {
     case "trac-nghiem":
       return q.options[q.correctIndex] ?? ""

@@ -20,6 +20,7 @@ const blank: AiQuestion = {
   math: null,
   simplest: null,
   figure: null,
+  solution: null,
 }
 const ai = (patch: Partial<AiQuestion>): AiQuestion => ({ ...blank, ...patch })
 
@@ -108,5 +109,39 @@ describe("math and figures", () => {
     const r = toQuestion(ai({ type: "trac-nghiem", prompt: "Hình nào?", options: ["A", "B"], correctIndex: 0, figure: { box: [0, 0, 1000, 1000] } }), "id-1")
     expect(r.figure).toBeUndefined()
     expect(r.notes).toContain("Chưa xác định được vị trí hình – hãy thêm hình bằng tay")
+  })
+})
+
+describe("scans without solving", () => {
+  it("transcribes only: ignores any answers, marks the key missing and doesn't flag it", () => {
+    const mc = toQuestion(ai({ type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndex: 1 }), "q", { answers: "none" })
+    expect(mc.question).toEqual({ id: "q", type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndex: 0, points: 1, skills: [], answerStatus: "missing" })
+    expect(mc.confidence).toBe(0.9)
+    expect(mc.notes).toEqual([])
+    const short = toQuestion(ai({ type: "tra-loi-ngan", prompt: "$\frac{1}{2} + \frac{1}{4} = ?$", math: true, simplest: true }), "q", { answers: "none" })
+    expect(short.question).toMatchObject({ answer: "", math: true, simplest: true, answerStatus: "missing" })
+    expect(short.notes).toEqual([])
+    const fill = toQuestion(ai({ type: "dien-cho-trong", prompt: "___ + 2 = ___" }), "q", { answers: "none" })
+    expect(fill.question).toMatchObject({ answers: ["", ""], answerStatus: "missing" })
+    expect(fill.notes).toEqual([])
+  })
+
+  it("keeps printed order for ordering questions, shown as printed", () => {
+    const r = toQuestion(ai({ type: "sap-xep", prompt: "Sắp xếp", tokens: ["học", "em", "đi"] }), "q", { answers: "none" })
+    expect(r.question).toMatchObject({ tokens: ["học", "em", "đi"], shuffled: [0, 1, 2], answerStatus: "missing" })
+  })
+
+  it("reads a document's answers and solution, and marks only questions it has no answer for", () => {
+    const keyed = toQuestion(ai({ type: "trac-nghiem", prompt: "?", options: ["a", "b"], correctIndex: 1, solution: " Vì b đúng. " }), "q", { answers: "document" })
+    expect(keyed.question).toMatchObject({ correctIndex: 1, solution: "Vì b đúng." })
+    expect(keyed.question).not.toHaveProperty("answerStatus")
+    const unkeyed = toQuestion(ai({ type: "tra-loi-ngan", prompt: "6 × 7 = ?" }), "q", { answers: "document" })
+    expect(unkeyed.question).toMatchObject({ answer: "", answerStatus: "missing" })
+    expect(unkeyed.notes).toContain("Tài liệu không có đáp án câu này")
+    expect(unkeyed.confidence).toBe(0.9)
+  })
+
+  it("keeps a solution from generated questions too", () => {
+    expect(toQuestion(ai({ type: "dung-sai", prompt: "?", trueFalseAnswer: false, solution: "Sai vì…" }), "q").question).toMatchObject({ answer: false, solution: "Sai vì…" })
   })
 })

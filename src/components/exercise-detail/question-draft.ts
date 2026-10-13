@@ -1,7 +1,7 @@
 import { evaluateMath } from '@/lib/math-answer'
 import { editedQuestionSchema } from '@/lib/question-schema'
 import { BLANK, countBlanks, shuffleIndexes } from '@/lib/questions'
-import type { MatchingPair, Question, QuestionImage, QuestionType } from '@/lib/types'
+import type { AnswerStatus, MatchingPair, Question, QuestionImage, QuestionType } from '@/lib/types'
 
 const MATH_KEY_ISSUE = 'Đáp án dạng toán chưa đúng (VD: 3/4, 2\\frac{1}{3}, 0,75)'
 
@@ -24,6 +24,18 @@ export interface QuestionDraft {
   simplest: boolean
   image?: QuestionImage
   imageUrl?: string
+  /** "missing": no key yet, the answer fields are left as they are; "ai"/"ai-check": key from AI. */
+  answerStatus?: AnswerStatus
+  solution: string
+}
+
+/** Fields that make up the answer key: changing one makes it the parent's own. */
+const KEY_FIELDS = ['correctIndex', 'tfAnswer', 'blanks', 'shortAnswer', 'pairs', 'orderingText', 'rubric'] as const
+
+export function patchDraft(d: QuestionDraft, p: Partial<QuestionDraft>): QuestionDraft {
+  const next = { ...d, ...p }
+  if (d.answerStatus && KEY_FIELDS.some((k) => k in p && JSON.stringify(p[k]) !== JSON.stringify(d[k]))) delete next.answerStatus
+  return next
 }
 
 const DEFAULT_PROMPTS: Partial<Record<QuestionType, string>> = {
@@ -52,14 +64,25 @@ export function emptyDraft(type: QuestionType): QuestionDraft {
     rubric: '',
     math: false,
     simplest: false,
+    solution: '',
   }
 }
 
 export function toDraft(q: Question): QuestionDraft {
-  const base = { ...emptyDraft(q.type), prompt: q.prompt, points: q.points, skills: [...q.skills], image: q.image, imageUrl: q.imageUrl }
+  const base = {
+    ...emptyDraft(q.type),
+    prompt: q.prompt,
+    points: q.points,
+    skills: [...q.skills],
+    image: q.image,
+    imageUrl: q.imageUrl,
+    answerStatus: q.answerStatus,
+    solution: q.solution ?? '',
+  }
   switch (q.type) {
     case 'trac-nghiem':
-      return { ...base, options: [...q.options], correctIndex: q.correctIndex }
+      // No option chosen while the question has no key (correctIndex is a placeholder then).
+      return { ...base, options: [...q.options], correctIndex: q.answerStatus === 'missing' ? -1 : q.correctIndex }
     case 'dung-sai':
       return { ...base, tfAnswer: q.answer }
     case 'dien-cho-trong':
@@ -99,21 +122,25 @@ export function orderingTokens(text: string): string[] {
 export function validateDraft(d: QuestionDraft): string[] {
   const issues: string[] = []
   if (!d.prompt.trim()) issues.push('Nhập nội dung câu hỏi')
+  // Without a key only the content is checked: the parent grades by hand.
+  const keyless = d.answerStatus === 'missing'
   switch (d.type) {
     case 'trac-nghiem': {
       const filled = d.options.filter((o) => o.trim())
       if (filled.length < 2) issues.push('Cần ít nhất 2 phương án')
-      if (!d.options[d.correctIndex]?.trim()) issues.push('Chọn đáp án đúng có nội dung')
+      if (!keyless && !d.options[d.correctIndex]?.trim()) issues.push('Chọn đáp án đúng có nội dung')
       break
     }
     case 'dien-cho-trong': {
       const n = countBlanks(d.prompt)
       if (n === 0) issues.push(`Thêm ít nhất một chỗ trống (${BLANK})`)
+      else if (keyless) break
       else if (d.blanks.slice(0, n).some((b) => !b?.trim())) issues.push('Nhập đáp án cho mọi chỗ trống')
       else if (d.math && d.blanks.slice(0, n).some((b) => !evaluateMath(b))) issues.push(MATH_KEY_ISSUE)
       break
     }
     case 'tra-loi-ngan':
+      if (keyless) break
       if (!d.shortAnswer.trim()) issues.push('Nhập đáp án')
       else if (d.math && !evaluateMath(d.shortAnswer)) issues.push(MATH_KEY_ISSUE)
       break
@@ -128,7 +155,16 @@ export function validateDraft(d: QuestionDraft): string[] {
 }
 
 export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Question {
-  const base = { id, prompt: d.prompt.trim(), points: d.points, skills: d.skills, ...(d.image ? { image: d.image, imageUrl: d.imageUrl } : {}) }
+  const solution = d.solution.trim()
+  const base = {
+    id,
+    prompt: d.prompt.trim(),
+    points: d.points,
+    skills: d.skills,
+    ...(d.image ? { image: d.image, imageUrl: d.imageUrl } : {}),
+    ...(d.answerStatus ? { answerStatus: d.answerStatus } : {}),
+    ...(solution ? { solution } : {}),
+  }
   const math = d.math ? { math: true as const, ...(d.simplest ? { simplest: true as const } : {}) } : {}
   switch (d.type) {
     case 'trac-nghiem': {
@@ -144,7 +180,7 @@ export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Qu
     case 'dung-sai':
       return { ...base, type: 'dung-sai', answer: d.tfAnswer }
     case 'dien-cho-trong':
-      return { ...base, type: 'dien-cho-trong', answers: d.blanks.slice(0, countBlanks(d.prompt)).map((b) => b.trim()), ...math }
+      return { ...base, type: 'dien-cho-trong', answers: Array.from({ length: countBlanks(d.prompt) }, (_, i) => (d.blanks[i] ?? '').trim()), ...math }
     case 'tra-loi-ngan':
       return { ...base, type: 'tra-loi-ngan', answer: d.shortAnswer.trim(), ...math }
     case 'noi':

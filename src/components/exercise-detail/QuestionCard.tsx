@@ -1,6 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Pencil, Trash2 } from 'lucide-react'
+import { GripVertical, Loader2, Pencil, Sparkles, Trash2 } from 'lucide-react'
+import AnswerStatusBadge from '@/components/question/AnswerStatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatScoreValue } from '@/lib/format'
@@ -14,9 +15,11 @@ interface QuestionCardProps {
   index: number
   onEdit: () => void
   onDelete: () => void
+  onSolve?: () => void
+  solving?: boolean
 }
 
-export default function QuestionCard({ question, index, onEdit, onDelete }: QuestionCardProps) {
+export default function QuestionCard({ question, index, onEdit, onDelete, onSolve, solving }: QuestionCardProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: question.id,
   })
@@ -51,6 +54,19 @@ export default function QuestionCard({ question, index, onEdit, onDelete }: Ques
           {index + 1}
         </span>
         <div className="-mr-2 ml-auto flex items-center">
+          {onSolve && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-slate-400 hover:text-violet-700"
+              onClick={onSolve}
+              disabled={solving}
+              aria-label={`Giải câu ${index + 1} bằng AI`}
+              title="Giải bằng AI"
+            >
+              {solving ? <Loader2 className="size-[18px] animate-spin" /> : <Sparkles className="size-[18px]" />}
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="text-slate-400 hover:text-indigo-700" onClick={onEdit} aria-label={`Sửa câu ${index + 1}`}>
             <Pencil className="size-[18px]" />
           </Button>
@@ -68,6 +84,7 @@ export default function QuestionCard({ question, index, onEdit, onDelete }: Ques
         <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
           {formatScoreValue(question.points)} điểm
         </Badge>
+        <AnswerStatusBadge status={question.answerStatus} />
         {question.skills.map((skill) => (
           <Badge key={skill} variant="outline" className="border-slate-200 font-medium text-slate-600">
             #{skill}

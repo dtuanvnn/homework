@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { ArrowLeft, ChevronRight, TextCursorInput } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, TextCursorInput } from 'lucide-react'
+import AnswerStatusBadge from '@/components/question/AnswerStatusBadge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -13,7 +14,7 @@ import FigureField, { type FigureSource } from './FigureField'
 import FormulaPreview from './FormulaPreview'
 import QuestionTypeFields from './QuestionTypeFields'
 import SkillTagInput from './SkillTagInput'
-import { changeDraftType, emptyDraft, fromDraft, toDraft, validateDraft, type QuestionDraft } from './question-draft'
+import { changeDraftType, emptyDraft, fromDraft, patchDraft, toDraft, validateDraft, type QuestionDraft } from './question-draft'
 
 const POINT_OPTIONS = [0.5, 1, 1.5, 2, 3]
 
@@ -64,7 +65,7 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
     }
   }
 
-  const patch = (p: Partial<QuestionDraft>) => setDraft((d) => (d ? { ...d, ...p } : d))
+  const patch = (p: Partial<QuestionDraft>) => setDraft((d) => (d ? patchDraft(d, p) : d))
   const issues = draft ? validateDraft(draft) : []
   const typeInfo = draft ? QUESTION_TYPES[draft.type] : null
   const promptCopy = draft ? PROMPT_LABELS[draft.type] : undefined
@@ -207,7 +208,36 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
                 <FormulaPreview text={draft.prompt} />
               </div>
 
+              {draft.answerStatus && (
+                <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                  <AnswerStatusBadge status={draft.answerStatus} />
+                  {draft.answerStatus === 'missing' ? (
+                    <p>Nhập đáp án bên dưới, hoặc để trống: khi con làm, câu này do bố mẹ chấm tay.</p>
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p>Đáp án do AI giải. Sửa đáp án, hoặc xác nhận nếu đã đúng.</p>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setDraft((d) => d && { ...d, answerStatus: undefined })}>
+                        <Check />
+                        Xác nhận đáp án đúng
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <QuestionTypeFields draft={draft} onChange={patch} />
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="q-solution">Lời giải (không bắt buộc)</Label>
+                <Textarea
+                  id="q-solution"
+                  rows={draft.solution.includes('\n') || draft.solution.length > 160 ? 6 : 3}
+                  value={draft.solution}
+                  onChange={(e) => patch({ solution: e.target.value })}
+                  placeholder="Các bước giải và đáp số. Con xem được khi đã hết lượt làm."
+                />
+                <FormulaPreview text={draft.solution} />
+              </div>
 
               {setId && (
                 <FigureField setId={setId} sources={sources ?? []} image={draft.image} imageUrl={draft.imageUrl} onChange={(image, imageUrl) => patch({ image, imageUrl })} />

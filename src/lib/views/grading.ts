@@ -168,6 +168,7 @@ const optionLabel = (q: { options: string[] }, i: number) => `${OPTION_LETTERS[i
 
 /** The expected answer, written for the parent. */
 export function correctAnswerText(q: Question): string {
+  if (q.answerStatus === "missing" && q.type !== "tu-luan") return "Chưa có đáp án – phụ huynh tự đối chiếu"
   switch (q.type) {
     case "trac-nghiem":
       return optionLabel(q, q.correctIndex)

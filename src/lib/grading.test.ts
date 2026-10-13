@@ -110,6 +110,14 @@ describe("gradeQuestion", () => {
   it("leaves essays for the parent", () => {
     expect(gradeQuestion(essay, { text: "Bạn em tên là Lan." })).toEqual({ isCorrect: null, pointsAwarded: null })
   })
+
+  it("leaves answers to questions without an answer key for the parent, but blanks are still wrong", () => {
+    const missing = { ...mc, answerStatus: "missing" } as Question
+    expect(gradeQuestion(missing, 0)).toEqual({ isCorrect: null, pointsAwarded: null })
+    expect(gradeQuestion(missing, undefined)).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    expect(gradeQuestion({ ...shortNum, answer: "", answerStatus: "missing" } as Question, " ")).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    expect(gradeQuestion({ ...mc, answerStatus: "ai" } as Question, 1)).toEqual({ isCorrect: true, pointsAwarded: 1 })
+  })
 })
 
 describe("math questions", () => {

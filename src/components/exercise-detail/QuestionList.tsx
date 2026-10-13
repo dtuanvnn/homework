@@ -19,9 +19,13 @@ interface QuestionListProps {
   onReorder: (questions: Question[]) => void
   onEdit: (question: Question) => void
   onDelete: (question: Question) => void
+  /** "Giải câu này" with AI; omitted where solving isn't offered. */
+  onSolve?: (question: Question) => void
+  /** Questions being solved right now. */
+  solving?: ReadonlySet<string>
 }
 
-export default function QuestionList({ questions, onReorder, onEdit, onDelete }: QuestionListProps) {
+export default function QuestionList({ questions, onReorder, onEdit, onDelete, onSolve, solving }: QuestionListProps) {
   // Stable id so dnd-kit's aria-describedby matches between server and client render.
   const dndId = useId()
   const sensors = useSensors(
@@ -61,7 +65,15 @@ export default function QuestionList({ questions, onReorder, onEdit, onDelete }:
       <SortableContext items={questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
         <ol className="relative flex flex-col gap-3">
           {questions.map((q, i) => (
-            <QuestionCard key={q.id} question={q} index={i} onEdit={() => onEdit(q)} onDelete={() => onDelete(q)} />
+            <QuestionCard
+              key={q.id}
+              question={q}
+              index={i}
+              onEdit={() => onEdit(q)}
+              onDelete={() => onDelete(q)}
+              onSolve={onSolve && (() => onSolve(q))}
+              solving={solving?.has(q.id)}
+            />
           ))}
         </ol>
       </SortableContext>

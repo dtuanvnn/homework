@@ -59,7 +59,7 @@ export default function ProcessingStep({ pages, phase, onCancel }: ProcessingSte
             {uploading
               ? `Đang tải tài liệu lên… (${pages.length} tệp)`
               : late
-                ? 'Đang nhận dạng câu hỏi và đáp án…'
+                ? 'Đang nhận dạng câu hỏi…'
                 : `Đang đọc tài liệu… (${pages.length} tệp)`}
           </p>
           <p className="mt-1 text-sm text-slate-500">

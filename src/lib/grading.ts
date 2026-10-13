@@ -79,6 +79,8 @@ const sameText = (expected: string, given: string) => normalizeText(given) === n
 export function gradeQuestion(q: Question, response: Response | undefined | null): QuestionGrade {
   if (q.type === "tu-luan") return NEEDS_PARENT
   if (response === undefined || response === null) return WRONG
+  // No answer key yet: the parent compares by hand.
+  if (q.answerStatus === "missing") return typeof response === "string" && !response.trim() ? WRONG : NEEDS_PARENT
 
   switch (q.type) {
     case "trac-nghiem":

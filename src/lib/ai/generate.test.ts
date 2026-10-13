@@ -45,6 +45,7 @@ const blank: AiQuestion = {
   math: null,
   simplest: null,
   figure: null,
+  solution: null,
 }
 const ai = (patch: Partial<AiQuestion> = {}): AiQuestion => ({ ...blank, ...patch })
 const output = (questions: AiQuestion[], patch: Partial<GeneratedSet> = {}): GeneratedSet => ({

@@ -4,7 +4,7 @@ import { REPAIRED_CONFIDENCE } from "./question-format"
 import {
   mergeScanResults,
   SCAN_BATCH_FILES,
-  SCAN_SYSTEM_PROMPT,
+  scanSystemPrompt,
   scanBatches,
   scanFileLabel,
   scanRequestText,
@@ -15,6 +15,8 @@ import {
 } from "./scan"
 
 const meta: ScanMeta = { subject: "toan", grade: 3, kind: "luyen-tap" }
+/** A document with printed answers: keys are read, so tests can check the mapping of answers. */
+const keyed: ScanMeta = { ...meta, withSolutions: true }
 
 const blank: AiQuestion = {
   type: "tra-loi-ngan",
@@ -35,6 +37,7 @@ const blank: AiQuestion = {
   math: null,
   simplest: null,
   figure: null,
+  solution: null,
 }
 const q = (patch: Partial<AiQuestion>): AiQuestion => ({ ...blank, ...patch })
 
@@ -57,7 +60,7 @@ describe("scan prompt pieces", () => {
   it("labels files with a 1-based number the response's page refers to", () => {
     expect(scanFileLabel(0, { name: "trang-1.jpg", kind: "image" })).toBe("Tệp 1 (ảnh: trang-1.jpg)")
     expect(scanFileLabel(2, { name: "de.pdf", kind: "pdf" })).toBe("Tệp 3 (PDF: de.pdf)")
-    expect(SCAN_SYSTEM_PROMPT).toContain('"Tệp N"')
+    expect(scanSystemPrompt()).toContain('"Tệp N"')
   })
 
   it("describes the subject, grade, kind and file count", () => {
@@ -73,13 +76,15 @@ describe("scan prompt pieces", () => {
     const text = scanRequestText(meta, 7, { start: 3, end: 6 })
     expect(text).toContain("files 4–6 of a 7-file document")
     expect(text).not.toContain("files follow")
+    expect(scanRequestText(meta, 2, { start: 1, end: 2 })).toContain("file 2 of a 2-file document")
   })
 
   it("splits files into consecutive batches", () => {
     expect(scanBatches(1)).toEqual([{ start: 0, end: 1 }])
     expect(scanBatches(SCAN_BATCH_FILES)).toEqual([{ start: 0, end: SCAN_BATCH_FILES }])
-    expect(scanBatches(7).map((b) => b.end - b.start)).toEqual([3, 3, 1])
-    expect(scanBatches(7).at(-1)).toEqual({ start: 6, end: 7 })
+    expect(scanBatches(7)).toHaveLength(Math.ceil(7 / SCAN_BATCH_FILES))
+    expect(scanBatches(7).flatMap((b) => Array.from({ length: b.end - b.start }, (_, i) => b.start + i))).toEqual([0, 1, 2, 3, 4, 5, 6])
+    expect(scanBatches(7).at(-1)?.end).toBe(7)
   })
 
   it("has a response schema Claude's output parses against", () => {
@@ -97,7 +102,7 @@ describe("toScanResult", () => {
           q({ prompt: "Tính: 456 + 237 = ?", answer: "693", confidence: 0.8, page: 2 }),
         ],
       }),
-      meta,
+      keyed,
       2,
       ids(),
     )
@@ -116,9 +121,15 @@ describe("toScanResult", () => {
   })
 
   it("joins Claude's note with repair notes and lowers confidence for incomplete questions", () => {
-    const r = toScanResult(response({ questions: [q({ prompt: "Hỏi đã bán bao nhiêu ki-lô-gam?", note: "Chữ mờ", confidence: 0.9 })] }), meta, 1, ids())
-    expect(r.items[0].note).toBe("Chữ mờ · Chưa có đáp án")
+    const r = toScanResult(response({ questions: [q({ type: "trac-nghiem", prompt: "Chọn đáp án", options: ["a"], correctIndex: 0, note: "Chữ mờ", confidence: 0.9 })] }), keyed, 1, ids())
+    expect(r.items[0].note).toBe("Chữ mờ · Câu hỏi chưa đủ thông tin")
     expect(r.items[0].confidence).toBe(REPAIRED_CONFIDENCE)
+  })
+
+  it("notes questions the document has no answer for, without lowering confidence", () => {
+    const r = toScanResult(response({ questions: [q({ prompt: "Hỏi đã bán bao nhiêu ki-lô-gam?", note: "Chữ mờ", confidence: 0.9 })] }), keyed, 1, ids())
+    expect(r.items[0].note).toBe("Chữ mờ · Tài liệu không có đáp án câu này")
+    expect(r.items[0].confidence).toBe(0.9)
   })
 
   it("clamps pages to the uploaded files and drops empty questions", () => {
@@ -185,7 +196,7 @@ describe("mergeScanResults", () => {
   })
 
   it("asks for LaTeX formulas and figure boxes", () => {
-    expect(SCAN_SYSTEM_PROMPT).toContain("$\\frac{3}{4} + \\frac{1}{8}$")
-    expect(SCAN_SYSTEM_PROMPT).toContain("fill figure")
+    expect(scanSystemPrompt()).toContain("$\\frac{3}{4} + \\frac{1}{8}$")
+    expect(scanSystemPrompt()).toContain("fill figure")
   })
 })
