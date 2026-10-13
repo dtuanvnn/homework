@@ -54,6 +54,9 @@ export async function scanDocuments(input: ScanInput): Promise<ActionResult<Scan
       content: [{ type: "text", text: scanRequestText(meta, files.length) }, ...fileBlocks],
       schema: scanResponseSchema,
       effort: "high",
+      // Thinking plus every transcribed (and self-solved) question of up to 20 pages
+      // overflows the default 32k; 128k is Claude's streaming cap (DeepSeek allows 384k).
+      maxTokens: 128000,
     })
     const result = toScanResult(response, meta, files.length, () => crypto.randomUUID())
     if (!result.items.length) throw new Error("AI không tìm thấy câu hỏi nào trong tài liệu. Hãy thử ảnh rõ hơn.")
