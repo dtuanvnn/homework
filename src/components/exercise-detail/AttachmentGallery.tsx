@@ -5,7 +5,8 @@ import type { Attachment } from '@/lib/types'
 
 interface AttachmentGalleryProps {
   attachments: Attachment[]
-  onChange: (attachments: Attachment[]) => void
+  /** Without it the files are read-only (no remove buttons). */
+  onChange?: (attachments: Attachment[]) => void
   /** Show the trailing "Thêm tệp" tile (default true). */
   showAdd?: boolean
 }
@@ -36,7 +37,7 @@ export default function AttachmentGallery({ attachments, onChange, showAdd = tru
 
   const handleFiles = (files: FileList | null) => {
     if (!files?.length) return
-    onChange([...attachments, ...filesToAttachments(files)])
+    onChange?.([...attachments, ...filesToAttachments(files)])
   }
 
   return (
@@ -60,16 +61,18 @@ export default function AttachmentGallery({ attachments, onChange, showAdd = tru
             </div>
             <div className="text-[11px] text-slate-400">{formatSize(file.sizeKb)}</div>
           </figcaption>
-          <button
-            type="button"
-            onClick={() => onChange(attachments.filter((a) => a.id !== file.id))}
-            className="absolute -top-2 -right-2 flex size-9 items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            aria-label={`Gỡ tệp ${file.name}`}
-          >
-            <span className="flex size-6 items-center justify-center rounded-full bg-slate-900/80 text-white shadow">
-              <X className="size-3.5" />
-            </span>
-          </button>
+          {onChange && (
+            <button
+              type="button"
+              onClick={() => onChange(attachments.filter((a) => a.id !== file.id))}
+              className="absolute -top-2 -right-2 flex size-9 items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              aria-label={`Gỡ tệp ${file.name}`}
+            >
+              <span className="flex size-6 items-center justify-center rounded-full bg-slate-900/80 text-white shadow">
+                <X className="size-3.5" />
+              </span>
+            </button>
+          )}
         </figure>
       ))}
 

@@ -8,6 +8,23 @@ export interface ReviewItem extends ScannedQuestion {
   figureState?: 'cropping' | 'error'
 }
 
+/**
+ * Review items after a scan of more pages: the new questions go after the
+ * existing ones, unreviewed, with page numbers shifted past the `pageOffset`
+ * pages scanned before (a scan numbers the files it was sent from 1).
+ */
+export function appendScanned(existing: ReviewItem[], scanned: ScannedQuestion[], pageOffset: number): ReviewItem[] {
+  return [
+    ...existing,
+    ...scanned.map((s) => ({
+      ...s,
+      page: s.page + pageOffset,
+      reviewed: false,
+      ...(s.figure ? { figure: { ...s.figure, page: s.figure.page + pageOffset }, figureState: 'cropping' as const } : {}),
+    })),
+  ]
+}
+
 export const LOW_CONFIDENCE = 0.75
 export const HIGH_CONFIDENCE = 0.85
 

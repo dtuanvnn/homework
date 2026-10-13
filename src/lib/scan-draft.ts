@@ -21,6 +21,8 @@ export interface ScanDraft {
   items: ReviewItem[]
   /** Only uploaded files: their Storage path survives, blob previews don't. */
   files: Pick<Attachment, "id" | "name" | "kind" | "sizeKb" | "pages" | "uploaded">[]
+  /** How many of `files` were scanned; later ones were added but not scanned yet. Missing in older drafts: all. */
+  scannedCount?: number
 }
 
 export function loadScanDraft(): ScanDraft | null {

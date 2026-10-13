@@ -1,5 +1,5 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { AlertTriangle, Camera, FolderOpen, Loader2, Sparkles, Trash2, UploadCloud } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Camera, FolderOpen, Loader2, Sparkles, Trash2, UploadCloud } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -24,13 +24,18 @@ interface UploadStepProps {
   onScan: () => void
   /** Why the last scan failed, shown above the scan button. */
   error?: string | null
+  /** Pages added from the review step: the first `scannedCount` files are scanned already, kept and not scanned again. */
+  scannedCount?: number
+  onBackToReview?: () => void
 }
 
-export default function UploadStep({ files, onFilesChange, meta, onMetaChange, onScan, error }: UploadStepProps) {
+export default function UploadStep({ files, onFilesChange, meta, onMetaChange, onScan, error, scannedCount = 0, onBackToReview }: UploadStepProps) {
   const fileInput = useRef<HTMLInputElement>(null)
   const cameraInput = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
-  const tooMany = files.length > MAX_SCAN_FILES
+  const scanned = files.slice(0, scannedCount)
+  const fresh = files.slice(scannedCount)
+  const tooMany = fresh.length > MAX_SCAN_FILES
 
   const [converting, setConverting] = useState(false)
   // PDFs become one image per page: the AI reads images, and each page then shows in the review viewer.
@@ -100,19 +105,29 @@ export default function UploadStep({ files, onFilesChange, meta, onMetaChange, o
         <input ref={cameraInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
       </div>
 
-      {files.length > 0 && (
+      {scanned.length > 0 && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-slate-900">Tệp đã chọn</h2>
+            <h2 className="font-bold text-slate-900">Đã quét</h2>
+            <span className="text-sm text-slate-500">{scanned.length} tệp · câu hỏi đã được giữ lại</span>
+          </div>
+          <AttachmentGallery attachments={scanned} showAdd={false} />
+        </section>
+      )}
+
+      {fresh.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-slate-900">{scanned.length ? 'Trang mới' : 'Tệp đã chọn'}</h2>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-500">{files.length} tệp</span>
-              <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => onFilesChange([])}>
+              <span className="text-sm text-slate-500">{fresh.length} tệp</span>
+              <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => onFilesChange(scanned)}>
                 <Trash2 className="size-4" />
                 Xóa tất cả
               </Button>
             </div>
           </div>
-          <AttachmentGallery attachments={files} onChange={onFilesChange} showAdd={false} />
+          <AttachmentGallery attachments={fresh} onChange={(list) => onFilesChange([...scanned, ...list])} showAdd={false} />
         </section>
       )}
 
@@ -184,19 +199,31 @@ export default function UploadStep({ files, onFilesChange, meta, onMetaChange, o
       )}
 
       <div className="flex flex-col items-stretch gap-2 sm:items-end">
-        <Button
-          size="lg"
-          className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700"
-          disabled={files.length === 0 || tooMany}
-          onClick={onScan}
-        >
-          <Sparkles className="size-5" />
-          {error ? 'Quét lại bằng AI' : 'Quét bằng AI'}
-        </Button>
-        {files.length === 0 && <p className="text-center text-xs text-slate-400 sm:text-right">Thêm ít nhất một tệp để bắt đầu quét.</p>}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row">
+          {onBackToReview && (
+            <Button size="lg" variant="outline" onClick={onBackToReview}>
+              <ArrowLeft className="size-5" />
+              Quay lại câu hỏi
+            </Button>
+          )}
+          <Button
+            size="lg"
+            className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700"
+            disabled={fresh.length === 0 || tooMany}
+            onClick={onScan}
+          >
+            <Sparkles className="size-5" />
+            {scanned.length ? (fresh.length ? `Quét thêm ${fresh.length} trang` : 'Quét thêm trang') : error ? 'Quét lại bằng AI' : 'Quét bằng AI'}
+          </Button>
+        </div>
+        {fresh.length === 0 && (
+          <p className="text-center text-xs text-slate-400 sm:text-right">
+            {scanned.length ? 'Chụp hoặc chọn các trang còn lại, AI chỉ quét trang mới.' : 'Thêm ít nhất một tệp để bắt đầu quét.'}
+          </p>
+        )}
         {tooMany && (
           <p className="text-center text-xs font-medium text-amber-700 sm:text-right">
-            Mỗi lần quét tối đa {MAX_SCAN_FILES} tệp – hãy bỏ bớt {files.length - MAX_SCAN_FILES} tệp.
+            Mỗi lần quét tối đa {MAX_SCAN_FILES} tệp – hãy bỏ bớt {fresh.length - MAX_SCAN_FILES} tệp.
           </p>
         )}
       </div>

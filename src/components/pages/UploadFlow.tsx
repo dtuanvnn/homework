@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, Save } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, FilePlus2, Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -7,7 +7,7 @@ import ProcessingStep, { type ScanPhase } from '@/components/upload/ProcessingSt
 import ReviewStep from '@/components/upload/ReviewStep'
 import UploadStep, { type UploadMeta } from '@/components/upload/UploadStep'
 import UploadStepper, { type UploadStepId } from '@/components/upload/UploadStepper'
-import { needsCheck, pageSource, pagesFromFiles, type ReviewItem, type SourcePage } from '@/components/upload/review-utils'
+import { appendScanned, needsCheck, pageSource, pagesFromFiles, type ReviewItem, type SourcePage } from '@/components/upload/review-utils'
 import { findInvalidQuestion } from '@/components/exercise-detail/question-draft'
 import { unwrap } from '@/lib/action-result'
 import type { ScanResult } from '@/lib/ai/scan'
@@ -45,6 +45,8 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
   const [items, setItems] = useState<ReviewItem[]>([])
   const [title, setTitle] = useState('')
   const [details, setDetails] = useState<ScanDetails | null>(null)
+  /** Files already scanned: the first `scannedCount` of `files` (added pages go after them and can't be removed). */
+  const [scannedCount, setScannedCount] = useState(0)
   // Files are uploaded under this id before the scan, and the set is saved with it.
   const [setId, setSetId] = useState(() => crypto.randomUUID())
   /** An unsaved scan from an earlier visit (back pressed, tab closed…), offered for restore. */
@@ -69,8 +71,8 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
 
   // Keep the review state restorable until it's saved or explicitly discarded.
   useEffect(() => {
-    if (step === 'review' && items.length) saveScanDraft({ setId, meta, title, details, items, files })
-  }, [step, setId, meta, title, details, items, files])
+    if (step === 'review' && items.length) saveScanDraft({ setId, meta, title, details, items, files, scannedCount })
+  }, [step, setId, meta, title, details, items, files, scannedCount])
 
   const restoreDraft = async (draft: ScanDraft) => {
     setRestorable(null)
@@ -80,6 +82,7 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
     setDetails(draft.details)
     setItems(draft.items.map((it) => (it.figureState === 'cropping' ? { ...it, figureState: 'error' as const } : it)))
     setFiles(draft.files)
+    setScannedCount(draft.scannedCount ?? draft.files.length)
     setStep('review')
     // Blob previews are gone; show the uploaded copies (pages and figures) instead.
     const figurePaths = draft.items.flatMap((it) => (it.question.image ? [it.question.image.path] : []))
@@ -134,8 +137,10 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
     await Promise.all([cropNext(), cropNext()])
   }
 
+  /** Scans the files not scanned yet: all of them first, then pages added from the review step. */
   const startScan = async () => {
     const run = ++scanRun.current
+    const adding = scannedCount > 0
     setScanError(null)
     setPhase('uploading')
     setStep('processing')
@@ -153,28 +158,41 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
       }
       if (run !== scanRun.current) return
       setPhase('reading')
-      const result = unwrap(await scanDocuments({ setId, files: current.flatMap((f) => (f.uploaded ? [f.uploaded] : [])), ...meta }))
+      const fresh = current.slice(scannedCount)
+      const result = unwrap(await scanDocuments({ setId, files: fresh.flatMap((f) => (f.uploaded ? [f.uploaded] : [])), ...meta }))
       if (run !== scanRun.current) return
       const { items: scanned, title: suggested, ...rest } = result
-      const reviewItems: ReviewItem[] = scanned.map((s) => ({ ...s, reviewed: false, ...(s.figure ? { figureState: 'cropping' as const } : {}) }))
+      // The review step is hidden while scanning, so `items` is still the list the parent left.
+      const existing = adding ? items : []
+      const reviewItems = appendScanned(existing, scanned, pagesFromFiles(current.slice(0, scannedCount)).length)
       setItems(reviewItems)
-      void cropFigures(reviewItems, pagesFromFiles(current), run)
-      setTitle(suggested)
-      setDetails(rest)
+      void cropFigures(reviewItems.slice(existing.length), pagesFromFiles(current), run)
+      if (adding) {
+        // Keep the first scan's title and details; the added pages take extra time.
+        setDetails((d) => (d ? { ...d, estimatedMinutes: Math.min(240, d.estimatedMinutes + rest.estimatedMinutes) } : rest))
+        toast.success(`Đã thêm ${scanned.length} câu từ ${fresh.length} trang mới`)
+      } else {
+        setTitle(suggested)
+        setDetails(rest)
+      }
+      setScannedCount(current.length)
       setStep('review')
     } catch (e) {
       if (run !== scanRun.current) return
       const message = e instanceof Error ? e.message : 'Đã có lỗi xảy ra. Vui lòng thử lại.'
       toast.error('Không quét được tài liệu', { description: message })
       setScanError(message)
-      setStep('upload')
+      // Questions from earlier pages stay; the new pages wait for another try.
+      setStep(adding ? 'review' : 'upload')
     }
   }
 
   const cancelScan = () => {
     scanRun.current++
-    setStep('upload')
+    setStep(scannedCount > 0 ? 'review' : 'upload')
   }
+
+  const addPages = () => setStep('upload')
 
   const requestCancel = () => (hasProgress ? setPendingLeave(() => onClose) : onClose())
 
@@ -252,7 +270,16 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
       </header>
 
       {step === 'upload' && (
-        <UploadStep files={files} onFilesChange={setFiles} meta={meta} onMetaChange={setMeta} onScan={() => void startScan()} error={scanError} />
+        <UploadStep
+          files={files}
+          onFilesChange={setFiles}
+          meta={meta}
+          onMetaChange={setMeta}
+          onScan={() => void startScan()}
+          error={scanError}
+          scannedCount={scannedCount}
+          onBackToReview={scannedCount > 0 ? () => setStep('review') : undefined}
+        />
       )}
 
       {step === 'processing' && <ProcessingStep pages={pages} phase={phase} onCancel={cancelScan} />}
@@ -278,6 +305,10 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1 md:flex-none" disabled={saving} onClick={requestCancel}>
                 Hủy
+              </Button>
+              <Button variant="outline" className="flex-1 md:flex-none" disabled={saving} onClick={addPages}>
+                <FilePlus2 />
+                Thêm trang
               </Button>
               <Button className="flex-[2] md:flex-none" disabled={saving} onClick={handleSave}>
                 {saving ? <Loader2 className="animate-spin" aria-hidden /> : <Save />}
