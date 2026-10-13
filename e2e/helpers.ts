@@ -12,7 +12,9 @@ export async function open(page: Page, path: string) {
 /**
  * Collects uncaught page errors; assert it stays empty. Ignores the dev overlay
  * failing to fetch source-mapped stacks when a navigation cancels the request,
- * and AudioContext errors in headless WebKit (MathLive tries to load sounds).
+ * and "Can't find variable: AudioContext" in Playwright's WebKit, which has no
+ * Web Audio: MathLive's playSound() touches its AudioContext on every keypress
+ * even with all sounds set to null (real Safari has it).
  */
 export function trackPageErrors(page: Page) {
   const errors: string[] = []

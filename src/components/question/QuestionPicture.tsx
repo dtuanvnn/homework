@@ -16,11 +16,13 @@ export default function QuestionPicture({ question, className }: { question: { i
   const { width, height } = question.image
   if (!question.imageUrl) {
     return (
+      // No signed URL (e.g. the file is gone from Storage): keep the space, say so, don't pulse forever.
       <div
-        aria-label="Đang tải hình"
-        className={cn('max-h-80 w-full max-w-md animate-pulse rounded-xl border border-slate-200 bg-slate-100', className)}
+        className={cn('flex max-h-80 w-full max-w-md items-center justify-center rounded-xl border border-slate-200 bg-slate-100', className)}
         style={{ aspectRatio: `${width} / ${height}` }}
-      />
+      >
+        <span className="text-xs text-slate-400">Không tải được hình</span>
+      </div>
     )
   }
   return (

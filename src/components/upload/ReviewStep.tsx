@@ -70,7 +70,7 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
 
   const removeFigure = (id: string) =>
     onItemsChange(
-      items.map((it) => {
+      latestItems.current.map((it) => {
         if (it.question.id !== id) return it
         // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Destructuring to remove image properties
         const { image: _image, imageUrl: _url, ...question } = it.question
@@ -85,7 +85,7 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
   }
 
   const update = (id: string, patch: Partial<ReviewItem>) =>
-    onItemsChange(items.map((it) => (it.question.id === id ? { ...it, ...patch } : it)))
+    onItemsChange(latestItems.current.map((it) => (it.question.id === id ? { ...it, ...patch } : it)))
 
   const handleDelete = (index: number) => withUndo(items.filter((_, i) => i !== index), `Đã xóa câu ${index + 1}`)
 
@@ -109,7 +109,10 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
   }
 
   const handleSubmitEdit = (q: Question) => {
-    update(q.id, { question: q, reviewed: true })
+    const before = latestItems.current.find((it) => it.question.id === q.id)
+    // The picture was removed in the editor: drop its crop box too, so the card stops offering "Chỉnh khung / Bỏ hình".
+    const dropFigure = before?.question.image && !q.image ? { figure: undefined, figureState: undefined } : {}
+    update(q.id, { question: q, reviewed: true, ...dropFigure })
     toast.success('Đã cập nhật câu hỏi')
   }
 

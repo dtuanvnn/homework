@@ -86,7 +86,7 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
     await assertAccess("parent")
     const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
     for (const f of newFiles) {
-      if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp "${f.name}" chưa tải lên xong`)
+      if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
     }
     // Figures the set didn't have yet must really be in Storage (their paths are checked by the schema).
     const known = new Set((await getQuestions(set.id)).flatMap((q) => (q.image ? [q.image.path] : [])))

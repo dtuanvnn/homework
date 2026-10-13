@@ -45,6 +45,10 @@ interface QuestionEditorSheetProps {
   sources?: FigureSource[]
 }
 
+const keepOpenForMathKeyboard = (event: Event) => {
+  if (event.target instanceof Element && event.target.closest('.ML__keyboard')) event.preventDefault()
+}
+
 export default function QuestionEditorSheet({ open, onOpenChange, editing, onSubmit, skillSuggestions, setId, sources }: QuestionEditorSheetProps) {
   const [draft, setDraft] = useState<QuestionDraft | null>(() => (open && editing ? toDraft(editing) : null))
   const [showErrors, setShowErrors] = useState(false)
@@ -98,7 +102,11 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent aria-describedby={undefined}>
+      {/*
+        MathLive's virtual keyboard (math answers) mounts on <body>, outside this modal sheet: without this a
+        keycap tap counts as an outside interaction and closes the sheet.
+      */}
+      <SheetContent aria-describedby={undefined} onInteractOutside={keepOpenForMathKeyboard}>
         {!draft ? (
           <>
             <SheetHeader>

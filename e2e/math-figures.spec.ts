@@ -64,5 +64,44 @@ test("child answers a fraction with the math keyboard and an equal value counts"
   await expect(page.getByText("Đã nộp!")).toBeVisible()
   await expect(page).toHaveURL(/\/student\/results\//, { timeout: 15_000 })
   await expect(page.locator("p").filter({ hasText: "/10" }).first()).toHaveText(/^10\s*\/10$/)
+
+  // The result shows the figure and the child's fraction as a formula, not raw LaTeX.
+  await expect(page.locator('img[alt="Hình minh họa"]').first()).toBeVisible()
+  const childAnswer = page.locator("p").filter({ hasText: "Em trả lời:" }).first()
+  await expect(childAnswer.locator(".katex").first()).toBeVisible()
+
+  // The parent's view of the same (auto-graded) attempt renders them too.
+  const attemptId = decodeURIComponent(new URL(page.url()).pathname.split("/").at(-1)!)
+  await open(page, `/parent/grading/${encodeURIComponent(attemptId)}`)
+  await expect(page.locator('img[alt="Hình minh họa"]').first()).toBeVisible()
+  for (const label of ["Đáp án đúng", "Con trả lời"]) {
+    const box = page.getByText(label, { exact: true }).first().locator("xpath=..")
+    await expect(box.locator(".katex").first()).toBeVisible()
+  }
+  expect(errors).toEqual([])
+})
+
+test("parent types a math answer with the virtual keyboard inside the editor sheet", async ({ page }) => {
+  const errors = trackPageErrors(page)
+  await openSet(page)
+  await page.getByRole("button", { name: "Sửa câu 1" }).filter({ visible: true }).first().click()
+  const sheet = page.getByRole("dialog", { name: "Sửa câu hỏi" })
+  await expect(sheet).toBeVisible()
+
+  const field = sheet.locator("math-field")
+  await expect(field).toBeVisible()
+  const before = await field.evaluate((el: MathfieldElement) => el.value)
+  await field.click()
+
+  // The keyboard mounts on <body>, outside the modal sheet: real taps (no force) must reach it.
+  const keyboard = page.locator(".ML__keyboard")
+  await expect(keyboard).toBeVisible({ timeout: 2000 })
+  await keyboard.locator('[data-keycap-value="7"]').click()
+  await expect(sheet).toBeVisible()
+  await keyboard.locator('[data-keycap-value="5"]').click()
+  await expect(sheet).toBeVisible()
+
+  await expect.poll(async () => await field.evaluate((el: MathfieldElement) => el.value)).not.toBe(before)
+  expect(await field.evaluate((el: MathfieldElement) => el.value)).toContain("75")
   expect(errors).toEqual([])
 })

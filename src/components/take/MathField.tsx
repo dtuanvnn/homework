@@ -8,6 +8,8 @@ import type { MathAnswerInputProps } from './MathAnswerInput'
 // Global MathLive setup, once per page: local fonts, no sounds, a primary-school keyboard.
 MathfieldElement.fontsDirectory = '/mathlive/fonts'
 MathfieldElement.soundsDirectory = null
+MathfieldElement.keypressSound = null
+MathfieldElement.plonkSound = null
 window.mathVirtualKeyboard.layouts = [
   {
     label: '123',

@@ -11,11 +11,18 @@ export interface MathAnswerInputProps {
 }
 
 // MathLive is ~1 MB: load it only where a math answer is needed, and fall back to a text box if it fails.
-const MathField = dynamic(() => import('./MathField').catch(() => import('./PlainMathInput')), {
+// `loading` gets no props, so each size has its own dynamic component (the import stays inline: next/dynamic's
+// ssr:false transform needs it there). Spans, because inline inputs sit inside FillBlank's <p>.
+const placeholder = 'animate-pulse rounded-2xl border-2 border-slate-200 bg-slate-50'
+const LargeMathField = dynamic(() => import('./MathField').catch(() => import('./PlainMathInput')), {
   ssr: false,
-  loading: () => <div className="h-20 w-full animate-pulse rounded-2xl border-2 border-slate-200 bg-slate-50" />,
+  loading: () => <span className={`block h-20 w-full ${placeholder}`} />,
+})
+const InlineMathField = dynamic(() => import('./MathField').catch(() => import('./PlainMathInput')), {
+  ssr: false,
+  loading: () => <span className={`mx-1 inline-block h-14 w-28 align-middle ${placeholder}`} />,
 })
 
 export default function MathAnswerInput(props: MathAnswerInputProps) {
-  return <MathField {...props} />
+  return props.size === 'inline' ? <InlineMathField {...props} /> : <LargeMathField {...props} />
 }

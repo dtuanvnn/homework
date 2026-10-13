@@ -136,7 +136,8 @@ export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDe
       )}
 
       <div className="-mx-2 -mb-2 flex flex-wrap items-center gap-1 border-t border-slate-100 pt-2">
-        <Button variant="ghost" size="sm" className="h-11 text-slate-600" onClick={onEdit}>
+        {/* Editing while the figure is still being cut out would lose it when the crop lands. */}
+        <Button variant="ghost" size="sm" className="h-11 text-slate-600" onClick={onEdit} disabled={item.figureState === 'cropping'}>
           <Pencil />
           Sửa
         </Button>

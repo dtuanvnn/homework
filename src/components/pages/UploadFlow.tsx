@@ -112,21 +112,26 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
       group.ids.push(it.question.id)
       groups.set(key, group)
     }
-    await Promise.all(
-      [...groups.values()].map(async (g) => {
-        const apply = (patch: (it: ReviewItem) => ReviewItem) => {
-          if (run === scanRun.current) setItems((list) => list.map((it) => (g.ids.includes(it.question.id) ? patch(it) : it)))
-        }
-        try {
-          const source = pageSource(sourcePages[g.page - 1])
-          if (!source) throw new Error('missing page')
-          const { image, imageUrl } = await makeFigure(setId, source, g.box)
-          apply((it) => ({ ...it, figureState: undefined, question: { ...it.question, image, imageUrl } }))
-        } catch {
-          apply((it) => ({ ...it, figureState: 'error' }))
-        }
-      }),
-    )
+    // Each crop decodes the full-size photo, so at most two run at once (iPad Safari memory).
+    const queue = [...groups.values()]
+    const cropNext = async (): Promise<void> => {
+      const g = queue.shift()
+      if (!g) return
+      const apply = (patch: (it: ReviewItem) => ReviewItem) => {
+        if (run === scanRun.current) setItems((list) => list.map((it) => (g.ids.includes(it.question.id) ? patch(it) : it)))
+      }
+      try {
+        const source = pageSource(sourcePages[g.page - 1])
+        if (!source) throw new Error('missing page')
+        const { image, imageUrl } = await makeFigure(setId, source, g.box)
+        apply((it) => ({ ...it, figureState: undefined, question: { ...it.question, image, imageUrl } }))
+      } catch (error) {
+        console.error('Không cắt được hình minh họa', error)
+        apply((it) => ({ ...it, figureState: 'error' }))
+      }
+      return cropNext()
+    }
+    await Promise.all([cropNext(), cropNext()])
   }
 
   const startScan = async () => {
