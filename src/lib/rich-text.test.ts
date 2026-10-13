@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { hasMath, mathText, splitRichText } from "./rich-text"
+import { answerAsRichText, hasMath, mathText, splitRichText } from "./rich-text"
 
 describe("splitRichText", () => {
   it("returns plain text untouched", () => {
@@ -29,5 +29,14 @@ describe("splitRichText", () => {
 
   it("wraps a LaTeX answer for display", () => {
     expect(mathText("\\frac{3}{4}")).toBe("$\\frac{3}{4}$")
+  })
+})
+
+describe("answerAsRichText", () => {
+  it("wraps answers of math questions only", () => {
+    expect(answerAsRichText({ math: true }, "\\frac{3}{4}")).toBe("$\\frac{3}{4}$")
+    expect(splitRichText(answerAsRichText({ math: true }, "3/4"))).toEqual([{ kind: "math", tex: "3/4" }])
+    expect(answerAsRichText({}, "24 kg")).toBe("24 kg")
+    expect(answerAsRichText({ math: false }, "3/4")).toBe("3/4")
   })
 })

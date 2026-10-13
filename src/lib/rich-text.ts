@@ -52,3 +52,10 @@ export const hasMath = (input: string) => splitRichText(input).some((s) => s.kin
 
 /** A LaTeX answer key as displayable rich text. */
 export const mathText = (latex: string) => `$${latex}$`
+
+/**
+ * One answer (a single blank, or a short answer) of a question for display:
+ * math questions store and receive LaTeX without $, so it is wrapped for
+ * RichText; anything else is returned unchanged.
+ */
+export const answerAsRichText = (q: { math?: boolean }, answer: string) => (q.math ? mathText(answer) : answer)

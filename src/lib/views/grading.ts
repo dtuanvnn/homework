@@ -4,6 +4,7 @@
  */
 import { OPTION_LETTERS } from "../questions"
 import type { EssayValue, Response } from "../grading"
+import { answerAsRichText } from "../rich-text"
 import type { Attachment, Question, QuestionType, SubjectId } from "../types"
 
 /* ---------- Queue ---------- */
@@ -173,9 +174,9 @@ export function correctAnswerText(q: Question): string {
     case "dung-sai":
       return q.answer ? "Đúng" : "Sai"
     case "dien-cho-trong":
-      return q.answers.join(" · ")
+      return q.answers.map((a) => answerAsRichText(q, a)).join(" · ")
     case "tra-loi-ngan":
-      return q.answer
+      return answerAsRichText(q, q.answer)
     case "noi":
       return q.pairs.map((p) => `${p.left} → ${p.right}`).join(" · ")
     case "sap-xep":
@@ -198,9 +199,16 @@ export function responseText(q: Question, response: Response | null | undefined)
     case "dung-sai":
       return typeof response === "boolean" ? (response ? "Đúng" : "Sai") : NO_ANSWER
     case "dien-cho-trong":
-      return Array.isArray(response) ? q.answers.map((_, i) => String(response[i] ?? "").trim() || "(trống)").join(" · ") : NO_ANSWER
+      return Array.isArray(response)
+        ? q.answers
+            .map((_, i) => {
+              const text = String(response[i] ?? "").trim()
+              return text ? answerAsRichText(q, text) : "(trống)"
+            })
+            .join(" · ")
+        : NO_ANSWER
     case "tra-loi-ngan":
-      return typeof response === "string" && response.trim() ? response.trim() : NO_ANSWER
+      return typeof response === "string" && response.trim() ? answerAsRichText(q, response.trim()) : NO_ANSWER
     case "noi": {
       if (typeof response !== "object" || Array.isArray(response) || isEssayValue(response)) return NO_ANSWER
       const map = response as Record<string, number>

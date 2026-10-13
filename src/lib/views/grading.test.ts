@@ -129,6 +129,16 @@ describe("readable answers", () => {
     expect(responseText(mc, null)).toBe("(Chưa trả lời)")
   })
 
+  it("wraps math answers as formulas, one blank at a time", () => {
+    const mathShort: Question = { ...base, type: "tra-loi-ngan", answer: "\\frac{3}{4}", math: true }
+    const mathFill: Question = { ...base, type: "dien-cho-trong", answers: ["\\frac{1}{2}", "2"], math: true }
+    expect(correctAnswerText(mathShort)).toBe("$\\frac{3}{4}$")
+    expect(responseText(mathShort, " 3/4 ")).toBe("$3/4$")
+    expect(responseText(mathShort, "  ")).toBe("(Chưa trả lời)")
+    expect(correctAnswerText(mathFill)).toBe("$\\frac{1}{2}$ · $2$")
+    expect(responseText(mathFill, ["\\frac{1}{2}"])).toBe("$\\frac{1}{2}$ · (trống)")
+  })
+
   it("only exposes inline image drawings", () => {
     expect(essayDrawing({ text: "", drawing: "data:image/png;base64,AAA" })).toBe("data:image/png;base64,AAA")
     expect(essayDrawing({ text: "", drawing: "javascript:alert(1)" })).toBeUndefined()

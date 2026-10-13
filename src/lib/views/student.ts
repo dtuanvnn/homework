@@ -7,6 +7,7 @@ import { deriveAssignmentState, type DerivedState } from "@/lib/assignment-statu
 import { addDays, startOfDay, startOfWeek } from "@/lib/dates"
 import { formatDayMonth, formatShortDate, formatTime, formatVietnameseDate, formatWeekday } from "@/lib/format"
 import { starsFor, type EssayValue, type Response } from "@/lib/grading"
+import { answerAsRichText } from "@/lib/rich-text"
 import type { EssayQuestion, FillBlankQuestion, MultipleChoiceQuestion, Question, ShortAnswerQuestion, SubjectId, TrueFalseQuestion } from "@/lib/types"
 import type { AnswerRecord, AssignmentRecord, AttemptRecord } from "@/server/queries"
 
@@ -302,11 +303,14 @@ export function answerText(q: Question, response: Response | null | undefined, m
       return typeof response === "boolean" ? yesNo(response) : NO_ANSWER
     case "dien-cho-trong": {
       if (!Array.isArray(response)) return NO_ANSWER
-      const given = q.answers.map((_, i) => (typeof response[i] === "string" && (response[i] as string).trim()) || "…")
+      const given = q.answers.map((_, i) => {
+        const text = typeof response[i] === "string" ? (response[i] as string).trim() : ""
+        return text ? answerAsRichText(q, text) : "…"
+      })
       return given.join(" ; ")
     }
     case "tra-loi-ngan":
-      return typeof response === "string" && response.trim() ? response.trim() : NO_ANSWER
+      return typeof response === "string" && response.trim() ? answerAsRichText(q, response.trim()) : NO_ANSWER
     case "noi": {
       if (typeof response !== "object" || Array.isArray(response)) return NO_ANSWER
       const map = response as Record<string, number>
@@ -331,9 +335,9 @@ export function correctAnswerText(q: Question): string | undefined {
     case "dung-sai":
       return yesNo(q.answer)
     case "dien-cho-trong":
-      return q.answers.join(" ; ")
+      return q.answers.map((a) => answerAsRichText(q, a)).join(" ; ")
     case "tra-loi-ngan":
-      return q.answer
+      return answerAsRichText(q, q.answer)
     case "noi":
       return q.pairs.map((p) => `${p.left} – ${p.right}`).join("; ")
     case "sap-xep":

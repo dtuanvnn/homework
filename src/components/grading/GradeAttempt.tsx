@@ -220,7 +220,9 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
         <div className="grid gap-2 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-emerald-50/70 p-3">
             <p className="mb-1 text-xs font-semibold text-emerald-700">{essay ? "Gợi ý chấm" : "Đáp án đúng"}</p>
-            <p className="break-words text-slate-800">{correctAnswerText(q)}</p>
+            <p className="break-words text-slate-800">
+              <RichText text={correctAnswerText(q)} />
+            </p>
           </div>
           <div className="rounded-xl bg-indigo-50/60 p-3">
             <p className="mb-1 text-xs font-semibold text-indigo-700">Con trả lời</p>

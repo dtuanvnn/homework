@@ -164,6 +164,16 @@ describe("answerText", () => {
     expect(correctAnswerText(order)).toBe("I am eight")
     expect(correctAnswerText(essay)).toBeUndefined()
   })
+
+  it("wraps math answers as formulas, one blank at a time", () => {
+    const mathShort: Question = { id: "m1", type: "tra-loi-ngan", prompt: "?", points: 1, skills: [], answer: "\\frac{3}{4}", math: true }
+    const mathFill: Question = { id: "m2", type: "dien-cho-trong", prompt: "___ ___", points: 1, skills: [], answers: ["\\frac{1}{2}", "2"], math: true }
+    expect(answerText(mathShort, " 3/4 ")).toBe("$3/4$")
+    expect(answerText(mathShort, "")).toBe("(chưa trả lời)")
+    expect(correctAnswerText(mathShort)).toBe("$\\frac{3}{4}$")
+    expect(answerText(mathFill, ["\\frac{1}{2}", ""])).toBe("$\\frac{1}{2}$ ; …")
+    expect(correctAnswerText(mathFill)).toBe("$\\frac{1}{2}$ ; $2$")
+  })
 })
 
 describe("buildResultDetail", () => {
