@@ -13,6 +13,8 @@ process.env.TZ = "Asia/Ho_Chi_Minh"
 
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
+import { eq } from "drizzle-orm"
+import { createClient } from "@supabase/supabase-js"
 import { gradeAttempt, scoreOutOf10, type Response } from "@/lib/grading"
 import { addDays, startOfDay } from "@/lib/dates"
 import type { Question } from "@/lib/types"
@@ -187,6 +189,26 @@ const CURRENT: AssignmentPlan[] = [
 
 /* ---------- Run ---------- */
 
+/** 1×1 PNG; the browser scales it to the stored size. Enough to test that figures load. */
+const SEED_FIGURE = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64")
+
+async function seedFigure(set: Loaded) {
+  const url = process.env.SUPABASE_URL
+  const key = process.env.SUPABASE_SECRET_KEY
+  if (!url || !key) return console.log("No SUPABASE_URL/SUPABASE_SECRET_KEY: skipping the seed figure")
+  const storage = createClient(url, key, { auth: { persistSession: false } }).storage
+  const bucket = process.env.STORAGE_BUCKET ?? "homework"
+  const { data } = await storage.getBucket(bucket)
+  if (!data) await storage.createBucket(bucket, { public: false, fileSizeLimit: "20MB" })
+  const path = `sets/${set.row.id}/${crypto.randomUUID()}-figure.jpg`
+  const { error } = await storage.from(bucket).upload(path, SEED_FIGURE, { contentType: "image/png", upsert: true })
+  if (error) throw error
+  const question = set.questions.find((x) => x.type === "trac-nghiem")
+  if (!question) return
+  const { id, ...content } = { ...question, image: { path, width: 240, height: 160 } }
+  await db.update(schema.questions).set({ content }).where(eq(schema.questions.id, id))
+}
+
 async function main() {
   console.log("Resetting tables…")
   await client`truncate table answers, attachments, attempts, assignments, questions, exercise_sets, students restart identity cascade`
@@ -216,6 +238,8 @@ async function main() {
       ])
     }
   }
+
+  await seedFigure(sets.get("bt-18")!)
 
   const plans = [...history(), ...CURRENT]
   console.log(`Inserting ${plans.length} assignments with attempts…`)

@@ -254,15 +254,12 @@ export const SEED_SETS: SeedSet[] = [
     ],
   },
   {
-    key: "bt-18", title: "Đề kiểm tra giữa kỳ I – Tiếng Anh 3", subject: "tieng-anh", grade: 3, topic: "Kiểm tra",
-    description: "Đề 35 phút: nghe, đọc hiểu và từ vựng Unit 1–5.",
-    kind: "de-thi", source: "ai", status: "nhap", estimatedMinutes: 35, difficulty: 3, ageDays: 1,
+    key: "bt-18", title: "Phân số và hình vẽ", subject: "toan", grade: 3, topic: "Phân số",
+    description: "Cộng phân số đơn giản và đọc hình vẽ.",
+    kind: "luyen-tap", source: "thu-cong", status: "san-sang", estimatedMinutes: 10, difficulty: 2, ageDays: 1,
     questions: [
-      mc("Hello. My ___ is Nam.", ["name", "names", "is", "am"], 0, ["Grammar: My name is"]),
-      mc("How old are you? – I'm ___ .", ["eight", "fine", "Nam", "a pen"], 0, ["Số đếm 1–10"]),
-      fb("This ___ my friend, Mai.", ["is"], ["Grammar: to be"]),
-      tf("\"Goodbye\" dùng khi gặp nhau.", false, ["Greetings"]),
-      ord("Sắp xếp thành câu đúng.", ["Nice", "to", "meet", "you"], ["Greetings"]),
+      { ...sa("Tính: $\\frac{1}{2} + \\frac{1}{4} = ?$", "\\frac{3}{4}", ["Phân số"]), math: true } as Q,
+      mc("Hình bên có mấy hình vuông?", ["3", "4", "5", "6"], 1, ["Hình học"]),
     ],
   },
   {
