@@ -50,3 +50,18 @@ describe("validateHints", () => {
     expect(text).toContain("Các lựa chọn: 54 | 56 | 63")
   })
 })
+
+describe("leaksAnswer with math", () => {
+  const q: Question = { id: "m1", type: "tra-loi-ngan", prompt: "$\\frac{1}{2}+\\frac{1}{4}=?$", points: 1, skills: [], answer: "\\frac{3}{4}", math: true }
+
+  it("catches the answer written another way", () => {
+    expect(leaksAnswer("Đáp án là 3/4 nhé", q)).toBe(true)
+    expect(leaksAnswer("Kết quả bằng 6/8", q)).toBe(true)
+    expect(leaksAnswer("Kết quả là $\\frac{3}{4}$", q)).toBe(true)
+    expect(leaksAnswer("Bằng 0,75 đó", q)).toBe(true)
+  })
+
+  it("allows numbers from the question and guidance", () => {
+    expect(leaksAnswer("Em quy đồng 1/2 thành 2/4 rồi cộng với 1/4 nhé", q)).toBe(false)
+  })
+})

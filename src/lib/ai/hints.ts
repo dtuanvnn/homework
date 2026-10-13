@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { answerKey, QUESTION_TYPE_NAMES } from "@/lib/ai/question-format"
 import { normalizeText, type Response } from "@/lib/grading"
+import { equalRational, evaluateMath, latexToPlain, mathValuesIn } from "@/lib/math-answer"
 import { SUBJECTS } from "@/lib/subjects"
 import type { Question, SubjectId } from "@/lib/types"
 import { answerText } from "@/lib/views/student"
@@ -75,11 +76,26 @@ const containsWord = (text: string, word: string) => new RegExp(`(^|[^\\p{L}\\p{
 
 /** True when the hint gives away an answer that isn't already visible in the question. */
 export function leaksAnswer(hint: string, q: Question): boolean {
-  const text = normalizeText(hint)
-  const prompt = normalizeText(q.prompt)
-  return secrets(q).some((s) => {
-    const secret = normalizeText(s)
+  const plainHint = latexToPlain(hint)
+  const text = normalizeText(plainHint)
+  const prompt = normalizeText(latexToPlain(q.prompt))
+  const textLeak = secrets(q).some((s) => {
+    const secret = normalizeText(latexToPlain(s))
     return secret.length > 0 && containsWord(text, secret) && !containsWord(prompt, secret)
+  })
+  return textLeak || mathValueLeaks(plainHint, q)
+}
+
+/** Math keys also leak as any equal value (6/8 or 0,75 for 3/4) the question doesn't show. Single digits stay allowed. */
+function mathValueLeaks(plainHint: string, q: Question): boolean {
+  if ((q.type !== "tra-loi-ngan" && q.type !== "dien-cho-trong") || !q.math) return false
+  const keys = q.type === "tra-loi-ngan" ? [q.answer] : q.answers
+  const shown = mathValuesIn(latexToPlain(q.prompt))
+  const said = mathValuesIn(plainHint).filter((c) => !/^\d$/.test(c.raw))
+  return keys.some((k) => {
+    const value = evaluateMath(k)
+    if (!value || shown.some((s) => equalRational(s.value, value))) return false
+    return said.some((c) => equalRational(c.value, value))
   })
 }
 

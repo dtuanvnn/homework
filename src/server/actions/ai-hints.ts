@@ -6,7 +6,7 @@ import { runAction, type ActionResult } from "@/lib/action-result"
 import { HINTS_SYSTEM, hintsPrompt, hintsResponseSchema, validateHints, type HintItem } from "@/lib/ai/hints"
 import { buildResultDetail } from "@/lib/views/student"
 import { assertAccess } from "../access"
-import { ask } from "../ai/llm"
+import { ask, storageFileBlocks, type ContentBlock } from "../ai/llm"
 import { getAttemptDetail, isUuid } from "../queries"
 
 const { answers } = schema
@@ -30,9 +30,14 @@ export async function explainMistakes(attemptId: string): Promise<ActionResult<R
     if (!items.length) return {}
 
     const { set } = detail.assignment
+    const figures: ContentBlock[] = (
+      await Promise.all(
+        items.map((i) => (i.question.image ? storageFileBlocks(i.question.image.path, `Hình của câu id ${i.id}:`).catch(() => []) : [])),
+      )
+    ).flat()
     const result = await ask({
       system: HINTS_SYSTEM,
-      content: [{ type: "text", text: hintsPrompt(items, set.subject, set.grade) }],
+      content: [{ type: "text", text: hintsPrompt(items, set.subject, set.grade) }, ...figures],
       schema: hintsResponseSchema,
       effort: "low",
       maxTokens: 6000,

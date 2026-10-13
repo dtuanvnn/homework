@@ -33,6 +33,12 @@ const { answers, attempts, attachments } = schema
 
 type AnswerRow = { id: string; position: number; question: Question; response: Response | null }
 
+/** The question's figure as an image block, when it has one. */
+async function figureBlocks(question: Question, number: number): Promise<ContentBlock[]> {
+  if (!question.image) return []
+  return storageFileBlocks(question.image.path, `Hình của câu ${number}:`).catch(() => [])
+}
+
 async function submittedAttempt(attemptId: string) {
   if (!isUuid(attemptId)) throw new Error("Mã bài làm không hợp lệ")
   const attempt = await db.query.attempts.findFirst({ where: eq(attempts.id, attemptId) })
@@ -50,11 +56,12 @@ async function answerRows(attemptId: string): Promise<AnswerRow[]> {
 }
 
 /** Text + handwriting blocks of essays; `number` is the question number on the grading screen. */
-function essayBlocks(items: { row: AnswerRow; number: number }[]): ContentBlock[] {
+async function essayBlocks(items: { row: AnswerRow; number: number }[]): Promise<ContentBlock[]> {
   const blocks: ContentBlock[] = []
   for (const { row, number } of items) {
     const typed = isEssayValue(row.response) ? (row.response.text ?? "") : ""
     blocks.push({ type: "text", text: essayQuestionText(row.question, number, typed) })
+    blocks.push(...(await figureBlocks(row.question, number)))
     const drawing = essayDrawing(row.response)
     const image = drawing ? parseImageDataUrl(drawing) : null
     if (image) {
@@ -71,7 +78,7 @@ async function gradeEssays(items: { row: AnswerRow; number: number }[]): Promise
   const result = await ask({
     system: ESSAY_SYSTEM,
     content: [
-      ...essayBlocks(items),
+      ...(await essayBlocks(items)),
       { type: "text", text: `Hãy chấm ${items.length === 1 ? "câu tự luận trên" : `${items.length} câu tự luận trên`} (số câu: ${items.map((i) => i.number).join(", ")}).` },
     ],
     schema: essayGradesSchema,
@@ -143,11 +150,13 @@ export async function gradePaperWithAI(attemptId: string): Promise<ActionResult<
         return []
       }),
     )
+    const items = rows.map((row, i) => ({ row, number: i + 1 }))
     const result = await ask({
       system: PAPER_SYSTEM,
       content: [
         ...pages.flat(),
         { type: "text", text: paperQuestionList(rows) },
+        ...(await Promise.all(items.map(({ row, number }) => figureBlocks(row.question, number)))).flat(),
         { type: "text", text: `Hãy đọc bài làm trên ảnh và chấm đủ ${rows.length} câu.` },
       ],
       schema: paperGradesSchema,
