@@ -24,6 +24,7 @@ export default function QuestionPicture({ question, className }: { question: { i
     )
   }
   return (
+    // eslint-disable-next-line @next/next/no-img-element -- Signed Storage URLs can't use next/image optimization
     <img
       src={question.imageUrl}
       alt="Hình minh họa"
