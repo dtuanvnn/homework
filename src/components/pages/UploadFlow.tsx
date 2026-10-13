@@ -123,8 +123,8 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
       try {
         const source = pageSource(sourcePages[g.page - 1])
         if (!source) throw new Error('missing page')
-        const { image, imageUrl } = await makeFigure(setId, source, g.box)
-        apply((it) => ({ ...it, figureState: undefined, question: { ...it.question, image, imageUrl } }))
+        const { image, imageUrl, box } = await makeFigure(setId, source, g.box, { snap: true })
+        apply((it) => ({ ...it, figureState: undefined, figure: { page: g.page, box }, question: { ...it.question, image, imageUrl } }))
       } catch (error) {
         console.error('Không cắt được hình minh họa', error)
         apply((it) => ({ ...it, figureState: 'error' }))

@@ -31,10 +31,10 @@ export default function FigureField({ setId, sources, image, imageUrl, onChange 
   const [busy, setBusy] = useState(false)
   const [cropFrom, setCropFrom] = useState<FigureSource | null>(null)
 
-  const run = async (source: Blob | string, box: Box, padding: number) => {
+  const run = async (source: Blob | string, box: Box) => {
     setBusy(true)
     try {
-      const made = await makeFigure(setId, source, box, { padding })
+      const made = await makeFigure(setId, source, box)
       onChange(made.image, made.imageUrl)
       setCropFrom(null)
     } catch {
@@ -74,7 +74,7 @@ export default function FigureField({ setId, sources, image, imageUrl, onChange 
         onChange={(e) => {
           const file = e.target.files?.[0]
           e.target.value = ''
-          if (file) void run(file, FULL_PAGE, 0)
+          if (file) void run(file, FULL_PAGE)
         }}
       />
       <FigureCropDialog
@@ -83,7 +83,7 @@ export default function FigureField({ setId, sources, image, imageUrl, onChange 
         pageUrl={cropFrom?.url}
         title="Cắt hình từ trang tài liệu"
         saving={busy}
-        onSave={(box) => cropFrom && void run(cropFrom.source, box, 0.03)}
+        onSave={(box) => cropFrom && void run(cropFrom.source, box)}
       />
     </div>
   )

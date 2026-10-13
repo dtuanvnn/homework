@@ -45,7 +45,7 @@ export const aiQuestionSchema = z.object({
     .describe("tra-loi-ngan/dien-cho-trong: true when the answer is a number, fraction or expression the child types with a math keyboard; the answer(s) are then LaTeX without $"),
   simplest: z.boolean().nullable().describe("With math: true when the exercise asks for the simplest form (\"rút gọn\", \"tối giản\")"),
   figure: z
-    .object({ box: z.array(z.number()).describe("[x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels") })
+    .object({ box: z.array(z.number()).describe("[x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels, without the question text or answer choices") })
     .nullable()
     .describe("The picture, diagram, drawn table or chart the child needs to answer, on this question's page; null when there is none"),
   confidence: z.number().describe("0-1: how sure you are the question and its answer are read/written correctly"),

@@ -74,7 +74,7 @@ Transcribe every exercise in the document into questions:
 - Use a printed answer key when there is one. Handwritten or circled answers may be a child's own work and can be wrong: check each one, use the correct answer, and when the written one was wrong say so in the note. When no answer is shown, solve the exercise yourself as a teacher of this grade would expect and say in the note "AI tự giải".
 - Report low confidence and a short note when text is hard to read, cut off or ambiguous. Never invent questions that are not in the document.
 ${MATH_NOTATION_RULES}
-- When the child needs a picture, diagram, drawn table or chart to answer (geometry figures, objects to count, clocks, charts), fill figure with its box on that page: [x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels, not the question text. Parts of one exercise that share a picture repeat the same box. Use null when no picture is needed.
+- When the child needs a picture, diagram, drawn table or chart to answer (geometry figures, objects to count, clocks, charts), fill figure with its box on that page: [x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels (lengths, letters, numbers), leaving out the question text and the answer choices below it. Parts of one exercise that share a picture repeat the same box. Use null when no picture is needed.
 - page is the number N of the "Tệp N" label above the file the question comes from.
 
 Write the title, topic, description, skill tags and notes in Vietnamese.`
