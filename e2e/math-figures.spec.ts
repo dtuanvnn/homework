@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
+import type { MathfieldElement } from "mathlive"
 import { open, trackPageErrors } from "./helpers"
 
 const TITLE = "Phân số và hình vẽ"
@@ -37,14 +38,21 @@ test("child answers a fraction with the math keyboard and an equal value counts"
   const field = take.locator("math-field")
   await expect(field).toBeVisible()
   await field.click()
-  // Type the LaTeX directly (keyboard auto-conversion doesn't work in test env) and trigger input event
-  await field.evaluate((el) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (el as any).value = "\\frac{6}{8}"
-    el.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await expect.poll(async () => await field.evaluate((el) => (el as any).value)).toContain("\\frac{6}{8}")
+
+  // Use MathLive's virtual keyboard like a child would on iPad
+  const keyboard = page.locator('.ML__keyboard')
+  await expect(keyboard).toBeVisible({ timeout: 2000 })
+
+  // Tap keycaps directly: 6, "phân số" button, 8 (to enter 6/8 which equals the expected 3/4)
+  await keyboard.locator('[data-keycap-value="6"]').click({ force: true })
+  await keyboard.locator('[aria-label="phân số"]').click({ force: true })
+  await keyboard.locator('[data-keycap-value="8"]').click({ force: true })
+
+  // Verify the field contains a fraction with 6 and 8 (MathLive may use shorthand \frac68 or full \frac{6}{8})
+  await expect.poll(async () => await field.evaluate((el: MathfieldElement) => el.value)).toMatch(/\\frac(\{6\}\{8\}|68)/)
+
+  // Click dialog header to dismiss keyboard, then click next
+  await take.locator('header').click()
   await take.getByRole("button", { name: "Câu tiếp", exact: true }).click()
 
   await expect(take.getByRole("img", { name: "Hình minh họa" })).toBeVisible()

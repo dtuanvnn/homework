@@ -239,7 +239,7 @@ async function main() {
     }
   }
 
-  await seedFigure(sets.get("bt-18")!)
+  await seedFigure(sets.get("bt-20")!)
 
   const plans = [...history(), ...CURRENT]
   console.log(`Inserting ${plans.length} assignments with attempts…`)

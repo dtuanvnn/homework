@@ -11,12 +11,15 @@ export async function open(page: Page, path: string) {
 
 /**
  * Collects uncaught page errors; assert it stays empty. Ignores the dev overlay
- * failing to fetch source-mapped stacks when a navigation cancels the request.
+ * failing to fetch source-mapped stacks when a navigation cancels the request,
+ * and AudioContext errors in headless WebKit (MathLive tries to load sounds).
  */
 export function trackPageErrors(page: Page) {
   const errors: string[] = []
   page.on("pageerror", (e) => {
-    if (!e.message.includes("__nextjs_original-stack-frames")) errors.push(e.message)
+    if (!e.message.includes("__nextjs_original-stack-frames") && !e.message.includes("AudioContext")) {
+      errors.push(e.message)
+    }
   })
   return errors
 }
