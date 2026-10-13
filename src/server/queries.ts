@@ -3,6 +3,7 @@ import { asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { db, schema } from "@/db"
 import { starsFor } from "@/lib/grading"
 import type { Attachment, Difficulty, ExerciseSet, Question, Student } from "@/lib/types"
+import { withImageUrls } from "./question-images"
 import { attachmentUrl } from "./storage"
 
 /*
@@ -99,12 +100,17 @@ export async function getQuestions(setId: string): Promise<Question[]> {
   return rows.map((r) => ({ ...r.content, id: r.id }) as Question)
 }
 
+/** Questions with signed figure URLs, for display. Use getQuestions() for anything that gets stored. */
+export async function getQuestionsWithImages(setId: string): Promise<Question[]> {
+  return withImageUrls(await getQuestions(setId))
+}
+
 export async function getExerciseSetDetail(id: string) {
   if (!isUuid(id)) return null
   const row = await db.query.exerciseSets.findFirst({ where: eq(exerciseSets.id, id) })
   if (!row) return null
   const [qs, files, [{ n: timesAssigned }]] = await Promise.all([
-    getQuestions(id),
+    getQuestionsWithImages(id),
     db.select().from(attachments).where(eq(attachments.setId, id)).orderBy(asc(attachments.position)),
     db.select({ n: count() }).from(assignments).where(eq(assignments.setId, id)),
   ])
@@ -168,7 +174,13 @@ export async function getAttemptDetail(attemptId: string) {
     db.select().from(attachments).where(eq(attachments.attemptId, attemptId)).orderBy(asc(attachments.position)),
   ])
   if (!assignment) return null
-  return { attempt, assignment, answers: answerRows, scans: await Promise.all(scanRows.map(toAttachment)) }
+  const signed = await withImageUrls(answerRows.map((a) => a.question))
+  return {
+    attempt,
+    assignment,
+    answers: answerRows.map((a, i) => ({ ...a, question: signed[i] })),
+    scans: await Promise.all(scanRows.map(toAttachment)),
+  }
 }
 
 /** Answer rows of graded attempts, for skill analytics. */

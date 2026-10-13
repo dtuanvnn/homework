@@ -1,17 +1,18 @@
 "use server"
 
-import { and, eq, inArray, notInArray } from "drizzle-orm"
+import { and, eq, inArray, notInArray, sql, type AnyColumn } from "drizzle-orm"
 import { refresh } from "next/cache"
 import { z } from "zod"
 import { db, schema } from "@/db"
+import { figureOwner, unusedFigures } from "@/lib/figures"
 import { editedQuestionSchema } from "@/lib/question-schema"
 import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { assertAccess } from "../access"
-import { getExerciseSetDetail, getQuestions, getStudent, isUuid, toExerciseSet } from "../queries"
-import { attachmentUrl, createUploadTargets, isUploaded, removeFromStorage, type UploadTarget } from "../storage"
+import { getExerciseSetDetail, getQuestions, getQuestionsWithImages, getStudent, isUuid, toExerciseSet } from "../queries"
+import { attachmentUrl, createUploadTargets, isUploaded, listFolder, removeFromStorage, type UploadTarget } from "../storage"
 
-const { exerciseSets, questions, attachments, assignments } = schema
+const { exerciseSets, questions, attachments, assignments, answers } = schema
 
 const setMetaSchema = z.object({
   id: z.uuid(),
@@ -49,7 +50,7 @@ export type SavePayload = z.input<typeof savePayloadSchema>
 export async function loadQuestions(setId: string): Promise<ActionResult<Question[]>> {
   return runAction(async () => {
     await assertAccess("parent")
-    return isUuid(setId) ? getQuestions(setId) : []
+    return isUuid(setId) ? getQuestionsWithImages(setId) : []
   })
 }
 
@@ -85,7 +86,14 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
     await assertAccess("parent")
     const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
     for (const f of newFiles) {
-      if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
+      if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp "${f.name}" chưa tải lên xong`)
+    }
+    // Figures the set didn't have yet must really be in Storage (their paths are checked by the schema).
+    const known = new Set((await getQuestions(set.id)).flatMap((q) => (q.image ? [q.image.path] : [])))
+    for (const path of new Set(qs.flatMap((q) => (q.image ? [q.image.path] : [])))) {
+      if (known.has(path)) continue
+      const owner = figureOwner(path)
+      if (!owner || !(await isUploaded("sets", owner, path))) throw new Error("Hình minh họa chưa tải lên xong. Hãy thử lại.")
     }
     const { id, ...meta } = set
 
@@ -117,6 +125,7 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
     })
 
     await removeUnreferenced(removedPaths)
+    await removeUnusedFigures(id)
     refresh()
     const saved = await getExerciseSetDetail(id)
     if (!saved) throw new Error("Không lưu được bộ bài")
@@ -162,6 +171,7 @@ export async function deleteExerciseSet(id: string): Promise<ActionResult<void>>
     const files = await db.select({ path: attachments.storagePath }).from(attachments).where(eq(attachments.setId, id))
     await db.delete(exerciseSets).where(eq(exerciseSets.id, id))
     await removeUnreferenced(files.flatMap((f) => (f.path ? [f.path] : [])))
+    await removeUnusedFigures(id)
     refresh()
   })
 }
@@ -172,6 +182,25 @@ async function removeUnreferenced(paths: string[]) {
   const stillUsed = await db.select({ path: attachments.storagePath }).from(attachments).where(inArray(attachments.storagePath, paths))
   const used = new Set(stillUsed.map((r) => r.path))
   await removeFromStorage(paths.filter((p) => !used.has(p))).catch(() => {})
+}
+
+const imagePath = (column: AnyColumn) => sql<string>`${column}->'image'->>'path'`
+
+/** Figure objects in a set's folder that no question, answer snapshot or attachment uses any more. */
+async function removeUnusedFigures(setId: string) {
+  try {
+    const candidates = unusedFigures(await listFolder("sets", setId), [])
+    if (!candidates.length) return
+    const [inQuestions, inAnswers, inAttachments] = await Promise.all([
+      db.select({ path: imagePath(questions.content) }).from(questions).where(inArray(imagePath(questions.content), candidates)),
+      db.select({ path: imagePath(answers.question) }).from(answers).where(inArray(imagePath(answers.question), candidates)),
+      db.select({ path: attachments.storagePath }).from(attachments).where(inArray(attachments.storagePath, candidates)),
+    ])
+    const used = [...inQuestions, ...inAnswers, ...inAttachments].flatMap((r) => (r.path ? [r.path] : []))
+    await removeFromStorage(unusedFigures(candidates, used))
+  } catch {
+    // Best effort: a leftover figure only costs storage.
+  }
 }
 
 /* ---------- Assigning ---------- */
@@ -248,7 +277,7 @@ export async function previewSetUploads(setId: string, paths: string[]): Promise
     await assertAccess("parent")
     if (!isUuid(setId)) throw new Error("Mã bộ bài không hợp lệ")
     const prefix = `sets/${setId}/`
-    const own = paths.slice(0, 30).filter((p) => p.startsWith(prefix) && !p.includes(".."))
+    const own = paths.slice(0, 200).filter((p) => p.startsWith(prefix) && !p.includes(".."))
     const entries = await Promise.all(own.map(async (p) => [p, await attachmentUrl({ storagePath: p, externalUrl: null })] as const))
     return Object.fromEntries(entries.filter((e): e is readonly [string, string] => Boolean(e[1])))
   })

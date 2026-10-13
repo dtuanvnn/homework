@@ -93,3 +93,20 @@ export async function attachmentUrl(row: { storagePath: string | null; externalU
   if (error) return undefined
   return data.signedUrl
 }
+
+/** Signed read URLs for many objects at once, keyed by path (missing ones are left out). */
+export async function signedUrls(paths: string[]): Promise<Record<string, string>> {
+  const unique = [...new Set(paths)]
+  if (!unique.length) return {}
+  const { data, error } = await storage().from(BUCKET).createSignedUrls(unique, SIGNED_URL_SECONDS)
+  if (error || !data) return {}
+  return Object.fromEntries(data.flatMap((d) => (d.path && d.signedUrl ? [[d.path, d.signedUrl] as const] : [])))
+}
+
+/** Full paths of the objects directly inside an owner's folder. */
+export async function listFolder(folder: StorageFolder, ownerId: string): Promise<string[]> {
+  const prefix = `${folder}/${ownerId}`
+  const { data, error } = await storage().from(BUCKET).list(prefix, { limit: 1000 })
+  if (error || !data) return []
+  return data.map((o) => `${prefix}/${o.name}`)
+}

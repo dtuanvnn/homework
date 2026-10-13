@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation"
 import { TAB_PATHS } from "@/components/layout/routes"
 import TakeRoute from "@/components/take/TakeRoute"
 import { canTake, stateOf, toTakeQuestion } from "@/lib/views/student"
-import { getAssignment, getQuestions } from "@/server/queries"
+import { getAssignment, getQuestionsWithImages } from "@/server/queries"
 import { getDraftResponses } from "@/server/student-data"
 
 export default async function TakeAssignmentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -13,7 +13,7 @@ export default async function TakeAssignmentPage({ params }: { params: Promise<{
 
   const latest = record.attempts.at(-1)
   const [questions, initialAnswers] = await Promise.all([
-    getQuestions(record.setId),
+    getQuestionsWithImages(record.setId),
     latest && !latest.submittedAt ? getDraftResponses(latest.id) : {},
   ])
   if (!questions.length) redirect(TAB_PATHS.today)
