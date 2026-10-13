@@ -21,6 +21,8 @@ import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 import { isLongPrompt } from "@/lib/questions"
 import { explainMistakes } from "@/server/actions/ai-hints"
+import RichText from "@/components/question/RichText"
+import QuestionPicture from "@/components/question/QuestionPicture"
 
 export const fmtScore = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 2 })
 
@@ -215,20 +217,30 @@ export default function ResultDetail({
                 </motion.span>
                 <div className="min-w-0 flex-1 space-y-2">
                   <p className="text-sm font-bold text-slate-400">Câu {n}</p>
-                  <p className={cn("leading-snug break-words whitespace-pre-line text-slate-900", isLongPrompt(q.prompt) ? "text-lg font-medium leading-relaxed" : "text-xl font-bold")}>{q.prompt}</p>
+                  <p className={cn("leading-snug break-words whitespace-pre-line text-slate-900", isLongPrompt(q.prompt) ? "text-lg font-medium leading-relaxed" : "text-xl font-bold")}>
+                    <RichText text={q.prompt} />
+                  </p>
+                  <QuestionPicture question={q} />
                   <p className="text-lg text-slate-600">
                     Em trả lời:{" "}
-                    <span className={cn("font-bold", q.correct ? "text-emerald-700" : "text-red-600 line-through decoration-2")}>{q.answer}</span>
+                    <span className={cn("font-bold", q.correct ? "text-emerald-700" : "text-red-600 line-through decoration-2")}>
+                      <RichText text={q.answer} />
+                    </span>
                   </p>
                   {!q.correct && r.answersRevealed && q.correctAnswer && (
                     <p className="text-lg text-slate-600">
-                      Đáp án đúng: <span className="rounded-lg bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700">{q.correctAnswer}</span>
+                      Đáp án đúng: <span className="rounded-lg bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700">
+                        <RichText text={q.correctAnswer} />
+                      </span>
                     </p>
                   )}
                   {!q.correct && !r.answersRevealed && (q.hint ?? hints[q.id] ? (
                     <p className="flex items-start gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-900">
                       <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber-500" />
-                      <span><span className="font-bold">Gợi ý: </span>{q.hint ?? hints[q.id]}</span>
+                      <span>
+                        <span className="font-bold">Gợi ý: </span>
+                        <RichText text={q.hint ?? hints[q.id]} />
+                      </span>
                     </p>
                   ) : hintsLoading ? (
                     <p className="flex items-center gap-2 text-base text-slate-500">

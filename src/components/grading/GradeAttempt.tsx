@@ -44,6 +44,8 @@ import {
 import ScanViewer from "./ScanViewer"
 import { AiAssistCard, AiReadout } from "./AiAssist"
 import { fmt, scoreTone, submittedLabel } from "./format"
+import RichText from "@/components/question/RichText"
+import QuestionPicture from "@/components/question/QuestionPicture"
 
 const QUICK_COMMENTS = ["Giỏi lắm!", "Trình bày rõ ràng", "Con đọc kỹ đề nhé", "Kiểm tra lại phép tính", "Viết cẩn thận hơn nhé", "Cần giải thích thêm"]
 
@@ -210,7 +212,10 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
             </Badge>
           )}
         </div>
-        <p className="font-medium leading-relaxed break-words whitespace-pre-line text-slate-900 md:text-lg">{q.prompt}</p>
+        <p className="font-medium leading-relaxed break-words whitespace-pre-line text-slate-900 md:text-lg">
+          <RichText text={q.prompt} />
+        </p>
+        <QuestionPicture question={q} />
 
         <div className="grid gap-2 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-emerald-50/70 p-3">
@@ -226,7 +231,9 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
               </>
             ) : (
               <>
-                {answerText && <p className="break-words whitespace-pre-wrap text-slate-800">{answerText}</p>}
+                {answerText && <p className="break-words whitespace-pre-wrap text-slate-800">
+                  <RichText text={answerText} />
+                </p>}
                 {drawing && <img src={drawing} alt={`Bài viết tay câu ${n}`} className="mt-2 w-full max-w-md rounded-lg border bg-white" />}
               </>
             )}

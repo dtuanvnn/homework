@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils"
 import type { QuestionType, SubjectId } from "@/lib/types"
 import type { TakeQuestion } from "@/lib/views/student"
 import { Essay, FillBlank, Matching, MultipleChoice, Ordering, ShortAnswer, TrueFalse, type EssayValue } from "./questions"
+import RichText from "@/components/question/RichText"
+import QuestionPicture from "@/components/question/QuestionPicture"
 
 const TYPE_LABEL: Record<QuestionType, string> = {
   "trac-nghiem": "Trắc nghiệm",
@@ -303,13 +305,16 @@ export default function TakeAssignment({
                 {q.type !== "dien-cho-trong" &&
                   (isLongPrompt(q.prompt) ? (
                     <h2 className="rounded-3xl bg-white p-5 text-xl leading-relaxed font-semibold break-words whitespace-pre-line text-slate-900 md:p-6 md:text-2xl md:leading-relaxed">
-                      {q.prompt}
+                      <RichText text={q.prompt} />
                     </h2>
                   ) : (
-                    <h2 className="text-3xl leading-snug font-extrabold break-words whitespace-pre-line text-slate-900 md:text-4xl">{q.prompt}</h2>
+                    <h2 className="text-3xl leading-snug font-extrabold break-words whitespace-pre-line text-slate-900 md:text-4xl">
+                      <RichText text={q.prompt} />
+                    </h2>
                   ))}
                 {q.type === "dien-cho-trong" && <h2 className="text-xl font-bold text-slate-600">Em điền từ thích hợp vào chỗ trống:</h2>}
               </div>
+              <QuestionPicture question={q} className="mx-auto max-h-96" />
               {renderQuestion(q)}
             </motion.div>
           )}

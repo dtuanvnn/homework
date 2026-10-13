@@ -102,6 +102,8 @@ export interface ReviewItem {
   comment?: string
   /** AI guidance for a wrong answer: what went wrong and how to solve it, without the answer. */
   hint?: string
+  image?: { path: string; width: number; height: number }
+  imageUrl?: string
 }
 
 export interface ResultView {
@@ -377,6 +379,8 @@ export function buildResultDetail(
         correctAnswer: correct || !answersRevealed ? undefined : correctAnswerText(row.question),
         comment: row.comment ?? undefined,
         hint: correct ? undefined : (row.hint ?? undefined),
+        image: row.question.image,
+        imageUrl: row.question.imageUrl,
       }
     }),
   }

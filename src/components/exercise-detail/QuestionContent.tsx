@@ -2,11 +2,18 @@ import { ArrowRight, Check, X } from 'lucide-react'
 import { BLANK, OPTION_LETTERS } from '@/lib/questions'
 import { cn } from '@/lib/utils'
 import type { Question } from '@/lib/types'
+import RichText from '@/components/question/RichText'
+import QuestionPicture from '@/components/question/QuestionPicture'
+import { mathText } from '@/lib/rich-text'
 
 const correctChip = 'border-emerald-300 bg-emerald-50 text-emerald-800'
 
-function Prompt({ children }: { children: React.ReactNode }) {
-  return <p className="text-base leading-relaxed font-medium break-words whitespace-pre-line text-slate-900">{children}</p>
+function Prompt({ text }: { text: string }) {
+  return (
+    <p className="text-base leading-relaxed font-medium break-words whitespace-pre-line text-slate-900">
+      <RichText text={text} />
+    </p>
+  )
 }
 
 function AnswerBox({ label = 'Đáp án', children }: { label?: string; children: React.ReactNode }) {
@@ -21,12 +28,12 @@ function AnswerBox({ label = 'Đáp án', children }: { label?: string; children
   )
 }
 
-export default function QuestionContent({ question: q }: { question: Question }) {
+function QuestionBody({ question: q }: { question: Question }) {
   switch (q.type) {
     case 'trac-nghiem':
       return (
         <div className="flex flex-col gap-3">
-          <Prompt>{q.prompt}</Prompt>
+          <Prompt text={q.prompt} />
           <ul className="grid grid-cols-2 gap-2">
             {q.options.map((opt, i) => {
               const correct = i === q.correctIndex
@@ -46,7 +53,9 @@ export default function QuestionContent({ question: q }: { question: Question })
                   >
                     {OPTION_LETTERS[i]}
                   </span>
-                  <span className="min-w-0 flex-1 font-medium">{opt}</span>
+                  <span className="min-w-0 flex-1 font-medium">
+                    <RichText text={opt} />
+                  </span>
                   {correct && (
                     <>
                       <Check className="size-4 shrink-0 text-emerald-600" aria-hidden />
@@ -63,7 +72,7 @@ export default function QuestionContent({ question: q }: { question: Question })
     case 'dung-sai':
       return (
         <div className="flex flex-col gap-3">
-          <Prompt>{q.prompt}</Prompt>
+          <Prompt text={q.prompt} />
           <div className="flex gap-2">
             {[true, false].map((v) => {
               const correct = v === q.answer
@@ -89,27 +98,29 @@ export default function QuestionContent({ question: q }: { question: Question })
     case 'dien-cho-trong': {
       const parts = q.prompt.split(BLANK)
       return (
-        <Prompt>
+        <p className="text-base leading-relaxed font-medium break-words whitespace-pre-line text-slate-900">
           {parts.map((part, i) => (
             <span key={i}>
-              {part}
+              <RichText text={part} />
               {i < parts.length - 1 && (
                 <span className="mx-1 inline-block rounded-md border-b-2 border-emerald-500 bg-emerald-50 px-2 font-semibold text-emerald-700">
-                  {q.answers[i] || '…'}
+                  {q.answers[i] ? <RichText text={q.math ? mathText(q.answers[i]) : q.answers[i]} /> : '…'}
                 </span>
               )}
             </span>
           ))}
-        </Prompt>
+        </p>
       )
     }
 
     case 'tra-loi-ngan':
       return (
         <div className="flex flex-col gap-3">
-          <Prompt>{q.prompt}</Prompt>
+          <Prompt text={q.prompt} />
           <AnswerBox>
-            <span className="font-bold">{q.answer}</span>
+            <span className="font-bold">
+              <RichText text={q.math ? mathText(q.answer) : q.answer} />
+            </span>
           </AnswerBox>
         </div>
       )
@@ -117,12 +128,12 @@ export default function QuestionContent({ question: q }: { question: Question })
     case 'noi':
       return (
         <div className="flex flex-col gap-3">
-          <Prompt>{q.prompt}</Prompt>
+          <Prompt text={q.prompt} />
           <ul className="flex flex-col gap-2">
             {q.pairs.map((pair, i) => (
               <li key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <span className="flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800">
-                  {pair.left}
+                  <RichText text={pair.left} />
                 </span>
                 <ArrowRight className="size-4 text-emerald-500" aria-label="nối với" />
                 <span className={cn('flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold', correctChip)}>
@@ -131,7 +142,7 @@ export default function QuestionContent({ question: q }: { question: Question })
                       {pair.picture}
                     </span>
                   )}
-                  {pair.right}
+                  <RichText text={pair.right} />
                 </span>
               </li>
             ))}
@@ -142,19 +153,21 @@ export default function QuestionContent({ question: q }: { question: Question })
     case 'sap-xep':
       return (
         <div className="flex flex-col gap-3">
-          <Prompt>{q.prompt}</Prompt>
+          <Prompt text={q.prompt} />
           <div className="flex flex-wrap items-center gap-1.5" aria-label="Các từ hiển thị cho học sinh">
             {q.shuffled.map((idx, i) => (
               <span key={i} className="flex items-center gap-1.5">
                 <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-sm font-medium text-slate-700">
-                  {q.tokens[idx]}
+                  <RichText text={q.tokens[idx]} />
                 </span>
                 {i < q.shuffled.length - 1 && <span className="text-slate-300">/</span>}
               </span>
             ))}
           </div>
           <AnswerBox>
-            <span className="font-bold">{q.tokens.join(' ')}.</span>
+            <span className="font-bold">
+              <RichText text={q.tokens.join(' ') + '.'} />
+            </span>
           </AnswerBox>
         </div>
       )
@@ -162,7 +175,7 @@ export default function QuestionContent({ question: q }: { question: Question })
     case 'tu-luan':
       return (
         <div className="flex flex-col gap-3">
-          <Prompt>{q.prompt}</Prompt>
+          <Prompt text={q.prompt} />
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-900">
             <div className="mb-1.5 font-semibold text-emerald-800">Gợi ý chấm</div>
             <ul className="flex flex-col gap-1">
@@ -173,7 +186,7 @@ export default function QuestionContent({ question: q }: { question: Question })
                 .map((r, i) => (
                   <li key={i} className="flex gap-2">
                     <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden />
-                    {r}
+                    <RichText text={r} />
                   </li>
                 ))}
             </ul>
@@ -181,4 +194,13 @@ export default function QuestionContent({ question: q }: { question: Question })
         </div>
       )
   }
+}
+
+export default function QuestionContent({ question: q }: { question: Question }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <QuestionBody question={q} />
+      <QuestionPicture question={q} />
+    </div>
+  )
 }

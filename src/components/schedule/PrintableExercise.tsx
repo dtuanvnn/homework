@@ -4,6 +4,8 @@ import { CardTitle } from "@/components/ui/card"
 import { useStudent } from "@/components/layout/AppFrame"
 import { OPTION_LETTERS } from "@/lib/questions"
 import type { ExerciseSet, Question } from "@/lib/types"
+import RichText from "@/components/question/RichText"
+import QuestionPicture from "@/components/question/QuestionPicture"
 
 /** A student worksheet: deliberately omits answers and grading rubrics. */
 export default function PrintableExercise({
@@ -34,13 +36,14 @@ export default function PrintableExercise({
         {questions.map((q, i) => (
           <li key={q.id} className="break-inside-avoid">
             <p className="font-semibold whitespace-pre-line">
-              Câu {i + 1}. {q.prompt}
+              Câu {i + 1}. <RichText text={q.prompt} />
             </p>
+            <QuestionPicture question={q} className="max-h-64" />
             {q.type === "trac-nghiem" && (
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {q.options.map((opt, index) => (
                   <p key={index}>
-                    {OPTION_LETTERS[index]}. {opt}
+                    {OPTION_LETTERS[index]}. <RichText text={opt} />
                   </p>
                 ))}
               </div>
@@ -53,14 +56,14 @@ export default function PrintableExercise({
                 <div>
                   {q.pairs.map((p, index) => (
                     <p key={index}>
-                      {index + 1}. {p.left}
+                      {index + 1}. <RichText text={p.left} />
                     </p>
                   ))}
                 </div>
                 <div>
                   {[...q.pairs].reverse().map((p, index) => (
                     <p key={index}>
-                      {OPTION_LETTERS[index]}. {p.right}
+                      {OPTION_LETTERS[index]}. <RichText text={p.right} />
                     </p>
                   ))}
                 </div>
@@ -68,7 +71,7 @@ export default function PrintableExercise({
             )}
             {q.type === "sap-xep" && (
               <p className="mt-2">
-                {q.shuffled.map((index) => q.tokens[index]).join(" / ")}
+                <RichText text={q.shuffled.map((index) => q.tokens[index]).join(" / ")} />
               </p>
             )}
             {q.type !== "trac-nghiem" &&

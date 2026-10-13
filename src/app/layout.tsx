@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import { Be_Vietnam_Pro } from "next/font/google"
 import "./globals.css"
+import 'katex/dist/katex.min.css'
 
 const beVietnam = Be_Vietnam_Pro({
   subsets: ["latin", "vietnamese"],

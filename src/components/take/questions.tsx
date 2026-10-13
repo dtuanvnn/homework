@@ -6,6 +6,7 @@ import { isLongPrompt } from "@/lib/questions"
 import { cn } from "@/lib/utils"
 import type { SubjectStyle } from "@/lib/subjects"
 import type { TakeQuestion } from "@/lib/views/student"
+import RichText from "@/components/question/RichText"
 
 type Q<T extends TakeQuestion["type"]> = Extract<TakeQuestion, { type: T }>
 
@@ -53,7 +54,7 @@ export function MultipleChoice({ q, value, onChange, tone }: Props<Q<"trac-nghie
             <span className={cn("flex size-12 shrink-0 items-center justify-center rounded-2xl text-xl font-extrabold", on ? "bg-white/25" : cn(tone.softBg, tone.text))}>
               {LETTERS[i]}
             </span>
-            {o}
+            <RichText text={o} />
           </motion.button>
         )
       })}
@@ -100,7 +101,7 @@ export function FillBlank({ q, value = [], onChange, tone }: Props<Q<"dien-cho-t
     >
       {parts.map((p, i) => (
         <span key={i}>
-          {p}
+          <RichText text={p} />
           {i < parts.length - 1 && (
             <input
               aria-label={`Chỗ trống ${i + 1}`}
@@ -258,7 +259,7 @@ export function Matching({ q, value = NO_PAIRS, onChange, tone }: Props<Q<"noi">
             )}
             style={leftLinked ? { borderColor: colors[i % colors.length] } : undefined}
           >
-            {p.left}
+            <RichText text={p.left} />
           </button>,
           <button
             key={`r${i}`}
@@ -272,7 +273,7 @@ export function Matching({ q, value = NO_PAIRS, onChange, tone }: Props<Q<"noi">
             )}
           >
             {q.pairs[r].picture && <span className="text-2xl" aria-hidden>{q.pairs[r].picture}</span>}
-            {q.pairs[r].right}
+            <RichText text={q.pairs[r].right} />
           </button>,
         ]
       })}
@@ -332,7 +333,7 @@ export function Ordering({ q, value = [], onChange, tone }: Props<Q<"sap-xep">, 
             animate={{ scale: dragging === pos ? 1.1 : 1 }}
             className={cn("min-h-14 touch-none rounded-2xl px-5 text-2xl font-bold text-white shadow-md", tone.bg, dragging === pos && "ring-4 ring-white")}
           >
-            {q.tokens[t]}
+            <RichText text={q.tokens[t]} />
           </motion.button>
         ))}
       </div>
@@ -348,7 +349,7 @@ export function Ordering({ q, value = [], onChange, tone }: Props<Q<"sap-xep">, 
             onClick={() => onChange([...value, t])}
             className="min-h-14 rounded-2xl border-2 border-slate-200 bg-white px-5 text-2xl font-bold text-slate-800 shadow-sm"
           >
-            {q.tokens[t]}
+            <RichText text={q.tokens[t]} />
           </motion.button>
         ))}
       </div>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { LOW_CONFIDENCE, type AiPaperMark } from "@/lib/ai/grading"
 import { cn } from "@/lib/utils"
+import RichText from "@/components/question/RichText"
 
 /** Seconds since `running` became true, for the progress note of slow AI calls. */
 function useElapsed(running: boolean) {
@@ -66,7 +67,9 @@ export function AiReadout({ read }: { read: Pick<AiPaperMark, "studentAnswer" | 
   return (
     <div className={cn("mt-2 rounded-lg border bg-white/80 p-2", unsure ? "border-amber-300" : "border-violet-100")}>
       <p className="text-xs font-semibold text-violet-700">AI đọc được</p>
-      <p className="break-words whitespace-pre-wrap text-slate-800">{read.studentAnswer || "(không tìm thấy câu trả lời)"}</p>
+      <p className="break-words whitespace-pre-wrap text-slate-800">
+        <RichText text={read.studentAnswer || "(không tìm thấy câu trả lời)"} />
+      </p>
       {read.note && <p className="mt-1 text-xs text-slate-500">{read.note}</p>}
       {unsure && (
         <p className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-amber-700">
