@@ -7,6 +7,7 @@
  * blank, tra-loi-ngan → string, noi → { leftIndex: rightPairIndex },
  * sap-xep → token indexes in the chosen order, tu-luan → EssayValue.
  */
+import { mathAnswerMatches } from "./math-answer"
 import type { Question } from "./types"
 
 export interface EssayValue {
@@ -67,6 +68,14 @@ function proportional(points: number, correct: number, total: number): QuestionG
 
 const allOrNothing = (points: number, ok: boolean): QuestionGrade => (ok ? { isCorrect: true, pointsAwarded: points } : WRONG)
 
+/** Math answers compare by value; a key that can't be evaluated falls back to `text`. */
+function answerMatches(q: { math?: boolean; simplest?: boolean }, expected: string, given: string, text: (e: string, g: string) => boolean): boolean {
+  if (!q.math) return text(expected, given)
+  return mathAnswerMatches(expected, given, { simplest: q.simplest }) ?? text(expected, given)
+}
+
+const sameText = (expected: string, given: string) => normalizeText(given) === normalizeText(expected)
+
 export function gradeQuestion(q: Question, response: Response | undefined | null): QuestionGrade {
   if (q.type === "tu-luan") return NEEDS_PARENT
   if (response === undefined || response === null) return WRONG
@@ -77,11 +86,13 @@ export function gradeQuestion(q: Question, response: Response | undefined | null
     case "dung-sai":
       return allOrNothing(q.points, response === q.answer)
     case "tra-loi-ngan":
-      return typeof response === "string" && response.trim() ? allOrNothing(q.points, shortAnswerMatches(q.answer, response)) : WRONG
+      return typeof response === "string" && response.trim()
+        ? allOrNothing(q.points, answerMatches(q, q.answer, response, shortAnswerMatches))
+        : WRONG
     case "dien-cho-trong": {
       if (!Array.isArray(response)) return WRONG
       const given = response as string[]
-      const correct = q.answers.filter((a, i) => typeof given[i] === "string" && normalizeText(given[i]) === normalizeText(a)).length
+      const correct = q.answers.filter((a, i) => typeof given[i] === "string" && given[i].trim() !== "" && answerMatches(q, a, given[i], sameText)).length
       return proportional(q.points, correct, q.answers.length)
     }
     case "noi": {

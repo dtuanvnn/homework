@@ -84,11 +84,28 @@ export interface SkillInsight {
 
 export type QuestionType = "trac-nghiem" | "dung-sai" | "dien-cho-trong" | "tra-loi-ngan" | "noi" | "sap-xep" | "tu-luan"
 
+/** A figure cut out of a scanned page (or picked in the editor); `path` is a Storage object. */
+export interface QuestionImage {
+  path: string
+  width: number
+  height: number
+}
+
 interface QuestionBase {
   id: string
+  /** May contain LaTeX between $…$ (see lib/rich-text.ts). */
   prompt: string
   points: number
   skills: string[]
+  image?: QuestionImage
+  /** Read side only: signed URL of `image`, added when loading. Never stored. */
+  imageUrl?: string
+}
+
+/** With `math`, answers are LaTeX (no $) graded by value; `simplest` also requires lowest terms. */
+interface MathAnswer {
+  math?: boolean
+  simplest?: boolean
 }
 
 export interface MultipleChoiceQuestion extends QuestionBase {
@@ -103,12 +120,12 @@ export interface TrueFalseQuestion extends QuestionBase {
 }
 
 /** Blanks are written as "___" inside the prompt, one answer per blank. */
-export interface FillBlankQuestion extends QuestionBase {
+export interface FillBlankQuestion extends QuestionBase, MathAnswer {
   type: "dien-cho-trong"
   answers: string[]
 }
 
-export interface ShortAnswerQuestion extends QuestionBase {
+export interface ShortAnswerQuestion extends QuestionBase, MathAnswer {
   type: "tra-loi-ngan"
   answer: string
 }

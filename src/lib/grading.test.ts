@@ -112,6 +112,38 @@ describe("gradeQuestion", () => {
   })
 })
 
+describe("math questions", () => {
+  const sa = (patch: Partial<Extract<Question, { type: "tra-loi-ngan" }>> = {}): Question => ({
+    id: "m1", type: "tra-loi-ngan", prompt: "$\\frac{1}{2}+\\frac{1}{4}=?$", points: 1, skills: [], answer: "\\frac{3}{4}", math: true, ...patch,
+  })
+
+  it("accepts any answer with the same value", () => {
+    expect(gradeQuestion(sa(), "\\frac{6}{8}").isCorrect).toBe(true)
+    expect(gradeQuestion(sa(), "0,75").isCorrect).toBe(true)
+    expect(gradeQuestion(sa(), "3/4").isCorrect).toBe(true)
+    expect(gradeQuestion(sa(), "\\frac{2}{3}").isCorrect).toBe(false)
+  })
+
+  it("requires lowest terms when simplest is set", () => {
+    expect(gradeQuestion(sa({ simplest: true }), "\\frac{6}{8}").isCorrect).toBe(false)
+    expect(gradeQuestion(sa({ simplest: true }), "\\frac{3}{4}").isCorrect).toBe(true)
+  })
+
+  it("falls back to text comparison when the key can't be evaluated", () => {
+    expect(gradeQuestion(sa({ answer: "ba phần tư" }), "Ba phần tư").isCorrect).toBe(true)
+  })
+
+  it("grades math blanks by value", () => {
+    const q: Question = { id: "m2", type: "dien-cho-trong", prompt: "$\\frac{1}{2}$ = ___ ; 1 = ___", points: 2, skills: [], answers: ["\\frac{2}{4}", "\\frac{4}{4}"], math: true }
+    expect(gradeQuestion(q, ["\\frac{1}{2}", "1"])).toEqual({ isCorrect: true, pointsAwarded: 2 })
+    expect(gradeQuestion(q, ["\\frac{1}{3}", "1"])).toEqual({ isCorrect: false, pointsAwarded: 1 })
+  })
+
+  it("leaves non-math questions unchanged", () => {
+    expect(gradeQuestion(sa({ math: undefined, answer: "3/4" }), "6/8").isCorrect).toBe(false)
+  })
+})
+
 describe("scoreOutOf10", () => {
   it("rounds to the nearest quarter point", () => {
     expect(scoreOutOf10(7, 9)).toBe(7.75)
