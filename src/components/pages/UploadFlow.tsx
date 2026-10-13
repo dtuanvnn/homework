@@ -254,7 +254,7 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
 
       {step === 'review' && (
         <>
-          <ReviewStep pages={pages} items={items} onItemsChange={setItems} meta={meta} title={title} onTitleChange={setTitle} />
+          <ReviewStep pages={pages} items={items} onItemsChange={setItems} meta={meta} title={title} onTitleChange={setTitle} setId={setId} />
 
           <div className="sticky bottom-0 z-30 -mx-4 border-t border-slate-200/80 bg-white/95 px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(15,23,42,0.06)] backdrop-blur md:bottom-4 md:mx-0 md:flex md:items-center md:justify-between md:gap-4 md:rounded-2xl md:border md:p-3 md:pl-5">
             <p

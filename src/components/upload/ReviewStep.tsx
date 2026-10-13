@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, FileImage, ListChecks } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card } from '@/components/ui/card'
@@ -10,10 +10,13 @@ import { SUBJECTS } from '@/lib/subjects'
 import { TABLET_QUERY, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import type { Question } from '@/lib/types'
+import { makeFigure } from '@/lib/figure-client'
+import type { Box } from '@/lib/figure-crop'
 import ExtractedQuestionCard from './ExtractedQuestionCard'
+import FigureCropDialog from './FigureCropDialog'
 import SourceViewer from './SourceViewer'
 import type { UploadMeta } from './UploadStep'
-import { mergeQuestions, needsCheck, type ReviewItem, type SourcePage } from './review-utils'
+import { mergeQuestions, needsCheck, pageSource, type ReviewItem, type SourcePage } from './review-utils'
 
 interface ReviewStepProps {
   pages: SourcePage[]
@@ -22,16 +25,58 @@ interface ReviewStepProps {
   meta: UploadMeta
   title: string
   onTitleChange: (title: string) => void
+  setId: string
 }
 
-export default function ReviewStep({ pages, items, onItemsChange, meta, title, onTitleChange }: ReviewStepProps) {
+export default function ReviewStep({ pages, items, onItemsChange, meta, title, onTitleChange, setId }: ReviewStepProps) {
   const isTablet = useMediaQuery(TABLET_QUERY)
   const [tab, setTab] = useState<'source' | 'questions'>('questions')
   const [activePage, setActivePage] = useState(1)
   const [editing, setEditing] = useState<ReviewItem | null>(null)
+  const latestItems = useRef(items)
+  useEffect(() => {
+    latestItems.current = items
+  }, [items])
+  const [figureFor, setFigureFor] = useState<ReviewItem | null>(null)
+  const [savingFigure, setSavingFigure] = useState(false)
+  const figurePage = figureFor ? (figureFor.figure?.page ?? figureFor.page) : 1
 
   const flagged = items.filter(needsCheck)
   const subject = SUBJECTS[meta.subject]
+
+  const saveFigure = async (box: Box) => {
+    if (!figureFor) return
+    const id = figureFor.question.id
+    const source = pageSource(pages[figurePage - 1])
+    if (!source) return
+    setSavingFigure(true)
+    try {
+      const { image, imageUrl } = await makeFigure(setId, source, box)
+      // Read the latest items: the parent may have edited other cards while this uploaded.
+      onItemsChange(
+        latestItems.current.map((it) =>
+          it.question.id === id
+            ? { ...it, reviewed: true, figureState: undefined, figure: { page: figurePage, box }, question: { ...it.question, image, imageUrl } }
+            : it,
+        ),
+      )
+      setFigureFor(null)
+    } catch {
+      toast.error('Không tải được hình', { description: 'Kiểm tra mạng rồi thử lại.' })
+    } finally {
+      setSavingFigure(false)
+    }
+  }
+
+  const removeFigure = (id: string) =>
+    onItemsChange(
+      items.map((it) => {
+        if (it.question.id !== id) return it
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Destructuring to remove image properties
+        const { image: _image, imageUrl: _url, ...question } = it.question
+        return { ...it, figure: undefined, figureState: undefined, reviewed: true, question: question as Question }
+      }),
+    )
 
   const withUndo = (next: ReviewItem[], message: string) => {
     const previous = items
@@ -47,9 +92,15 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
   const handleMergeUp = (index: number) => {
     const upper = items[index - 1]
     const lower = items[index]
+    const mergedQuestion = mergeQuestions(upper.question, lower.question)
+    const image = upper.question.image ?? lower.question.image
     const merged: ReviewItem = {
       ...upper,
-      question: mergeQuestions(upper.question, lower.question),
+      question: image
+        ? ({ ...mergedQuestion, image, imageUrl: upper.question.image ? upper.question.imageUrl : lower.question.imageUrl } as Question)
+        : mergedQuestion,
+      figure: upper.figure ?? lower.figure,
+      figureState: upper.figureState ?? lower.figureState,
       confidence: Math.max(upper.confidence, lower.confidence),
       reviewed: true,
       note: undefined,
@@ -100,6 +151,8 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
           onMergeUp={i > 0 ? () => handleMergeUp(i) : undefined}
           onConfirm={() => update(item.question.id, { reviewed: true })}
           onShowSource={() => showSource(item.page)}
+          onAdjustFigure={() => setFigureFor(item)}
+          onRemoveFigure={() => removeFigure(item.question.id)}
         />
       ))}
     </ol>
@@ -166,6 +219,16 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
         editing={editing?.question ?? null}
         onSubmit={handleSubmitEdit}
         skillSuggestions={[...new Set(items.flatMap((i) => i.question.skills))]}
+      />
+
+      <FigureCropDialog
+        open={figureFor !== null}
+        onOpenChange={(open) => !open && setFigureFor(null)}
+        pageUrl={pages[figurePage - 1]?.file.url}
+        initialBox={figureFor?.figure?.box}
+        title={figureFor?.question.image ? 'Chỉnh khung hình' : 'Thêm hình minh họa'}
+        saving={savingFigure}
+        onSave={(box) => void saveFigure(box)}
       />
     </div>
   )

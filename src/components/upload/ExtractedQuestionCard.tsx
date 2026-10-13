@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, FileSearch, Loader2, Merge, Pencil, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, Crop, FileSearch, ImageOff, ImagePlus, Loader2, Merge, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import QuestionContent from '@/components/exercise-detail/QuestionContent'
@@ -41,9 +41,11 @@ interface ExtractedQuestionCardProps {
   onMergeUp?: () => void
   onConfirm: () => void
   onShowSource: () => void
+  onAdjustFigure: () => void
+  onRemoveFigure: () => void
 }
 
-export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDelete, onMergeUp, onConfirm, onShowSource }: ExtractedQuestionCardProps) {
+export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDelete, onMergeUp, onConfirm, onShowSource, onAdjustFigure, onRemoveFigure }: ExtractedQuestionCardProps) {
   const q = item.question
   const typeInfo = QUESTION_TYPES[q.type]
   const flagged = needsCheck(item)
@@ -146,6 +148,23 @@ export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDe
           <Button variant="ghost" size="sm" className="h-11 text-slate-600" onClick={onMergeUp}>
             <Merge className="rotate-180" />
             Gộp với câu trên
+          </Button>
+        )}
+        {q.image || item.figure || item.figureState ? (
+          <>
+            <Button variant="ghost" size="sm" className="h-11 text-slate-600" onClick={onAdjustFigure}>
+              <Crop />
+              Chỉnh khung
+            </Button>
+            <Button variant="ghost" size="sm" className="h-11 text-slate-600" onClick={onRemoveFigure}>
+              <ImageOff />
+              Bỏ hình
+            </Button>
+          </>
+        ) : (
+          <Button variant="ghost" size="sm" className="h-11 text-slate-600" onClick={onAdjustFigure}>
+            <ImagePlus />
+            Thêm hình
           </Button>
         )}
       </div>
