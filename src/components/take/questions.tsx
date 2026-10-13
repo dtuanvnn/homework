@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import type { SubjectStyle } from "@/lib/subjects"
 import type { TakeQuestion } from "@/lib/views/student"
 import RichText from "@/components/question/RichText"
+import MathAnswerInput from "./MathAnswerInput"
 
 type Q<T extends TakeQuestion["type"]> = Extract<TakeQuestion, { type: T }>
 
@@ -102,29 +103,44 @@ export function FillBlank({ q, value = [], onChange, tone }: Props<Q<"dien-cho-t
       {parts.map((p, i) => (
         <span key={i}>
           <RichText text={p} />
-          {i < parts.length - 1 && (
-            <input
-              aria-label={`Chỗ trống ${i + 1}`}
-              value={value[i] ?? ""}
-              onChange={(e) => {
-                const next = [...value]
-                next[i] = e.target.value
-                onChange(next)
-              }}
-              style={{ width: `${Math.max(6, (value[i]?.length ?? 0) + 2)}ch` }}
-              className={cn("mx-1 inline-block h-14 rounded-xl border-2 border-dashed bg-slate-50 px-3 text-center align-middle font-bold outline-none focus:border-solid", tone.border, tone.text, "focus:bg-white")}
-            />
-          )}
+          {i < parts.length - 1 &&
+            (q.math ? (
+              <MathAnswerInput
+                size="inline"
+                ariaLabel={`Chỗ trống ${i + 1}`}
+                value={value[i] ?? ""}
+                onChange={(latex) => {
+                  const next = [...value]
+                  next[i] = latex
+                  onChange(next)
+                }}
+                tone={tone}
+              />
+            ) : (
+              <input
+                aria-label={`Chỗ trống ${i + 1}`}
+                value={value[i] ?? ""}
+                onChange={(e) => {
+                  const next = [...value]
+                  next[i] = e.target.value
+                  onChange(next)
+                }}
+                style={{ width: `${Math.max(6, (value[i]?.length ?? 0) + 2)}ch` }}
+                className={cn("mx-1 inline-block h-14 rounded-xl border-2 border-dashed bg-slate-50 px-3 text-center align-middle font-bold outline-none focus:border-solid", tone.border, tone.text, "focus:bg-white")}
+              />
+            ))}
         </span>
       ))}
     </p>
   )
 }
 
-export function ShortAnswer({ value = "", onChange, tone, math }: Props<Q<"tra-loi-ngan">, string> & { math: boolean }) {
+export function ShortAnswer({ q, value = "", onChange, tone, math }: Props<Q<"tra-loi-ngan">, string> & { math: boolean }) {
   return (
     <div className="space-y-3">
-      {math ? (
+      {q.math ? (
+        <MathAnswerInput value={value} onChange={onChange} ariaLabel="Câu trả lời" tone={tone} />
+      ) : math ? (
         <input
           aria-label="Câu trả lời"
           value={value}
