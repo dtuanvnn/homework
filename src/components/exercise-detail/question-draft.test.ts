@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Question } from "@/lib/types"
-import { changeDraftType, emptyDraft, fromDraft, patchDraft, toDraft, validateDraft } from "./question-draft"
+import { changeDraftType, emptyDraft, fromDraft, parsePoints, patchDraft, toDraft, validateDraft } from "./question-draft"
 
 describe("changeDraftType", () => {
   const wordProblem = { ...emptyDraft("tra-loi-ngan"), prompt: "Một cửa hàng bán 285 kg gạo…\nHỏi cả hai buổi bán được bao nhiêu ki-lô-gam?", points: 2, shortAnswer: "605 kg" }
@@ -83,5 +83,17 @@ describe("answer status and solution", () => {
     expect(d.solution).toBe("7 × 8 = 56")
     expect(fromDraft(d, "q")).toMatchObject({ solution: "7 × 8 = 56" })
     expect(fromDraft({ ...d, solution: "  " }, "q")).not.toHaveProperty("solution")
+  })
+})
+
+describe("parsePoints", () => {
+  it("reads exam points above the presets, with a comma or a dot, in quarter points", () => {
+    expect(parsePoints("4")).toBe(4)
+    expect(parsePoints("2,5")).toBe(2.5)
+    expect(parsePoints(" 0.25 ")).toBe(0.25)
+    expect(parsePoints("1,3")).toBe(1.25)
+  })
+  it("rejects empty, zero and out-of-range values", () => {
+    for (const bad of ["", "0", "-1", "101", "abc"]) expect(parsePoints(bad)).toBeNull()
   })
 })

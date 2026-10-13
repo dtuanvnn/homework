@@ -41,5 +41,11 @@ test("a scan without answers saves as is and offers to solve them later", async 
   const sheet = page.getByRole("dialog", { name: "Sửa câu hỏi" })
   await expect(sheet.getByText("Nhập đáp án bên dưới, hoặc để trống")).toBeVisible()
   await expect(sheet.getByLabel("Lời giải (không bắt buộc)")).toBeVisible()
+
+  // Exam questions can be worth more than the quick picks.
+  await sheet.getByLabel("Điểm khác").fill("4")
+  await sheet.getByRole("button", { name: "Lưu thay đổi" }).click()
+  await expect(sheet).toBeHidden()
+  await expect(page.getByText("4 điểm", { exact: true }).first()).toBeVisible()
   expect(errors).toEqual([])
 })

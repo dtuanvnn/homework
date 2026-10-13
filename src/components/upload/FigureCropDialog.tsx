@@ -36,11 +36,13 @@ export default function FigureCropDialog({ open, onOpenChange, pageUrl, initialB
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>Kéo để khoanh vùng hình minh họa, kéo các góc để chỉnh.</DialogDescription>
         </DialogHeader>
-        <div className="flex max-h-[65dvh] justify-center overflow-auto rounded-xl bg-slate-100 p-2">
+        <div className="flex max-h-[65dvh] items-start justify-center overflow-auto rounded-xl bg-slate-100 p-2">
           {pageUrl ? (
-            <ReactCrop crop={crop} onChange={(_, percent) => setCrop(percent)} keepSelection>
+            // The height limit goes on ReactCrop: its stylesheet makes the image inherit max-height (overriding a class on
+            // the image), and its mask covers ReactCrop's box, which must be exactly the image's.
+            <ReactCrop crop={crop} onChange={(_, percent) => setCrop(percent)} keepSelection className="max-h-[60dvh]">
               {/* eslint-disable-next-line @next/next/no-img-element -- Page blob/signed URLs can't use next/image optimization */}
-              <img src={pageUrl} alt="Trang tài liệu" className="max-h-[60dvh] w-auto" draggable={false} />
+              <img src={pageUrl} alt="Trang tài liệu" draggable={false} />
             </ReactCrop>
           ) : (
             <p className="p-8 text-sm text-slate-500">Không có ảnh trang để cắt.</p>

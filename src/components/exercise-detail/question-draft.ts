@@ -111,6 +111,14 @@ export function changeDraftType(d: QuestionDraft, type: QuestionType): QuestionD
   return next
 }
 
+/** Points typed by the parent ("4", "2,5", "0.25"): quarter points from 0.25 to 100, else null. */
+export function parsePoints(text: string): number | null {
+  const n = Number(text.trim().replace(',', '.'))
+  if (!text.trim() || !Number.isFinite(n)) return null
+  const quarters = Math.round(n * 4) / 4
+  return quarters >= 0.25 && quarters <= 100 ? quarters : null
+}
+
 export function orderingTokens(text: string): string[] {
   return text
     .split('/')

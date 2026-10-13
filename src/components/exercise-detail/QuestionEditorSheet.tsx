@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { ArrowLeft, Check, ChevronRight, TextCursorInput } from 'lucide-react'
 import AnswerStatusBadge from '@/components/question/AnswerStatusBadge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -14,9 +15,12 @@ import FigureField, { type FigureSource } from './FigureField'
 import FormulaPreview from './FormulaPreview'
 import QuestionTypeFields from './QuestionTypeFields'
 import SkillTagInput from './SkillTagInput'
-import { changeDraftType, emptyDraft, fromDraft, patchDraft, toDraft, validateDraft, type QuestionDraft } from './question-draft'
+import { changeDraftType, emptyDraft, fromDraft, parsePoints, patchDraft, toDraft, validateDraft, type QuestionDraft } from './question-draft'
 
+/** Quick picks; exams often give more, typed into "Điểm khác". */
 const POINT_OPTIONS = [0.5, 1, 1.5, 2, 3]
+
+const pointsLabel = (p: number) => p.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 
 const FORMULA_SNIPPETS = [
   { label: 'Phân số', snippet: '$\\frac{}{}$', caretBack: 4 },
@@ -53,6 +57,8 @@ const keepOpenForMathKeyboard = (event: Event) => {
 export default function QuestionEditorSheet({ open, onOpenChange, editing, onSubmit, skillSuggestions, setId, sources }: QuestionEditorSheetProps) {
   const [draft, setDraft] = useState<QuestionDraft | null>(() => (open && editing ? toDraft(editing) : null))
   const [showErrors, setShowErrors] = useState(false)
+  /** What the parent is typing into "Điểm khác"; null shows the draft's points. */
+  const [pointsText, setPointsText] = useState<string | null>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
 
   // Reset the form whenever the sheet opens or switches question.
@@ -62,11 +68,13 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
     if (open) {
       setDraft(editing ? toDraft(editing) : null)
       setShowErrors(false)
+      setPointsText(null)
     }
   }
 
   const patch = (p: Partial<QuestionDraft>) => setDraft((d) => (d ? patchDraft(d, p) : d))
-  const issues = draft ? validateDraft(draft) : []
+  const pointsInvalid = pointsText !== null && pointsText.trim() !== '' && parsePoints(pointsText) === null
+  const issues = draft ? [...validateDraft(draft), ...(pointsInvalid ? ['Điểm từ 0,25 đến 100'] : [])] : []
   const typeInfo = draft ? QUESTION_TYPES[draft.type] : null
   const promptCopy = draft ? PROMPT_LABELS[draft.type] : undefined
 
@@ -244,20 +252,41 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
               )}
 
               <div className="flex flex-col gap-2">
-                <Label>Điểm</Label>
-                <ToggleGroup
-                  type="single"
-                  value={String(draft.points)}
-                  onValueChange={(v) => v && patch({ points: Number(v) })}
-                  className="w-full"
-                  aria-label="Điểm"
-                >
-                  {POINT_OPTIONS.map((p) => (
-                    <ToggleGroupItem key={p} value={String(p)} className="min-h-10 tabular-nums">
-                      {formatScoreValue(p)}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                <Label htmlFor="q-points">Điểm</Label>
+                <div className="flex gap-2">
+                  <ToggleGroup
+                    type="single"
+                    value={String(draft.points)}
+                    onValueChange={(v) => {
+                      if (!v) return
+                      patch({ points: Number(v) })
+                      setPointsText(null)
+                    }}
+                    className="flex-1"
+                    aria-label="Điểm"
+                  >
+                    {POINT_OPTIONS.map((p) => (
+                      <ToggleGroupItem key={p} value={String(p)} className="min-h-10 tabular-nums">
+                        {formatScoreValue(p)}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                  <Input
+                    id="q-points"
+                    inputMode="decimal"
+                    aria-label="Điểm khác"
+                    placeholder="Khác"
+                    aria-invalid={pointsInvalid || undefined}
+                    className="h-10 w-20 text-center tabular-nums"
+                    value={pointsText ?? (POINT_OPTIONS.includes(draft.points) ? '' : pointsLabel(draft.points))}
+                    onChange={(e) => {
+                      setPointsText(e.target.value)
+                      const points = parsePoints(e.target.value)
+                      if (points !== null) patch({ points })
+                    }}
+                    onBlur={() => !pointsInvalid && setPointsText(null)}
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col gap-2">

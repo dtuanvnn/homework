@@ -24,7 +24,7 @@ export function formatVietnameseDate(value: string | Date): string {
 
 /** "8,5" */
 export function formatScoreValue(score: number): string {
-  return score.toLocaleString('vi-VN', { maximumFractionDigits: 1 })
+  return score.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 }
 
 /** "8,5/10" */
