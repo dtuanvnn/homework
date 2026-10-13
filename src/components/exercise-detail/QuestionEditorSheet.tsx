@@ -9,11 +9,20 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { formatScoreValue } from '@/lib/format'
 import { BLANK, QUESTION_TYPES, QUESTION_TYPE_LIST, uid } from '@/lib/questions'
 import type { Question, QuestionType } from '@/lib/types'
+import FigureField, { type FigureSource } from './FigureField'
+import FormulaPreview from './FormulaPreview'
 import QuestionTypeFields from './QuestionTypeFields'
 import SkillTagInput from './SkillTagInput'
 import { changeDraftType, emptyDraft, fromDraft, toDraft, validateDraft, type QuestionDraft } from './question-draft'
 
 const POINT_OPTIONS = [0.5, 1, 1.5, 2, 3]
+
+const FORMULA_SNIPPETS = [
+  { label: 'Phân số', snippet: '$\\frac{}{}$', caretBack: 4 },
+  { label: 'Hỗn số', snippet: '$1\\frac{}{}$', caretBack: 4 },
+  { label: '×', snippet: '$\\times$', caretBack: 0 },
+  { label: '÷', snippet: '$\\div$', caretBack: 0 },
+]
 
 const PROMPT_LABELS: Partial<Record<QuestionType, { label: string; placeholder: string }>> = {
   'trac-nghiem': { label: 'Câu hỏi', placeholder: 'VD: 7 × 8 = ?' },
@@ -32,9 +41,11 @@ interface QuestionEditorSheetProps {
   editing?: Question | null
   onSubmit: (question: Question) => void
   skillSuggestions: string[]
+  setId?: string
+  sources?: FigureSource[]
 }
 
-export default function QuestionEditorSheet({ open, onOpenChange, editing, onSubmit, skillSuggestions }: QuestionEditorSheetProps) {
+export default function QuestionEditorSheet({ open, onOpenChange, editing, onSubmit, skillSuggestions, setId, sources }: QuestionEditorSheetProps) {
   const [draft, setDraft] = useState<QuestionDraft | null>(() => (open && editing ? toDraft(editing) : null))
   const [showErrors, setShowErrors] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
@@ -54,18 +65,25 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
   const typeInfo = draft ? QUESTION_TYPES[draft.type] : null
   const promptCopy = draft ? PROMPT_LABELS[draft.type] : undefined
 
-  const insertBlank = () => {
+  const insertAtCursor = (snippet: string, caretBack = 0) => {
     if (!draft) return
     const el = promptRef.current
     const start = el?.selectionStart ?? draft.prompt.length
     const end = el?.selectionEnd ?? draft.prompt.length
-    const before = draft.prompt.slice(0, start)
-    const insert = `${before && !before.endsWith(' ') ? ' ' : ''}${BLANK} `
-    patch({ prompt: before + insert + draft.prompt.slice(end) })
+    patch({ prompt: draft.prompt.slice(0, start) + snippet + draft.prompt.slice(end) })
     requestAnimationFrame(() => {
       el?.focus()
-      el?.setSelectionRange(start + insert.length, start + insert.length)
+      el?.setSelectionRange(start + snippet.length - caretBack, start + snippet.length - caretBack)
     })
+  }
+
+  const insertBlank = () => {
+    if (!draft) return
+    const el = promptRef.current
+    const start = el?.selectionStart ?? draft.prompt.length
+    const before = draft.prompt.slice(0, start)
+    const insert = `${before && !before.endsWith(' ') ? ' ' : ''}${BLANK} `
+    insertAtCursor(insert, 0)
   }
 
   const submit = () => {
@@ -154,14 +172,21 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
               )}
 
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label htmlFor="q-prompt">{promptCopy?.label ?? 'Câu hỏi'}</Label>
-                  {draft.type === 'dien-cho-trong' && (
-                    <Button variant="outline" size="sm" className="h-9" onClick={insertBlank}>
-                      <TextCursorInput />
-                      Chèn chỗ trống
-                    </Button>
-                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {draft.type === 'dien-cho-trong' && (
+                      <Button variant="outline" size="sm" className="h-9" onClick={insertBlank}>
+                        <TextCursorInput />
+                        Chèn chỗ trống
+                      </Button>
+                    )}
+                    {FORMULA_SNIPPETS.map((f) => (
+                      <Button key={f.label} type="button" variant="outline" size="sm" className="h-9" aria-label={`Chèn ${f.label}`} onClick={() => insertAtCursor(f.snippet, f.caretBack)}>
+                        {f.label}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
                 <Textarea
                   id="q-prompt"
@@ -171,9 +196,14 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
                   onChange={(e) => patch({ prompt: e.target.value })}
                   placeholder={promptCopy?.placeholder}
                 />
+                <FormulaPreview text={draft.prompt} />
               </div>
 
               <QuestionTypeFields draft={draft} onChange={patch} />
+
+              {setId && (
+                <FigureField setId={setId} sources={sources ?? []} image={draft.image} imageUrl={draft.imageUrl} onChange={(image, imageUrl) => patch({ image, imageUrl })} />
+              )}
 
               <div className="flex flex-col gap-2">
                 <Label>Điểm</Label>

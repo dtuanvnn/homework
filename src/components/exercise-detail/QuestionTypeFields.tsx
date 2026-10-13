@@ -1,4 +1,5 @@
 import { ArrowRight, Check, Plus, Trash2, X } from 'lucide-react'
+import MathAnswerInput from '@/components/take/MathAnswerInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -7,6 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { BLANK, OPTION_LETTERS, countBlanks } from '@/lib/questions'
 import { cn } from '@/lib/utils'
 import { orderingTokens, type QuestionDraft } from './question-draft'
+import FormulaPreview from './FormulaPreview'
 
 interface Props {
   draft: QuestionDraft
@@ -40,13 +42,16 @@ function MultipleChoiceFields({ draft, onChange }: Props) {
             >
               {correct ? <Check className="size-5" /> : OPTION_LETTERS[i]}
             </button>
-            <Input
-              value={opt}
-              onChange={(e) => setOption(i, e.target.value)}
-              placeholder={`Phương án ${OPTION_LETTERS[i]}`}
-              aria-label={`Phương án ${OPTION_LETTERS[i]}`}
-              className={cn(correct && 'border-emerald-300 bg-emerald-50/50')}
-            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <Input
+                value={opt}
+                onChange={(e) => setOption(i, e.target.value)}
+                placeholder={`Phương án ${OPTION_LETTERS[i]}`}
+                aria-label={`Phương án ${OPTION_LETTERS[i]}`}
+                className={cn(correct && 'border-emerald-300 bg-emerald-50/50')}
+              />
+              <FormulaPreview text={opt} />
+            </div>
             {draft.options.length > 2 && (
               <Button variant="ghost" size="icon" className="shrink-0 text-slate-400" onClick={() => remove(i)} aria-label={`Xóa phương án ${OPTION_LETTERS[i]}`}>
                 <X className="size-4" />
@@ -98,20 +103,57 @@ function FillBlankFields({ draft, onChange }: Props) {
     )
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
+        <ToggleGroup
+          type="single"
+          value={draft.math ? 'on' : 'off'}
+          onValueChange={(v) => v && onChange({ math: v === 'on' })}
+          className="w-full"
+        >
+          <ToggleGroupItem value="on" className="min-h-10 flex-1 data-[state=on]:text-indigo-700">
+            Toán (bàn phím số, chấm theo giá trị)
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {draft.math && (
+          <ToggleGroup
+            type="single"
+            value={draft.simplest ? 'on' : 'off'}
+            onValueChange={(v) => v && onChange({ simplest: v === 'on' })}
+            className="w-full"
+          >
+            <ToggleGroupItem value="on" className="min-h-10 flex-1 data-[state=on]:text-indigo-700">
+              Bắt buộc dạng tối giản
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )}
+      </div>
       {Array.from({ length: n }, (_, i) => (
         <div key={i} className="flex flex-col gap-2">
           <Label htmlFor={`blank-${i}`}>Đáp án chỗ trống {n > 1 ? i + 1 : ''}</Label>
-          <Input
-            id={`blank-${i}`}
-            value={draft.blanks[i] ?? ''}
-            onChange={(e) => {
-              const blanks = [...draft.blanks]
-              blanks[i] = e.target.value
-              onChange({ blanks })
-            }}
-            placeholder="VD: cao vời vợi"
-            className="border-emerald-200 bg-emerald-50/40"
-          />
+          {draft.math ? (
+            <MathAnswerInput
+              value={draft.blanks[i] ?? ''}
+              onChange={(v) => {
+                const blanks = [...draft.blanks]
+                blanks[i] = v
+                onChange({ blanks })
+              }}
+              ariaLabel={`Đáp án chỗ trống ${n > 1 ? i + 1 : ''}`}
+              size="inline"
+            />
+          ) : (
+            <Input
+              id={`blank-${i}`}
+              value={draft.blanks[i] ?? ''}
+              onChange={(e) => {
+                const blanks = [...draft.blanks]
+                blanks[i] = e.target.value
+                onChange({ blanks })
+              }}
+              placeholder="VD: cao vời vợi"
+              className="border-emerald-200 bg-emerald-50/40"
+            />
+          )}
         </div>
       ))}
     </div>
@@ -120,15 +162,50 @@ function FillBlankFields({ draft, onChange }: Props) {
 
 function ShortAnswerFields({ draft, onChange }: Props) {
   return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor="short-answer">Đáp án</Label>
-      <Input
-        id="short-answer"
-        value={draft.shortAnswer}
-        onChange={(e) => onChange({ shortAnswer: e.target.value })}
-        placeholder="VD: 24 kg"
-        className="border-emerald-200 bg-emerald-50/40"
-      />
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
+        <ToggleGroup
+          type="single"
+          value={draft.math ? 'on' : 'off'}
+          onValueChange={(v) => v && onChange({ math: v === 'on' })}
+          className="w-full"
+        >
+          <ToggleGroupItem value="on" className="min-h-10 flex-1 data-[state=on]:text-indigo-700">
+            Toán (bàn phím số, chấm theo giá trị)
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {draft.math && (
+          <ToggleGroup
+            type="single"
+            value={draft.simplest ? 'on' : 'off'}
+            onValueChange={(v) => v && onChange({ simplest: v === 'on' })}
+            className="w-full"
+          >
+            <ToggleGroupItem value="on" className="min-h-10 flex-1 data-[state=on]:text-indigo-700">
+              Bắt buộc dạng tối giản
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )}
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="short-answer">Đáp án</Label>
+        {draft.math ? (
+          <MathAnswerInput
+            value={draft.shortAnswer}
+            onChange={(v) => onChange({ shortAnswer: v })}
+            ariaLabel="Đáp án"
+            size="inline"
+          />
+        ) : (
+          <Input
+            id="short-answer"
+            value={draft.shortAnswer}
+            onChange={(e) => onChange({ shortAnswer: e.target.value })}
+            placeholder="VD: 24 kg"
+            className="border-emerald-200 bg-emerald-50/40"
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -201,6 +278,7 @@ function OrderingFields({ draft, onChange }: Props) {
         placeholder="Hôm nay / em / đến / trường / sớm"
         className="border-emerald-200 bg-emerald-50/40"
       />
+      <FormulaPreview text={draft.orderingText} />
       {tokens.length > 0 && (
         <div className="flex flex-col gap-1.5 rounded-xl bg-slate-50 px-3.5 py-3">
           <div className="flex flex-wrap gap-1.5">

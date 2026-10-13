@@ -1,6 +1,9 @@
+import { evaluateMath } from '@/lib/math-answer'
 import { editedQuestionSchema } from '@/lib/question-schema'
 import { BLANK, countBlanks, shuffleIndexes } from '@/lib/questions'
-import type { MatchingPair, Question, QuestionType } from '@/lib/types'
+import type { MatchingPair, Question, QuestionImage, QuestionType } from '@/lib/types'
+
+const MATH_KEY_ISSUE = 'Đáp án dạng toán chưa đúng (VD: 3/4, 2\\frac{1}{3}, 0,75)'
 
 /** Flat, form-friendly representation covering every question type. */
 export interface QuestionDraft {
@@ -17,6 +20,10 @@ export interface QuestionDraft {
   /** Correct sentence, parts separated by "/". */
   orderingText: string
   rubric: string
+  math: boolean
+  simplest: boolean
+  image?: QuestionImage
+  imageUrl?: string
 }
 
 const DEFAULT_PROMPTS: Partial<Record<QuestionType, string>> = {
@@ -43,20 +50,22 @@ export function emptyDraft(type: QuestionType): QuestionDraft {
     ],
     orderingText: '',
     rubric: '',
+    math: false,
+    simplest: false,
   }
 }
 
 export function toDraft(q: Question): QuestionDraft {
-  const base = { ...emptyDraft(q.type), prompt: q.prompt, points: q.points, skills: [...q.skills] }
+  const base = { ...emptyDraft(q.type), prompt: q.prompt, points: q.points, skills: [...q.skills], image: q.image, imageUrl: q.imageUrl }
   switch (q.type) {
     case 'trac-nghiem':
       return { ...base, options: [...q.options], correctIndex: q.correctIndex }
     case 'dung-sai':
       return { ...base, tfAnswer: q.answer }
     case 'dien-cho-trong':
-      return { ...base, blanks: [...q.answers] }
+      return { ...base, blanks: [...q.answers], math: Boolean(q.math), simplest: Boolean(q.simplest) }
     case 'tra-loi-ngan':
-      return { ...base, shortAnswer: q.answer }
+      return { ...base, shortAnswer: q.answer, math: Boolean(q.math), simplest: Boolean(q.simplest) }
     case 'noi':
       return { ...base, pairs: q.pairs.map((p) => ({ ...p })) }
     case 'sap-xep':
@@ -101,10 +110,12 @@ export function validateDraft(d: QuestionDraft): string[] {
       const n = countBlanks(d.prompt)
       if (n === 0) issues.push(`Thêm ít nhất một chỗ trống (${BLANK})`)
       else if (d.blanks.slice(0, n).some((b) => !b?.trim())) issues.push('Nhập đáp án cho mọi chỗ trống')
+      else if (d.math && d.blanks.slice(0, n).some((b) => !evaluateMath(b))) issues.push(MATH_KEY_ISSUE)
       break
     }
     case 'tra-loi-ngan':
       if (!d.shortAnswer.trim()) issues.push('Nhập đáp án')
+      else if (d.math && !evaluateMath(d.shortAnswer)) issues.push(MATH_KEY_ISSUE)
       break
     case 'noi':
       if (d.pairs.filter((p) => p.left.trim() && p.right.trim()).length < 2) issues.push('Cần ít nhất 2 cặp nối đầy đủ')
@@ -117,7 +128,8 @@ export function validateDraft(d: QuestionDraft): string[] {
 }
 
 export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Question {
-  const base = { id, prompt: d.prompt.trim(), points: d.points, skills: d.skills }
+  const base = { id, prompt: d.prompt.trim(), points: d.points, skills: d.skills, ...(d.image ? { image: d.image, imageUrl: d.imageUrl } : {}) }
+  const math = d.math ? { math: true as const, ...(d.simplest ? { simplest: true as const } : {}) } : {}
   switch (d.type) {
     case 'trac-nghiem': {
       // Drop empty options while keeping the correct answer pointing at the same text.
@@ -132,9 +144,9 @@ export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Qu
     case 'dung-sai':
       return { ...base, type: 'dung-sai', answer: d.tfAnswer }
     case 'dien-cho-trong':
-      return { ...base, type: 'dien-cho-trong', answers: d.blanks.slice(0, countBlanks(d.prompt)).map((b) => b.trim()) }
+      return { ...base, type: 'dien-cho-trong', answers: d.blanks.slice(0, countBlanks(d.prompt)).map((b) => b.trim()), ...math }
     case 'tra-loi-ngan':
-      return { ...base, type: 'tra-loi-ngan', answer: d.shortAnswer.trim() }
+      return { ...base, type: 'tra-loi-ngan', answer: d.shortAnswer.trim(), ...math }
     case 'noi':
       return {
         ...base,

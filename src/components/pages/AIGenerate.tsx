@@ -670,6 +670,7 @@ export default function AIGenerate({
               })
             }}
             skillSuggestions={availableTopics}
+            setId={result!.id}
           />
         </>
       )}

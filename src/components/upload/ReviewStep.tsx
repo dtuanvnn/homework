@@ -219,6 +219,8 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
         editing={editing?.question ?? null}
         onSubmit={handleSubmitEdit}
         skillSuggestions={[...new Set(items.flatMap((i) => i.question.skills))]}
+        setId={setId}
+        sources={pages.flatMap((p) => { const s = pageSource(p); return s ? [{ label: `trang ${p.index}`, source: s, url: p.file.url }] : [] })}
       />
 
       <FigureCropDialog

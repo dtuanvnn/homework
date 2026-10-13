@@ -327,6 +327,8 @@ export default function ExerciseSetDetail({
         editing={editing}
         onSubmit={handleSubmitQuestion}
         skillSuggestions={skillSuggestions}
+        setId={setId}
+        sources={attachments.filter((a) => a.kind === 'image' && a.url).map((a, i) => ({ label: `trang ${i + 1}`, source: a.url!, url: a.url }))}
       />
 
       <Dialog open={pendingLeave !== null} onOpenChange={(open) => !open && setPendingLeave(null)}>
