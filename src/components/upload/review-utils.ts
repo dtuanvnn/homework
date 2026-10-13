@@ -4,6 +4,8 @@ import type { ScannedQuestion } from '@/lib/ai/scan'
 export interface ReviewItem extends ScannedQuestion {
   /** Set once the parent edits, merges or confirms the question. */
   reviewed: boolean
+  /** Figure being cut out and uploaded, or one that failed (the card offers a retry). */
+  figureState?: 'cropping' | 'error'
 }
 
 export const LOW_CONFIDENCE = 0.75
@@ -58,4 +60,9 @@ export function pagesFromFiles(files: Attachment[]): SourcePage[] {
     for (let p = 1; p <= count; p++) pages.push({ index: pages.length + 1, file, pageInFile: p })
   })
   return pages
+}
+
+/** The page image to crop from: the picked file, else its (signed) preview URL. */
+export function pageSource(page: SourcePage | undefined): Blob | string | undefined {
+  return page?.file.file ?? page?.file.url
 }

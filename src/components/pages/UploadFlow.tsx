@@ -7,10 +7,12 @@ import ProcessingStep, { type ScanPhase } from '@/components/upload/ProcessingSt
 import ReviewStep from '@/components/upload/ReviewStep'
 import UploadStep, { type UploadMeta } from '@/components/upload/UploadStep'
 import UploadStepper, { type UploadStepId } from '@/components/upload/UploadStepper'
-import { needsCheck, pagesFromFiles, type ReviewItem } from '@/components/upload/review-utils'
+import { needsCheck, pageSource, pagesFromFiles, type ReviewItem, type SourcePage } from '@/components/upload/review-utils'
 import { findInvalidQuestion } from '@/components/exercise-detail/question-draft'
 import { unwrap } from '@/lib/action-result'
 import type { ScanResult } from '@/lib/ai/scan'
+import { makeFigure } from '@/lib/figure-client'
+import type { Box } from '@/lib/figure-crop'
 import { shrinkImage, uploadFiles } from '@/lib/upload-client'
 import { cn } from '@/lib/utils'
 import { scanDocuments } from '@/server/actions/ai-scan'
@@ -76,14 +78,20 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
     setMeta(draft.meta)
     setTitle(draft.title)
     setDetails(draft.details)
-    setItems(draft.items)
+    setItems(draft.items.map((it) => (it.figureState === 'cropping' ? { ...it, figureState: 'error' as const } : it)))
     setFiles(draft.files)
     setStep('review')
-    // Blob previews are gone; show the uploaded copies instead.
-    const paths = draft.files.flatMap((f) => (f.uploaded ? [f.uploaded.path] : []))
+    // Blob previews are gone; show the uploaded copies (pages and figures) instead.
+    const figurePaths = draft.items.flatMap((it) => (it.question.image ? [it.question.image.path] : []))
+    const paths = [...draft.files.flatMap((f) => (f.uploaded ? [f.uploaded.path] : [])), ...figurePaths]
     try {
       const urls = unwrap(await previewSetUploads(draft.setId, paths))
       setFiles((list) => list.map((f) => (f.uploaded && urls[f.uploaded.path] ? { ...f, url: urls[f.uploaded.path] } : f)))
+      setItems((list) =>
+        list.map((it) =>
+          it.question.image && urls[it.question.image.path] ? { ...it, question: { ...it.question, imageUrl: urls[it.question.image.path] } } : it,
+        ),
+      )
     } catch {
       toast('Không tải được ảnh xem trước', { description: 'Các câu hỏi vẫn được giữ nguyên.' })
     }
@@ -92,6 +100,33 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
   const discardDraft = () => {
     clearScanDraft()
     setRestorable(null)
+  }
+
+  /** Cuts out every figure the scan found (identical boxes once) and attaches it to its questions. */
+  const cropFigures = async (scanned: ReviewItem[], sourcePages: SourcePage[], run: number) => {
+    const groups = new Map<string, { page: number; box: Box; ids: string[] }>()
+    for (const it of scanned) {
+      if (!it.figure) continue
+      const key = `${it.figure.page}:${it.figure.box.join(',')}`
+      const group = groups.get(key) ?? { page: it.figure.page, box: it.figure.box, ids: [] }
+      group.ids.push(it.question.id)
+      groups.set(key, group)
+    }
+    await Promise.all(
+      [...groups.values()].map(async (g) => {
+        const apply = (patch: (it: ReviewItem) => ReviewItem) => {
+          if (run === scanRun.current) setItems((list) => list.map((it) => (g.ids.includes(it.question.id) ? patch(it) : it)))
+        }
+        try {
+          const source = pageSource(sourcePages[g.page - 1])
+          if (!source) throw new Error('missing page')
+          const { image, imageUrl } = await makeFigure(setId, source, g.box)
+          apply((it) => ({ ...it, figureState: undefined, question: { ...it.question, image, imageUrl } }))
+        } catch {
+          apply((it) => ({ ...it, figureState: 'error' }))
+        }
+      }),
+    )
   }
 
   const startScan = async () => {
@@ -116,7 +151,9 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
       const result = unwrap(await scanDocuments({ setId, files: current.flatMap((f) => (f.uploaded ? [f.uploaded] : [])), ...meta }))
       if (run !== scanRun.current) return
       const { items: scanned, title: suggested, ...rest } = result
-      setItems(scanned.map((s) => ({ ...s, reviewed: false })))
+      const reviewItems: ReviewItem[] = scanned.map((s) => ({ ...s, reviewed: false, ...(s.figure ? { figureState: 'cropping' as const } : {}) }))
+      setItems(reviewItems)
+      void cropFigures(reviewItems, pagesFromFiles(current), run)
       setTitle(suggested)
       setDetails(rest)
       setStep('review')
@@ -178,6 +215,12 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
   }
 
   const handleSave = () => {
+    if (items.some((i) => i.figureState === 'cropping')) {
+      toast('Đang cắt hình minh họa', { description: 'Chờ vài giây rồi lưu nhé.' })
+      return
+    }
+    const failed = items.filter((i) => i.figureState === 'error').length
+    if (failed && !window.confirm(`${failed} câu chưa tải được hình minh họa. Vẫn lưu mà không có hình?`)) return
     if (!items.length) {
       toast.error('Chưa có câu hỏi nào để lưu')
       return

@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, FileSearch, Merge, Pencil, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, FileSearch, Loader2, Merge, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import QuestionContent from '@/components/exercise-detail/QuestionContent'
@@ -112,6 +112,19 @@ export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDe
       )}
 
       <QuestionContent question={q} />
+
+      {item.figureState === 'cropping' && (
+        <p className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+          Đang cắt hình…
+        </p>
+      )}
+      {item.figureState === 'error' && (
+        <p className="flex items-center gap-1.5 text-sm font-medium text-red-700">
+          <AlertTriangle className="size-4" aria-hidden />
+          Chưa tải được hình – nhấn Chỉnh khung để thử lại.
+        </p>
+      )}
 
       {missingAnswer && (
         <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700">
