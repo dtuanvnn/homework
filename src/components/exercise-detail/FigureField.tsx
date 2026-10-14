@@ -23,10 +23,11 @@ interface FigureFieldProps {
   image?: QuestionImage
   imageUrl?: string
   onChange: (image?: QuestionImage, imageUrl?: string) => void
+  label?: string
 }
 
-/** "Hình minh họa": pick a photo, cut one out of the set's pages, or remove it. */
-export default function FigureField({ setId, sources, image, imageUrl, onChange }: FigureFieldProps) {
+/** "Hình minh họa" (or the solution's picture): pick a photo, cut one out of the set's pages, or remove it. */
+export default function FigureField({ setId, sources, image, imageUrl, onChange, label = 'Hình minh họa' }: FigureFieldProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [cropFrom, setCropFrom] = useState<FigureSource | null>(null)
@@ -46,7 +47,7 @@ export default function FigureField({ setId, sources, image, imageUrl, onChange 
 
   return (
     <div className="flex flex-col gap-2">
-      <Label>Hình minh họa</Label>
+      <Label>{label}</Label>
       {image && <QuestionPicture question={{ image, imageUrl }} className="max-h-48" />}
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>

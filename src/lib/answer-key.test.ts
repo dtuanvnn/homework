@@ -9,6 +9,8 @@ describe("withLaterAnswerKey", () => {
   it("takes the key and solution solved after the child submitted", () => {
     const current: Question = { ...base, id: "q1", prompt: "Đề đã sửa", type: "trac-nghiem", options: ["3", "4"], correctIndex: 1, answerStatus: "ai", solution: "Vì 2 + 2 = 4" }
     expect(withLaterAnswerKey(snapshot, current)).toEqual({ ...snapshot, correctIndex: 1, answerStatus: "ai", solution: "Vì 2 + 2 = 4" })
+    const picture = { path: "sets/x/y-figure.jpg", width: 10, height: 10 }
+    expect(withLaterAnswerKey(snapshot, { ...current, solutionImage: picture })).toMatchObject({ solutionImage: picture })
   })
 
   it("keeps the snapshot when it had a key, or the set's question can't supply one", () => {

@@ -11,7 +11,11 @@ import type { Question } from "./types"
  */
 export function withLaterAnswerKey(snapshot: Question, current: Question | undefined): Question {
   if (snapshot.answerStatus !== "missing" || !current || current.answerStatus === "missing" || current.type !== snapshot.type) return snapshot
-  const extra = { answerStatus: current.answerStatus, ...(current.solution ? { solution: current.solution } : {}) }
+  const extra = {
+    answerStatus: current.answerStatus,
+    ...(current.solution ? { solution: current.solution } : {}),
+    ...(current.solutionImage ? { solutionImage: current.solutionImage } : {}),
+  }
   switch (snapshot.type) {
     case "trac-nghiem": {
       const c = current as typeof snapshot

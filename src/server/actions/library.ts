@@ -4,7 +4,7 @@ import { and, eq, inArray, notInArray, sql, type AnyColumn } from "drizzle-orm"
 import { refresh } from "next/cache"
 import { z } from "zod"
 import { db, schema } from "@/db"
-import { figureOwner, unusedFigures } from "@/lib/figures"
+import { figureOwner, figurePaths, unusedFigures } from "@/lib/figures"
 import { editedQuestionSchema } from "@/lib/question-schema"
 import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
 import { runAction, type ActionResult } from "@/lib/action-result"
@@ -89,8 +89,8 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
       if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
     }
     // Figures the set didn't have yet must really be in Storage (their paths are checked by the schema).
-    const known = new Set((await getQuestions(set.id)).flatMap((q) => (q.image ? [q.image.path] : [])))
-    for (const path of new Set(qs.flatMap((q) => (q.image ? [q.image.path] : [])))) {
+    const known = new Set((await getQuestions(set.id)).flatMap(figurePaths))
+    for (const path of new Set(qs.flatMap(figurePaths))) {
       if (known.has(path)) continue
       const owner = figureOwner(path)
       if (!owner || !(await isUploaded("sets", owner, path))) throw new Error("Hình minh họa chưa tải lên xong. Hãy thử lại.")
@@ -185,18 +185,21 @@ async function removeUnreferenced(paths: string[]) {
 }
 
 const imagePath = (column: AnyColumn) => sql<string>`${column}->'image'->>'path'`
+const solutionImagePath = (column: AnyColumn) => sql<string>`${column}->'solutionImage'->>'path'`
 
 /** Figure objects in a set's folder that no question, answer snapshot or attachment uses any more. */
 async function removeUnusedFigures(setId: string) {
   try {
     const candidates = unusedFigures(await listFolder("sets", setId), [])
     if (!candidates.length) return
-    const [inQuestions, inAnswers, inAttachments] = await Promise.all([
+    const [inQuestions, inAnswers, inQuestionSolutions, inAnswerSolutions, inAttachments] = await Promise.all([
       db.select({ path: imagePath(questions.content) }).from(questions).where(inArray(imagePath(questions.content), candidates)),
       db.select({ path: imagePath(answers.question) }).from(answers).where(inArray(imagePath(answers.question), candidates)),
+      db.select({ path: solutionImagePath(questions.content) }).from(questions).where(inArray(solutionImagePath(questions.content), candidates)),
+      db.select({ path: solutionImagePath(answers.question) }).from(answers).where(inArray(solutionImagePath(answers.question), candidates)),
       db.select({ path: attachments.storagePath }).from(attachments).where(inArray(attachments.storagePath, candidates)),
     ])
-    const used = [...inQuestions, ...inAnswers, ...inAttachments].flatMap((r) => (r.path ? [r.path] : []))
+    const used = [...inQuestions, ...inAnswers, ...inQuestionSolutions, ...inAnswerSolutions, ...inAttachments].flatMap((r) => (r.path ? [r.path] : []))
     await removeFromStorage(unusedFigures(candidates, used))
   } catch {
     // Best effort: a leftover figure only costs storage.

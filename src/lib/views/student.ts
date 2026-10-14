@@ -100,8 +100,10 @@ export interface ReviewItem {
   correct: boolean
   /** Only once answers are revealed (see ResultView.answersRevealed). */
   correctAnswer?: string
-  /** Worked solution, only once answers are revealed. */
+  /** Worked solution and its picture, only once answers are revealed. */
   solution?: string
+  solutionImage?: { path: string; width: number; height: number }
+  solutionImageUrl?: string
   comment?: string
   /** AI guidance for a wrong answer: what went wrong and how to solve it, without the answer. */
   hint?: string
@@ -386,6 +388,8 @@ export function buildResultDetail(
         correct,
         correctAnswer: correct || !answersRevealed ? undefined : correctAnswerText(row.question),
         solution: answersRevealed ? row.question.solution : undefined,
+        solutionImage: answersRevealed ? row.question.solutionImage : undefined,
+        solutionImageUrl: answersRevealed ? row.question.solutionImageUrl : undefined,
         comment: row.comment ?? undefined,
         hint: correct ? undefined : (row.hint ?? undefined),
         image: row.question.image,
@@ -398,7 +402,7 @@ export function buildResultDetail(
 /* ---------- Taking an assignment ---------- */
 
 /** Fields no question sent to the child while taking may carry. */
-type KeyInfo = "solution" | "answerStatus"
+type KeyInfo = "solution" | "solutionImage" | "solutionImageUrl" | "answerStatus"
 
 /** A question as sent to the browser while taking: answer keys and solutions removed. */
 export type TakeQuestion =
@@ -416,7 +420,7 @@ function without<T extends object, K extends keyof T>(obj: T, key: K): Omit<T, K
 
 export function toTakeQuestion(question: Question): TakeQuestion {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Dropping the solution and answer status
-  const { solution: _solution, answerStatus: _status, ...q } = question
+  const { solution: _solution, solutionImage: _image, solutionImageUrl: _imageUrl, answerStatus: _status, ...q } = question
   switch (q.type) {
     case "trac-nghiem":
       return without(q, "correctIndex")

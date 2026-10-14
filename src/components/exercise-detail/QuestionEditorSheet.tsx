@@ -245,6 +245,16 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
                   placeholder="Các bước giải và đáp số. Con xem được khi đã hết lượt làm."
                 />
                 <FormulaPreview text={draft.solution} />
+                {setId && (
+                  <FigureField
+                    label="Hình lời giải"
+                    setId={setId}
+                    sources={sources ?? []}
+                    image={draft.solutionImage}
+                    imageUrl={draft.solutionImageUrl}
+                    onChange={(solutionImage, solutionImageUrl) => patch({ solutionImage, solutionImageUrl })}
+                  />
+                )}
               </div>
 
               {setId && (

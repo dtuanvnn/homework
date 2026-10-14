@@ -20,6 +20,7 @@ const base = {
   image: imageSchema.optional(),
   answerStatus: z.enum(["missing", "ai", "ai-check"]).optional(),
   solution: z.string().max(10000).optional(),
+  solutionImage: imageSchema.optional(),
 }
 
 const mathFlags = { math: z.boolean().optional(), simplest: z.boolean().optional() }
@@ -44,6 +45,6 @@ export const questionContentSchema = z.discriminatedUnion("type", [
 /** A question as edited in the UI: content plus a client-side id. */
 export const editedQuestionSchema = z.intersection(z.object({ id: z.string() }), questionContentSchema).transform((q) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { imageUrl: _imageUrl, ...rest } = q as typeof q & { imageUrl?: string }
+  const { imageUrl: _imageUrl, solutionImageUrl: _solutionImageUrl, ...rest } = q as typeof q & { imageUrl?: string; solutionImageUrl?: string }
   return rest
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { figureOwner, isFigurePath, unusedFigures } from "./figures"
+import { figureOwner, figurePaths, isFigurePath, unusedFigures } from "./figures"
 
 const SET = "11111111-2222-3333-4444-555555555555"
 const FIG = `sets/${SET}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee-figure.jpg`
@@ -17,5 +17,11 @@ describe("figures", () => {
     const other = `sets/${SET}/aaaaaaaa-bbbb-cccc-dddd-ffffffffffff-figure.jpg`
     const page = `sets/${SET}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee-trang-1.jpg`
     expect(unusedFigures([FIG, other, page], [FIG])).toEqual([other])
+  })
+
+  it("lists a question's figure and solution picture", () => {
+    expect(figurePaths({})).toEqual([])
+    expect(figurePaths({ image: { path: FIG }, solutionImage: { path: "s" } })).toEqual([FIG, "s"])
+    expect(figurePaths({ solutionImage: { path: "s" } })).toEqual(["s"])
   })
 })

@@ -111,6 +111,10 @@ interface QuestionBase {
   answerStatus?: AnswerStatus
   /** Worked solution (may contain LaTeX) for the parent, and for the child once answers are revealed. */
   solution?: string
+  /** A picture shown with the solution, same rules as `image`. */
+  solutionImage?: QuestionImage
+  /** Read side only: signed URL of `solutionImage`. Never stored. */
+  solutionImageUrl?: string
 }
 
 /** With `math`, answers are LaTeX (no $) graded by value; `simplest` also requires lowest terms. */

@@ -14,6 +14,11 @@ const FIGURE_PATH = new RegExp(`^sets/(${UUID})/${UUID}-figure\\.jpg$`, "i")
 export const isFigurePath = (path: string) => FIGURE_PATH.test(path)
 export const figureOwner = (path: string) => FIGURE_PATH.exec(path)?.[1] ?? null
 
+/** Storage paths of a question's figure and solution picture. */
+export function figurePaths(q: { image?: { path: string }; solutionImage?: { path: string } }): string[] {
+  return [q.image?.path, q.solutionImage?.path].filter((p): p is string => !!p)
+}
+
 /** Figure objects among `listed` that nothing in `referenced` points to. */
 export function unusedFigures(listed: string[], referenced: Iterable<string>): string[] {
   const used = new Set(referenced)

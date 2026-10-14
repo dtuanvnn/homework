@@ -229,7 +229,9 @@ describe("buildResultDetail", () => {
     const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: record, answers: [row(sa, "24", false)] }, now)
     expect(view?.answersRevealed).toBe(false)
     expect(view?.review[0].correctAnswer).toBeUndefined()
-    expect(buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: record, answers: [row({ ...sa, solution: "Lời giải" } as Question, "24", false)] }, now)?.review[0].solution).toBeUndefined()
+    const withSolution = { ...sa, solution: "Lời giải", solutionImage: { path: "p", width: 1, height: 1 }, solutionImageUrl: "https://signed.example/p" } as Question
+    const hidden = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: record, answers: [row(withSolution, "24", false)] }, now)?.review[0]
+    expect(hidden).toMatchObject({ solution: undefined, solutionImage: undefined, solutionImageUrl: undefined })
   })
 
   it("refuses ungraded attempts and reports the previous score", () => {
@@ -252,8 +254,10 @@ describe("toTakeQuestion", () => {
     expect(toTakeQuestion(essay)).not.toHaveProperty("rubric")
     expect(toTakeQuestion(fb)).toEqual({ id: "q3", type: "dien-cho-trong", prompt: fb.prompt, points: 1, skills: [], blanks: 2 })
     expect(toTakeQuestion(order)).toEqual(order)
-    const solved = { ...sa, answerStatus: "ai", solution: "Lấy 96 : 4 = 24" } as Question
+    const solved = { ...sa, answerStatus: "ai", solution: "Lấy 96 : 4 = 24", solutionImage: { path: "p", width: 1, height: 1 }, solutionImageUrl: "u" } as Question
     expect(toTakeQuestion(solved)).not.toHaveProperty("solution")
+    expect(toTakeQuestion(solved)).not.toHaveProperty("solutionImage")
+    expect(toTakeQuestion(solved)).not.toHaveProperty("solutionImageUrl")
     expect(toTakeQuestion(solved)).not.toHaveProperty("answerStatus")
   })
 })

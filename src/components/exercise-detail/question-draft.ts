@@ -27,6 +27,8 @@ export interface QuestionDraft {
   /** "missing": no key yet, the answer fields are left as they are; "ai"/"ai-check": key from AI. */
   answerStatus?: AnswerStatus
   solution: string
+  solutionImage?: QuestionImage
+  solutionImageUrl?: string
 }
 
 /** Fields that make up the answer key: changing one makes it the parent's own. */
@@ -78,6 +80,8 @@ export function toDraft(q: Question): QuestionDraft {
     imageUrl: q.imageUrl,
     answerStatus: q.answerStatus,
     solution: q.solution ?? '',
+    solutionImage: q.solutionImage,
+    solutionImageUrl: q.solutionImageUrl,
   }
   switch (q.type) {
     case 'trac-nghiem':
@@ -172,6 +176,7 @@ export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Qu
     ...(d.image ? { image: d.image, imageUrl: d.imageUrl } : {}),
     ...(d.answerStatus ? { answerStatus: d.answerStatus } : {}),
     ...(solution ? { solution } : {}),
+    ...(d.solutionImage ? { solutionImage: d.solutionImage, solutionImageUrl: d.solutionImageUrl } : {}),
   }
   const math = d.math ? { math: true as const, ...(d.simplest ? { simplest: true as const } : {}) } : {}
   switch (d.type) {

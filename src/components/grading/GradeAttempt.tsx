@@ -244,7 +244,7 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
             )}
           </div>
         </div>
-        <SolutionBox text={q.solution} />
+        <SolutionBox question={q} />
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-2" role="radiogroup" aria-label={`Kết quả câu ${n}`}>

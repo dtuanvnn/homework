@@ -1,7 +1,7 @@
 import { ArrowRight, Check, X } from 'lucide-react'
 import { BLANK, OPTION_LETTERS } from '@/lib/questions'
 import { cn } from '@/lib/utils'
-import type { Question } from '@/lib/types'
+import type { Question, QuestionImage } from '@/lib/types'
 import RichText from '@/components/question/RichText'
 import QuestionPicture from '@/components/question/QuestionPicture'
 import { mathText } from '@/lib/rich-text'
@@ -204,15 +204,25 @@ function QuestionBody({ question: q }: { question: Question }) {
   }
 }
 
-/** The worked solution, for the parent (and the child once answers are revealed). */
-export function SolutionBox({ text }: { text?: string }) {
-  if (!text?.trim()) return null
+interface SolutionParts {
+  solution?: string
+  solutionImage?: QuestionImage
+  solutionImageUrl?: string
+}
+
+/** The worked solution and its picture, for the parent (and the child once answers are revealed). */
+export function SolutionBox({ question: q }: { question: SolutionParts }) {
+  const text = q.solution?.trim()
+  if (!text && !q.solutionImage) return null
   return (
     <details className="group rounded-xl border border-violet-200 bg-violet-50/60 px-3.5 py-2.5 text-sm text-slate-800">
       <summary className="cursor-pointer font-semibold text-violet-800 outline-none">Lời giải</summary>
-      <p className="mt-1.5 leading-relaxed break-words whitespace-pre-line">
-        <RichText text={text} />
-      </p>
+      {text && (
+        <p className="mt-1.5 leading-relaxed break-words whitespace-pre-line">
+          <RichText text={text} />
+        </p>
+      )}
+      {q.solutionImage && <QuestionPicture question={{ image: q.solutionImage, imageUrl: q.solutionImageUrl }} className="mt-2" />}
     </details>
   )
 }
@@ -222,7 +232,7 @@ export default function QuestionContent({ question: q }: { question: Question })
     <div className="flex flex-col gap-3">
       <QuestionBody question={q} />
       <QuestionPicture question={q} />
-      <SolutionBox text={q.solution} />
+      <SolutionBox question={q} />
     </div>
   )
 }

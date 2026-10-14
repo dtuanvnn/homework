@@ -20,13 +20,23 @@ describe("question schema", () => {
     expect(ok("https://evil.example/x.jpg")).toBe(false)
   })
 
-  it("strips the read-side imageUrl", () => {
+  it("strips the read-side picture URLs", () => {
     const parsed = editedQuestionSchema.parse({
       id: "q1", type: "dung-sai", prompt: "?", points: 1, skills: [], answer: true,
       image: { path: FIG, width: 10, height: 10 }, imageUrl: "https://signed.example/x",
+      solutionImage: { path: FIG, width: 10, height: 10 }, solutionImageUrl: "https://signed.example/y",
     })
     expect(parsed).not.toHaveProperty("imageUrl")
+    expect(parsed).not.toHaveProperty("solutionImageUrl")
     expect(parsed).toHaveProperty("image")
+    expect(parsed).toHaveProperty("solutionImage")
+  })
+
+  it("checks the solution picture's path like the figure's", () => {
+    const ok = (path: string) =>
+      questionContentSchema.safeParse({ type: "dung-sai", prompt: "?", points: 1, skills: [], answer: true, solutionImage: { path, width: 1, height: 1 } }).success
+    expect(ok(FIG)).toBe(true)
+    expect(ok("https://evil.example/x.jpg")).toBe(false)
   })
 
   it("accepts a short answer without a key only while it is marked missing, and keeps the solution", () => {
