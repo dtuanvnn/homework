@@ -167,7 +167,8 @@ export default function ExerciseSetDetail({
       const q = queue.shift()
       if (!q) return
       try {
-        const result = unwrap(await solveQuestion({ setId, subject: draft.subject, grade: draft.grade, question: q }))
+        // The server drops the signed imageUrl; keep it so the figure stays on screen.
+        const result = { ...unwrap(await solveQuestion({ setId, subject: draft.subject, grade: draft.grade, question: q })), imageUrl: q.imageUrl }
         solved.set(q.id, result)
         setQuestions((prev) => prev.map((x) => (x.id === q.id ? result : x)))
       } catch (e) {
