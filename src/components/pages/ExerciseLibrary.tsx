@@ -35,7 +35,8 @@ export default function ExerciseLibrary({
   const sets = library.sets
   const [creating, setCreating] = useState(false)
   const [query, setQuery] = useState("")
-  const [filters, setFilters] = useState<LibraryFilters>(EMPTY_FILTERS)
+  const defaultGrade = sets.some((s) => s.grade === student.grade) ? String(student.grade) : "all"
+  const [filters, setFilters] = useState<LibraryFilters>({ ...EMPTY_FILTERS, grade: defaultGrade })
 
   const results = useMemo(
     () => filterExerciseSets(sets, filters, query),

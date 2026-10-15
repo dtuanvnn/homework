@@ -12,6 +12,7 @@ import { assertAccess, getContext, type Context } from "../access"
 import { getExerciseSetDetail, getQuestions, getQuestionsWithImages, getViewingStudent, isUuid, toExerciseSet } from "../queries"
 import { attachmentUrl, createUploadTargets, isUploaded, listFolder, removeFromStorage, type UploadTarget } from "../storage"
 import { assertAssignmentInScope, assertSetInHousehold, NOT_FOUND } from "../ownership"
+import { listHouseholdStudents } from "../students"
 
 const { exerciseSets, questions, attachments, assignments, attempts, answers } = schema
 
@@ -230,64 +231,74 @@ export type NewAssignment = z.input<typeof newAssignmentSchema>
 /** Time limits only apply to web work. */
 const limitFor = (i: { mode: "web" | "paper"; timeLimitMinutes?: number | null }) => (i.mode === "web" ? (i.timeLimitMinutes ?? null) : null)
 
-async function insertAssignments(items: NewAssignment[], ctx: Context): Promise<Assignment[]> {
+async function insertAssignments(ctx: Context, items: NewAssignment[], studentIds: string[]): Promise<{ created: Assignment[]; total: number }> {
   const parsed = z.array(newAssignmentSchema).min(1).max(14).parse(items)
+  const ids = z.array(z.uuid()).min(1).max(20).parse(studentIds)
+  const children = new Set((await listHouseholdStudents(ctx.householdId)).map((c) => c.id))
+  if (ids.some((id) => !children.has(id))) throw new Error("Không tìm thấy học sinh.")
   for (const item of parsed) {
-    if (new Date(item.dueAt) <= new Date(item.availableFrom)) throw new Error("Hạn nộp phải sau thời điểm giao bài")
     await assertSetInHousehold(ctx, item.setId)
+    if (new Date(item.dueAt) <= new Date(item.availableFrom)) throw new Error("Hạn nộp phải sau thời điểm giao bài")
     const n = await db.$count(questions, eq(questions.setId, item.setId))
     if (n === 0) throw new Error("Hãy chọn bộ bài có ít nhất một câu hỏi.")
   }
-  if (!ctx.studentId) throw new Error("Chưa có học sinh nào.")
-  const studentId = ctx.studentId
   const rows = await db
     .insert(assignments)
     .values(
-      parsed.map((i) => ({
-        studentId,
-        setId: i.setId,
-        availableFrom: new Date(i.availableFrom),
-        dueAt: new Date(i.dueAt),
-        mode: i.mode,
-        maxAttempts: i.maxAttempts,
-        timeLimitMinutes: limitFor(i),
-        parentNote: i.note?.trim() || null,
-      })),
+      ids.flatMap((studentId) =>
+        parsed.map((i) => ({
+          studentId,
+          setId: i.setId,
+          availableFrom: new Date(i.availableFrom),
+          dueAt: new Date(i.dueAt),
+          mode: i.mode,
+          maxAttempts: i.maxAttempts,
+          timeLimitMinutes: limitFor(i),
+          parentNote: i.note?.trim() || null,
+        })),
+      ),
     )
     .returning()
   refresh()
-  return rows.map((r) => ({
-    id: r.id,
-    exerciseSetId: r.setId,
-    assignedDate: r.availableFrom.toISOString(),
-    dueDate: r.dueAt.toISOString(),
-    status: "chua-lam",
-    parentNote: r.parentNote ?? undefined,
-    mode: r.mode,
-    maxAttempts: r.maxAttempts as 1 | 2,
-    timeLimitMinutes: r.timeLimitMinutes ?? undefined,
-    attemptCount: 0,
-  }))
+  const created: Assignment[] = rows
+    .filter((r) => r.studentId === ctx.studentId)
+    .map((r) => ({
+      id: r.id,
+      exerciseSetId: r.setId,
+      assignedDate: r.availableFrom.toISOString(),
+      dueDate: r.dueAt.toISOString(),
+      status: "chua-lam",
+      parentNote: r.parentNote ?? undefined,
+      mode: r.mode,
+      maxAttempts: r.maxAttempts as 1 | 2,
+      timeLimitMinutes: r.timeLimitMinutes ?? undefined,
+      attemptCount: 0,
+    }))
+  return { created, total: rows.length }
 }
 
-export async function createAssignments(items: NewAssignment[]): Promise<ActionResult<Assignment[]>> {
+export async function createAssignments(items: NewAssignment[], studentIds?: string[]): Promise<ActionResult<{ created: Assignment[]; total: number }>> {
   return runAction(async () => {
     const ctx = await assertAccess("parent")
-    return insertAssignments(items, ctx)
+    if (!ctx.studentId) throw new Error("Chưa có học sinh nào.")
+    return insertAssignments(ctx, items, studentIds?.length ? studentIds : [ctx.studentId])
   })
 }
 
-/** "Giao bài" shortcut on a library card: available now, due tomorrow 20:00. */
+/** "Giao bài" shortcut on a library card: available now, due tomorrow 20:00, for the viewing child. */
 export async function quickAssign(setId: string): Promise<ActionResult<Assignment>> {
   return runAction(async () => {
     const due = new Date()
     due.setDate(due.getDate() + 1)
     due.setHours(20, 0, 0, 0)
     const ctx = await assertAccess("parent")
-    const [created] = await insertAssignments([
-      { setId, availableFrom: new Date().toISOString(), dueAt: due.toISOString(), mode: "web", maxAttempts: 2 },
-    ], ctx)
-    return created
+    if (!ctx.studentId) throw new Error("Chưa có học sinh nào.")
+    const { created } = await insertAssignments(
+      ctx,
+      [{ setId, availableFrom: new Date().toISOString(), dueAt: due.toISOString(), mode: "web", maxAttempts: 2 }],
+      [ctx.studentId],
+    )
+    return created[0]
   })
 }
 

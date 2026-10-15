@@ -120,3 +120,25 @@ test("a locked child sees the lock screen until unlocked", async ({ browser }, t
     await childCtx.close()
   }
 })
+
+test("one set assigned to both children reaches both", async ({ page }) => {
+  await open(page, "/parent/schedule")
+  await page.getByRole("button", { name: /^Giao bài( mới)?$/ }).filter({ visible: true }).first().click()
+  const sheet = page.getByRole("dialog", { name: "Giao bài mới" })
+  await sheet.getByLabel("Tìm bộ bài tập").fill("Unit 5")
+  await sheet.getByRole("radio", { name: /Unit 5: My family/ }).click()
+  await sheet.getByText("Giao cho").waitFor()
+  await sheet.locator("label", { hasText: "Bảo Ngọc" }).click()
+  await sheet.getByRole("button", { name: "Giao bài", exact: true }).click()
+  await expect(page.getByText(/cho Minh An, Bảo Ngọc/)).toBeVisible()
+
+  // Verify both children have the assignment on the parent's schedule (at least 2, since tests run sequentially)
+  const count = await page.getByText("Unit 5: My family").filter({ visible: true }).count()
+  expect(count).toBeGreaterThanOrEqual(2)
+
+  // Verify by switching to Bảo Ngọc's view
+  await page.getByRole("button", { name: /Đang xem: Minh An/ }).filter({ visible: true }).click()
+  await page.getByRole("menuitemradio", { name: /Bảo Ngọc/ }).click()
+  await expect(page.getByRole("button", { name: /Đang xem: Bảo Ngọc/ }).filter({ visible: true })).toBeVisible()
+  await expect(page.getByText("Unit 5: My family").filter({ visible: true }).first()).toBeVisible()
+})

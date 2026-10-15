@@ -29,7 +29,7 @@ import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
 interface LibraryStore {
   assignments: Assignment[]
   /** Creates assignments (validated server side) and returns them. */
-  addAssignments: (items: NewAssignment[]) => Promise<Assignment[]>
+  addAssignments: (items: NewAssignment[], studentIds?: string[]) => Promise<{ created: Assignment[]; total: number }>
   /** Saves new times/settings of an assignment; throws the server's message on failure. */
   editAssignment: (id: string, changes: AssignmentChanges) => Promise<void>
   /** Deletes an assignment and the child's work on it; throws on failure. */
@@ -190,13 +190,14 @@ export function LibraryProvider({
     [hide],
   )
 
-  const addAssignments = useCallback(async (items: NewAssignment[]) => {
-    const created = unwrap(await createAssignments(items))
+  const addAssignments = useCallback(async (items: NewAssignment[], studentIds?: string[]) => {
+    const { created, total } = unwrap(await createAssignments(items, studentIds))
     setAssignments((prev) => [...prev, ...created])
+    const perItem = total / items.length
     setSets((prev) =>
-      prev.map((s) => ({ ...s, timesAssigned: s.timesAssigned + created.filter((a) => a.exerciseSetId === s.id).length })),
+      prev.map((s) => ({ ...s, timesAssigned: s.timesAssigned + items.filter((i) => i.setId === s.id).length * perItem })),
     )
-    return created
+    return { created, total }
   }, [])
 
   const editAssignment = useCallback(async (id: string, changes: AssignmentChanges) => {

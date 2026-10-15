@@ -23,7 +23,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
 import { useLibrary } from "@/state/library-store"
-import { useRequiredStudent } from "@/components/layout/AppFrame"
+import { useRequiredStudent, useHousehold } from "@/components/layout/AppFrame"
 import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
 import { normalizeText } from "@/lib/library"
 import {
@@ -53,10 +53,14 @@ export default function AssignSheet({
 }) {
   const library = useLibrary()
   const student = useRequiredStudent()
+  const household = useHousehold()
   const [query, setQuery] = useState("")
   const [saving, setSaving] = useState(false)
   const [subject, setSubject] = useState("all")
   const [error, setError] = useState("")
+  const [targets, setTargets] = useState<string[]>([student.id])
+  const toggleTarget = (id: string) =>
+    setTargets((cur) => (cur.includes(id) ? (cur.length > 1 ? cur.filter((t) => t !== id) : cur) : [...cur, id]))
   const [draft, setDraft] = useState<ScheduleDraft>({
     exerciseSetId: setId ?? "",
     mode: "web",
@@ -85,7 +89,6 @@ export default function AssignSheet({
     try {
       if (!selected || !selected.questionCount)
         throw new Error("Hãy chọn bộ bài có ít nhất một câu hỏi.")
-      // Local wall-clock times → ISO instants; the server validates again.
       const items: NewAssignment[] = createAssignments(draft).map((a) => ({
         setId: a.exerciseSetId,
         availableFrom: a.assignedDate,
@@ -95,13 +98,17 @@ export default function AssignSheet({
         timeLimitMinutes: a.timeLimitMinutes ?? null,
         note: a.parentNote,
       }))
-      const created = await library.addAssignments(items)
-      toast.success(`Đã giao ${created.length} bài cho ${student.name}`, {
-        description:
-          draft.mode === "paper"
-            ? "Chọn “In đề” trên lịch để in phiếu bài tập."
-            : "Bài tập đã được thêm vào lịch.",
-      })
+      const { created, total } = await library.addAssignments(items, targets)
+      const names = household.filter((c) => targets.includes(c.id)).map((c) => c.name)
+      toast.success(
+        `Đã giao ${total} bài cho ${(names.length ? names : [student.name]).join(", ")}`,
+        {
+          description:
+            draft.mode === "paper"
+              ? "Chọn \"In đề\" trên lịch để in phiếu bài tập."
+              : "Bài tập đã được thêm vào lịch.",
+        },
+      )
       onCreated(new Date(created[0]?.assignedDate ?? items[0].availableFrom))
       onClose()
     } catch (e) {
@@ -210,6 +217,19 @@ export default function AssignSheet({
               </p>
             )}
           </div>
+          {household.length > 1 && (
+            <div>
+              <Label>Giao cho</Label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {household.map((c) => (
+                  <label key={c.id} className={cn("flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm", targets.includes(c.id) ? "border-indigo-500 bg-indigo-50" : "border-slate-200")}>
+                    <input type="checkbox" className="sr-only" aria-label={c.name} checked={targets.includes(c.id)} onChange={() => toggleTarget(c.id)} />
+                    <span aria-hidden>{c.avatarEmoji}</span> {c.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Hình thức</Label>
             <ToggleGroup
