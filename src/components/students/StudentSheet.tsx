@@ -170,20 +170,18 @@ export default function StudentSheet({ open, onOpenChange, editing, now }: {
               </button>
             )}
           </div>
-        </div>
-        <SheetFooter className="justify-between">
-          {editing ? (
-            <Button variant="ghost" className="text-red-600" onClick={archive}>
+          {editing && (
+            <Button variant="ghost" className="w-full text-red-600 hover:bg-red-50 hover:text-red-700" onClick={archive}>
               Lưu trữ học sinh
             </Button>
-          ) : (
-            <span />
           )}
+        </div>
+        <SheetFooter className="flex-col">
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
               Huỷ
             </Button>
-            <Button onClick={save} disabled={busy || !name.trim()}>
+            <Button className="flex-[2]" onClick={save} disabled={busy || !name.trim()}>
               {busy && <Loader2 className="animate-spin" />}
               {editing ? "Lưu" : "Thêm học sinh"}
             </Button>
