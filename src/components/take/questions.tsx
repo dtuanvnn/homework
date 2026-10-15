@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
-import { Eraser, Keyboard, PenLine, Trash2, Undo2 } from "lucide-react"
+import { Keyboard, PenLine } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
+import { InkEditor } from "@/components/ink/InkEditor"
+import { useStudent } from "@/components/layout/AppFrame"
 import { Textarea } from "@/components/ui/textarea"
+import type { EssayValue } from "@/lib/grading"
+import { isInkEmpty, newInk, paperFor } from "@/lib/ink"
 import { isLongPrompt } from "@/lib/questions"
 import { cn } from "@/lib/utils"
 import type { SubjectStyle } from "@/lib/subjects"
@@ -376,13 +380,11 @@ export function Ordering({ q, value = [], onChange, tone }: Props<Q<"sap-xep">, 
 
 /* ---------- Essay ---------- */
 
-export interface EssayValue {
-  text: string
-  drawing?: string
-}
+export type { EssayValue }
 
 export function Essay({ value = { text: "" }, onChange, tone }: Props<Q<"tu-luan">, EssayValue>) {
-  const [hand, setHand] = useState(Boolean(value.drawing) && !value.text)
+  const student = useStudent()
+  const [hand, setHand] = useState(Boolean(value.drawing || !isInkEmpty(value.ink)) && !value.text)
   return (
     <div className="space-y-3">
       <div className="inline-flex rounded-2xl bg-slate-100 p-1">
@@ -403,7 +405,23 @@ export function Essay({ value = { text: "" }, onChange, tone }: Props<Q<"tu-luan
         ))}
       </div>
       {hand ? (
-        <DrawingCanvas value={value.drawing} onChange={(drawing) => onChange({ ...value, drawing })} />
+        value.drawing && !value.ink ? (
+          // A draft from the old single canvas: show it until the child starts over on pages.
+          <div className="space-y-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- inline data URL */}
+            <img src={value.drawing} alt="Bài viết tay cũ" className="w-full rounded-3xl border-2 border-slate-200 bg-white" />
+            <button
+              type="button"
+              onClick={() => onChange({ text: value.text, ink: newInk(paperFor(student.grade)) })}
+              className="inline-flex h-12 items-center gap-2 rounded-xl border-2 border-indigo-200 bg-indigo-50 px-5 text-lg font-bold text-indigo-700"
+            >
+              <PenLine className="size-5" />
+              Viết lại trên giấy mới
+            </button>
+          </div>
+        ) : (
+          <InkEditor ink={value.ink ?? newInk(paperFor(student.grade))} onChange={(ink) => onChange({ text: value.text, ink })} />
+        )
       ) : (
         <div className="relative">
           <Textarea
@@ -417,112 +435,5 @@ export function Essay({ value = { text: "" }, onChange, tone }: Props<Q<"tu-luan
         </div>
       )}
     </div>
-  )
-}
-
-function DrawingCanvas({ value, onChange }: { value?: string; onChange: (dataUrl: string) => void }) {
-  const ref = useRef<HTMLCanvasElement>(null)
-  const history = useRef<ImageData[]>([])
-  const drawing = useRef(false)
-  const [eraser, setEraser] = useState(false)
-
-  useEffect(() => {
-    const c = ref.current!
-    const ratio = window.devicePixelRatio || 1
-    c.width = c.offsetWidth * ratio
-    c.height = c.offsetHeight * ratio
-    const ctx = c.getContext("2d")!
-    ctx.scale(ratio, ratio)
-    if (value) {
-      const img = new Image()
-      img.onload = () => ctx.drawImage(img, 0, 0, c.offsetWidth, c.offsetHeight)
-      img.src = value
-    }
-    // Only restore once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const ctx = () => ref.current!.getContext("2d")!
-  const pos = (e: React.PointerEvent) => {
-    const r = ref.current!.getBoundingClientRect()
-    return [e.clientX - r.left, e.clientY - r.top] as const
-  }
-  const save = () => onChange(ref.current!.toDataURL("image/png"))
-
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <ToolBtn on={!eraser} onClick={() => setEraser(false)} icon={PenLine} label="Bút" />
-        <ToolBtn on={eraser} onClick={() => setEraser(true)} icon={Eraser} label="Tẩy" />
-        <ToolBtn
-          onClick={() => {
-            const prev = history.current.pop()
-            if (prev) { ctx().putImageData(prev, 0, 0); save() }
-          }}
-          icon={Undo2}
-          label="Hoàn tác"
-        />
-        <ToolBtn
-          onClick={() => {
-            const c = ref.current!
-            history.current.push(ctx().getImageData(0, 0, c.width, c.height))
-            ctx().clearRect(0, 0, c.width, c.height)
-            save()
-          }}
-          icon={Trash2}
-          label="Xóa hết"
-        />
-      </div>
-      <canvas
-        ref={ref}
-        aria-label="Khung viết tay"
-        className="h-80 w-full touch-none rounded-3xl border-2 border-slate-200 bg-white bg-[linear-gradient(transparent_47px,#e2e8f0_48px)] bg-[length:100%_48px] md:h-[420px]"
-        onPointerDown={(e) => {
-          const c = ref.current!
-          c.setPointerCapture(e.pointerId)
-          history.current.push(ctx().getImageData(0, 0, c.width, c.height))
-          if (history.current.length > 30) history.current.shift()
-          drawing.current = true
-          const [x, y] = pos(e)
-          ctx().beginPath()
-          ctx().moveTo(x, y)
-        }}
-        onPointerMove={(e) => {
-          if (!drawing.current) return
-          const g = ctx()
-          const [x, y] = pos(e)
-          const pressure = e.pointerType === "pen" ? e.pressure || 0.5 : 0.5
-          g.globalCompositeOperation = eraser ? "destination-out" : "source-over"
-          g.lineWidth = eraser ? 28 : 1.5 + pressure * 4
-          g.lineCap = "round"
-          g.lineJoin = "round"
-          g.strokeStyle = "#1e293b"
-          g.lineTo(x, y)
-          g.stroke()
-          g.beginPath()
-          g.moveTo(x, y)
-        }}
-        onPointerUp={() => {
-          if (!drawing.current) return
-          drawing.current = false
-          save()
-        }}
-      />
-      <p className="text-base text-slate-500">Dùng Apple Pencil hoặc ngón tay để viết bài.</p>
-    </div>
-  )
-}
-
-function ToolBtn({ on, onClick, icon: Icon, label }: { on?: boolean; onClick: () => void; icon: typeof PenLine; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={on}
-      className={cn("inline-flex h-11 items-center gap-1.5 rounded-xl border px-3 text-base font-semibold", on ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600")}
-    >
-      <Icon className="size-5" />
-      <span className="hidden sm:inline">{label}</span>
-    </button>
   )
 }

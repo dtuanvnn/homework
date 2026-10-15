@@ -1,6 +1,6 @@
 # Handwritten essays on pages — design
 
-Date: 2026-10-15 · Status: approved in chat (user asked to implement straight after the spec)
+Date: 2026-10-15 · Status: implemented (user asked to implement straight after the spec)
 
 ## Goal
 
@@ -57,11 +57,11 @@ New dependency: `perfect-freehand` (tiny, MIT, no deps).
 ## 3. Writing UI — `src/components/ink/`
 
 - `Essay` keeps the "Gõ chữ / Viết tay" switch. Hand mode renders `InkEditor` instead of `DrawingCanvas` (removed).
-- `InkEditor`: toolbar (Bút, Tẩy, Hoàn tác, Làm lại, Xóa trang, "Viết bằng ngón tay" switch) and the pages stacked vertically, full width, aspect 10:7, "Trang i/n" label, "+ Thêm trang" under the last page (hidden at 10 pages). New ink takes `paperFor(student.grade)`; existing ink keeps `ink.paper`.
+- `InkEditor`: toolbar (Bút, Tẩy, Hoàn tác, Làm lại, "Viết bằng ngón tay" switch, remembered in localStorage) and the pages stacked vertically, full width, aspect 10:7, "Trang i/n" label, "+ Thêm trang" under the last page (hidden at 10 pages). New ink takes `paperFor(student.grade)`; existing ink keeps `ink.paper`.
 - Input: pen and mouse draw; touch draws only when the finger switch is on. With it off the canvas has `touch-action: pan-y` so fingers and palms scroll; with it on `touch-action: none`.
 - Each page: base canvas (paper + committed strokes) and an overlay canvas for the live stroke, redrawn in `requestAnimationFrame`. Points come from `getCoalescedEvents()`. Pointer up commits the stroke (quantized) and redraws the base. `ResizeObserver` redraws at the new scale (rotation, split view).
 - Eraser: dragging calls `eraseStrokes` along the path; one undo step per drag.
-- Undo/redo: stacks of `Ink` snapshots, at most 50. "Xóa trang" asks to confirm, clears the page, and removes it if it is a trailing page beyond the first.
+- Undo/redo: stacks of `Ink` snapshots, at most 50. Each page has its own "Xóa trang" (asks to confirm when the page has writing): it removes the page, or clears it when it is the only page ("Xóa hết").
 - Every commit/erase calls `onChange({ ...value, ink })`, which goes through the existing debounced autosave. `TakeAssignment` counts the essay answered when text, `drawing` or non-empty `ink` exists.
 - A draft that still has a legacy `drawing` and no `ink` shows the old image with "Viết lại trên giấy mới", which clears `drawing` and starts ink.
 

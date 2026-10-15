@@ -1,6 +1,7 @@
 process.env.TZ = "Asia/Ho_Chi_Minh"
 
 import { describe, expect, it } from "vitest"
+import type { Ink } from "@/lib/ink"
 import type { ExerciseSet, Question } from "@/lib/types"
 import type { AnswerRecord, AssignmentRecord, AttemptRecord } from "@/server/queries"
 import {
@@ -137,6 +138,7 @@ const match: Question = {
   pairs: [{ left: "pen", right: "bút" }, { left: "ruler", right: "thước" }],
 }
 const order: Question = { id: "q6", type: "sap-xep", prompt: "Sắp xếp", points: 1, skills: [], tokens: ["I", "am", "eight"], shuffled: [2, 0, 1] }
+const ink: Ink = { v: 1, paper: "o-li", pages: [{ strokes: [[100, 100, 5, 110, 100, 5]] }] }
 const essay: Question = { id: "q7", type: "tu-luan", prompt: "Kể về gia đình", points: 2, skills: [], rubric: "Đủ ý" }
 
 describe("answerText", () => {
@@ -149,6 +151,9 @@ describe("answerText", () => {
     expect(answerText(order, [0, 2, 1])).toBe("I eight am")
     expect(answerText(essay, { text: "Nhà em có bốn người." })).toBe("Nhà em có bốn người.")
     expect(answerText(essay, { text: "", drawing: "data:image/png;base64,x" })).toBe("(bài viết tay)")
+    expect(answerText(essay, { text: "", ink })).toBe("(bài viết tay)")
+    expect(answerText(essay, { text: "Mở bài", ink })).toBe("Mở bài (kèm bài viết tay)")
+    expect(answerText(essay, { text: "", ink: { ...ink, pages: [{ strokes: [] }] } })).toBe("(chưa trả lời)")
   })
 
   it("handles missing answers and paper work", () => {
@@ -232,6 +237,14 @@ describe("buildResultDetail", () => {
     const withSolution = { ...sa, solution: "Lời giải", solutionImage: { path: "p", width: 1, height: 1 }, solutionImageUrl: "https://signed.example/p" } as Question
     const hidden = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: record, answers: [row(withSolution, "24", false)] }, now)?.review[0]
     expect(hidden).toMatchObject({ solution: undefined, solutionImage: undefined, solutionImageUrl: undefined })
+  })
+
+  it("passes handwriting pages to the result screen", () => {
+    const first = graded(8)
+    const record = assignment("a", { attempts: [first] })
+    const answers = [row(essay, { text: "", ink }, null), row({ ...essay, id: "q8" }, { text: "", drawing: "data:image/png;base64,AAA" }, null), row(sa, "24", true)]
+    const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: record, answers }, now)
+    expect(view?.review.map((r) => r.handwriting)).toEqual([{ ink }, { drawing: "data:image/png;base64,AAA" }, undefined])
   })
 
   it("refuses ungraded attempts and reports the previous score", () => {

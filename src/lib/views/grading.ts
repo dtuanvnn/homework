@@ -4,6 +4,7 @@
  */
 import { OPTION_LETTERS } from "../questions"
 import type { EssayValue, Response } from "../grading"
+import { inkSchema, isInkEmpty, type Ink } from "../ink"
 import { answerAsRichText } from "../rich-text"
 import type { Attachment, Question, QuestionType, SubjectId } from "../types"
 
@@ -188,7 +189,7 @@ export function correctAnswerText(q: Question): string {
 }
 
 export function isEssayValue(value: unknown): value is EssayValue {
-  return typeof value === "object" && value !== null && !Array.isArray(value) && ("text" in value || "drawing" in value)
+  return typeof value === "object" && value !== null && !Array.isArray(value) && ("text" in value || "drawing" in value || "ink" in value)
 }
 
 /** The child's answer, written for the parent. Essays only return their text. */
@@ -220,8 +221,8 @@ export function responseText(q: Question, response: Response | null | undefined)
       return Array.isArray(response) && response.length ? (response as number[]).map((i) => q.tokens[i] ?? "?").join(" ") : NO_ANSWER
     case "tu-luan": {
       if (!isEssayValue(response)) return NO_ANSWER
-      // A handwriting-only essay has no text; the drawing is shown instead.
-      return response.text?.trim() || (response.drawing ? "" : NO_ANSWER)
+      // A handwriting-only essay has no text; the handwriting is shown instead.
+      return response.text?.trim() || (response.drawing || essayInk(response) ? "" : NO_ANSWER)
     }
   }
 }
@@ -230,4 +231,11 @@ export function responseText(q: Question, response: Response | null | undefined)
 export function essayDrawing(response: Response | null | undefined): string | undefined {
   if (!isEssayValue(response) || !response.drawing) return undefined
   return /^data:image\/(png|jpeg|webp);base64,/.test(response.drawing) ? response.drawing : undefined
+}
+
+/** Handwriting pages of an essay answer, only when they are valid and not blank. */
+export function essayInk(response: Response | null | undefined): Ink | undefined {
+  if (!isEssayValue(response) || !response.ink) return undefined
+  const parsed = inkSchema.safeParse(response.ink)
+  return parsed.success && !isInkEmpty(parsed.data) ? parsed.data : undefined
 }

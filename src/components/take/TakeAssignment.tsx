@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { SUBJECTS } from "@/lib/subjects"
+import { isInkEmpty } from "@/lib/ink"
 import { isLongPrompt } from "@/lib/questions"
 import { cn } from "@/lib/utils"
 import type { QuestionType, SubjectId } from "@/lib/types"
@@ -39,7 +40,7 @@ function isAnswered(q: TakeQuestion, a: unknown): boolean {
     case "tra-loi-ngan": return typeof a === "string" && Boolean(a.trim())
     case "noi": return Object.keys(a as object).length === q.pairs.length
     case "sap-xep": return (a as number[]).length === q.tokens.length
-    case "tu-luan": return Boolean((a as EssayValue).text?.trim() || (a as EssayValue).drawing)
+    case "tu-luan": return Boolean((a as EssayValue).text?.trim() || (a as EssayValue).drawing || !isInkEmpty((a as EssayValue).ink))
     default: return true
   }
 }

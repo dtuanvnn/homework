@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm"
 import { z } from "zod"
 import { db, schema } from "@/db"
 import { gradeAttempt, type Response } from "@/lib/grading"
+import { inkSchema } from "@/lib/ink"
 import type { Question } from "@/lib/types"
 import { autoFeedback, canTake, stateOf } from "@/lib/views/student"
 import { runAction, type ActionResult } from "@/lib/action-result"
@@ -33,7 +34,7 @@ const responseSchema = z.union([
   z.string().max(5000),
   z.array(z.union([z.string().max(500), z.number()])).max(100),
   z.record(z.string().max(4), z.number()),
-  z.object({ text: z.string().max(20_000), drawing: z.string().startsWith("data:image/").optional() }),
+  z.object({ text: z.string().max(20_000), drawing: z.string().startsWith("data:image/").optional(), ink: inkSchema.optional() }),
 ])
 
 const responsesSchema = z

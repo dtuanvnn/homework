@@ -7,13 +7,16 @@
  * blank, tra-loi-ngan → string, noi → { leftIndex: rightPairIndex },
  * sap-xep → token indexes in the chosen order, tu-luan → EssayValue.
  */
+import type { Ink } from "./ink"
 import { mathAnswerMatches } from "./math-answer"
 import type { Question } from "./types"
 
 export interface EssayValue {
   text: string
-  /** PNG data URL of the handwriting canvas. */
+  /** Legacy: PNG data URL of the old handwriting canvas. Read, never written. */
   drawing?: string
+  /** Handwriting as vector strokes on pages (lib/ink.ts). */
+  ink?: Ink
 }
 
 export type Response = number | boolean | string | string[] | number[] | Record<string, number> | EssayValue

@@ -18,8 +18,9 @@ import {
 } from "@/lib/ai/grading"
 import type { Response } from "@/lib/grading"
 import type { Question } from "@/lib/types"
-import { essayDrawing, isEssayValue } from "@/lib/views/grading"
+import { essayDrawing, essayInk, isEssayValue } from "@/lib/views/grading"
 import { assertAccess } from "../access"
+import { inkPagePngs } from "../ai/ink-image"
 import { ask, storageFileBlocks, type ContentBlock } from "../ai/llm"
 import { isUuid } from "../queries"
 
@@ -62,9 +63,16 @@ async function essayBlocks(items: { row: AnswerRow; number: number }[]): Promise
     const typed = isEssayValue(row.response) ? (row.response.text ?? "") : ""
     blocks.push({ type: "text", text: essayQuestionText(row.question, number, typed) })
     blocks.push(...(await figureBlocks(row.question, number)))
+    const ink = essayInk(row.response)
     const drawing = essayDrawing(row.response)
     const image = drawing ? parseImageDataUrl(drawing) : null
-    if (image) {
+    if (ink) {
+      const pages = inkPagePngs(ink)
+      for (const { page, data } of pages) {
+        blocks.push({ type: "text", text: `Chữ viết tay của con cho câu ${number} (trang ${page}/${ink.pages.length}):` })
+        blocks.push({ type: "image", source: { type: "base64", media_type: "image/png", data } })
+      }
+    } else if (image) {
       blocks.push({ type: "text", text: `Chữ viết tay của con cho câu ${number}:` })
       blocks.push({ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.data } })
     } else if (!typed.trim()) {

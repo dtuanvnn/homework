@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest"
+import type { Ink } from "../ink"
 import type { Question } from "../types"
 import {
   buildGradingQueue,
   correctAnswerText,
   essayDrawing,
+  essayInk,
   markedTotals,
   pointStep,
   responseText,
@@ -13,6 +15,7 @@ import {
   type QueueAttempt,
 } from "./grading"
 
+const ink: Ink = { v: 1, paper: "o-li", pages: [{ strokes: [[100, 100, 5, 110, 100, 5]] }] }
 const set = { id: "s1", title: "Phép chia có dư", subject: "toan" as const }
 const attempt = (over: Partial<QueueAttempt> & { id: string }): QueueAttempt => ({
   attemptNo: 1,
@@ -126,6 +129,8 @@ describe("readable answers", () => {
     expect(responseText({ ...base, type: "tra-loi-ngan", answer: "24" }, " 24 kg ")).toBe("24 kg")
     expect(responseText(essay, { text: "Vì cậu bé thông minh." })).toBe("Vì cậu bé thông minh.")
     expect(responseText(essay, { text: "", drawing: "data:image/png;base64,AAA" })).toBe("")
+    expect(responseText(essay, { text: "", ink })).toBe("")
+    expect(responseText(essay, { text: "", ink: { ...ink, pages: [{ strokes: [] }] } })).toBe("(Chưa trả lời)")
     expect(responseText(mc, null)).toBe("(Chưa trả lời)")
   })
 
@@ -143,5 +148,13 @@ describe("readable answers", () => {
     expect(essayDrawing({ text: "", drawing: "data:image/png;base64,AAA" })).toBe("data:image/png;base64,AAA")
     expect(essayDrawing({ text: "", drawing: "javascript:alert(1)" })).toBeUndefined()
     expect(essayDrawing(3)).toBeUndefined()
+  })
+
+  it("only exposes ink that passes the schema", () => {
+    expect(essayInk({ text: "", ink })).toEqual(ink)
+    expect(essayInk({ text: "", ink: { ...ink, pages: [{ strokes: [[5000, 0, 5]] }] } })).toBeUndefined()
+    expect(essayInk({ text: "", ink: { ...ink, pages: [{ strokes: [] }] } })).toBeUndefined()
+    expect(essayInk({ text: "hi" })).toBeUndefined()
+    expect(essayInk(3)).toBeUndefined()
   })
 })

@@ -7,7 +7,9 @@ import { deriveAssignmentState, type DerivedState } from "@/lib/assignment-statu
 import { addDays, startOfDay, startOfWeek } from "@/lib/dates"
 import { formatDayMonth, formatShortDate, formatTime, formatVietnameseDate, formatWeekday } from "@/lib/format"
 import { starsFor, type EssayValue, type Response } from "@/lib/grading"
+import type { Ink } from "@/lib/ink"
 import { answerAsRichText } from "@/lib/rich-text"
+import { essayDrawing, essayInk } from "@/lib/views/grading"
 import type { EssayQuestion, FillBlankQuestion, MultipleChoiceQuestion, Question, ShortAnswerQuestion, SubjectId, TrueFalseQuestion } from "@/lib/types"
 import type { AnswerRecord, AssignmentRecord, AttemptRecord } from "@/server/queries"
 
@@ -109,6 +111,8 @@ export interface ReviewItem {
   hint?: string
   image?: { path: string; width: number; height: number }
   imageUrl?: string
+  /** The child's handwritten essay pages (or a legacy drawing). */
+  handwriting?: { ink?: Ink; drawing?: string }
 }
 
 export interface ResultView {
@@ -325,6 +329,7 @@ export function answerText(q: Question, response: Response | null | undefined, m
     case "tu-luan": {
       const essay = response as EssayValue
       const text = typeof essay.text === "string" ? essay.text.trim() : ""
+      if (essayInk(essay)) return text ? `${text} (kèm bài viết tay)` : "(bài viết tay)"
       if (essay.drawing) return text ? `${text} (kèm hình vẽ)` : "(bài viết tay)"
       return text || NO_ANSWER
     }
@@ -394,9 +399,17 @@ export function buildResultDetail(
         hint: correct ? undefined : (row.hint ?? undefined),
         image: row.question.image,
         imageUrl: row.question.imageUrl,
+        handwriting: handwritingOf(row.response),
       }
     }),
   }
+}
+
+function handwritingOf(response: Response | null): ReviewItem["handwriting"] {
+  const ink = essayInk(response)
+  if (ink) return { ink }
+  const drawing = essayDrawing(response)
+  return drawing ? { drawing } : undefined
 }
 
 /* ---------- Taking an assignment ---------- */

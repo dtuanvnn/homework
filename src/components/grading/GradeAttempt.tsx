@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils"
 import {
   correctAnswerText,
   essayDrawing,
+  essayInk,
   markedTotals,
   responseText,
   stepPoints,
@@ -42,6 +43,7 @@ import {
   type GradingDetail,
 } from "@/lib/views/grading"
 import ScanViewer from "./ScanViewer"
+import HandwritingView from "@/components/ink/HandwritingView"
 import { AiAssistCard, AiReadout } from "./AiAssist"
 import { fmt, scoreTone, submittedLabel } from "./format"
 import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
@@ -183,7 +185,9 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
     const changed = initial.isCorrect !== null && (m.isCorrect !== initial.isCorrect || m.pointsAwarded !== initial.pointsAwarded)
     const auto = !paper && q.type !== "tu-luan"
     const essay = q.type === "tu-luan"
-    const drawing = essay ? essayDrawing(a.response) : undefined
+    const ink = essay ? essayInk(a.response) : undefined
+    const drawing = essay && !ink ? essayDrawing(a.response) : undefined
+    const handwriting = ink || drawing ? { ink, drawing } : undefined
     const answerText = responseText(q, a.response)
     const ungraded = m.isCorrect === null || m.pointsAwarded === null
     const TypeIcon = QUESTION_TYPES[q.type].icon
@@ -239,11 +243,12 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
                 {answerText && <p className="break-words whitespace-pre-wrap text-slate-800">
                   <RichText text={answerText} />
                 </p>}
-                {drawing && <img src={drawing} alt={`Bài viết tay câu ${n}`} className="mt-2 w-full max-w-md rounded-lg border bg-white" />}
+                {!answerText && handwriting && <p className="text-slate-600">Bài viết tay · xem bên dưới</p>}
               </>
             )}
           </div>
         </div>
+        {!paper && handwriting && <HandwritingView handwriting={handwriting} label={`Bài viết tay câu ${n}`} />}
         <SolutionBox question={q} />
 
         <div className="flex flex-wrap items-center gap-2">

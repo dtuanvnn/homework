@@ -24,6 +24,7 @@ import { explainMistakes } from "@/server/actions/ai-hints"
 import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
+import HandwritingView from "@/components/ink/HandwritingView"
 
 export const fmtScore = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 2 })
 
@@ -228,6 +229,7 @@ export default function ResultDetail({
                       <RichText text={q.answer} />
                     </span>
                   </p>
+                  {q.handwriting && <HandwritingView handwriting={q.handwriting} label={`Bài viết của em, câu ${n}`} />}
                   {!q.correct && r.answersRevealed && q.correctAnswer && (
                     <p className="text-lg text-slate-600">
                       Đáp án đúng: <span className="rounded-lg bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700">
