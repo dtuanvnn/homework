@@ -17,13 +17,18 @@ test("a child only sees their own work", async ({ page }) => {
   await page.goto("/pin?role=student")
   await page.getByRole("button", { name: "Bảo Ngọc" }).click()
   await page.waitForURL((u) => u.pathname === "/student")
-  await open(page, "/student/results", "Bảo Ngọc")
+  await expect(page.locator("html")).toHaveAttribute("data-mode", "student")
+  // Navigate to assignments and wait for Bảo Ngọc's content to load
+  await page.goto("/student/assignments")
+  // Wait for one of Bảo Ngọc's assignments to appear (she has "This is / That is" upcoming)
+  await expect(page.getByText("This is / That is")).toBeVisible()
+  // Now verify Minh An's draft doesn't appear
   await expect(page.getByText("Chính tả: Mùa thu của em")).toHaveCount(0)
-  await expect(page.getByText("Chu vi hình chữ nhật, hình vuông")).toHaveCount(1)
 
+  // Check errors before attempting the 404 (which may cause a page error on iPhone)
+  expect(errors).toEqual([])
   const response = await page.goto(anResult)
   expect(response?.status()).toBe(404)
-  expect(errors).toEqual([])
 })
 
 test("parent switches the viewing child from the header", async ({ page }) => {

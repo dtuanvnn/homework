@@ -25,6 +25,6 @@ export function formatLockEnd(until: string): string {
   const endDay = localDay(end)
   const time = end.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
   if (endDay === today) return time
-  const [, , day, month] = endDay.split("-")
+  const [, month, day] = endDay.split("-")
   return `${day}/${month} ${time}`
 }

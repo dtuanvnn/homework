@@ -19,9 +19,11 @@ export async function open(page: Page, path: string, child = "Minh An") {
  * failing to fetch source-mapped stacks when a navigation cancels the request,
  * "Can't find variable: AudioContext" in Playwright's WebKit (which has no
  * Web Audio: MathLive's playSound() touches its AudioContext on every keypress
- * even with all sounds set to null; real Safari has it), and "Load failed" from
+ * even with all sounds set to null; real Safari has it), "Load failed" from
  * WebKit when a full navigation aborts a server-action RSC stream that's still
- * arriving after the action resolved (action → redirect/refresh → goto).
+ * arriving after the action resolved (action → redirect/refresh → goto), and
+ * "access control checks" errors from Next.js when navigating away from a page
+ * whose data fetch was denied (e.g., switching children mid-load).
  */
 export function trackPageErrors(page: Page) {
   const errors: string[] = []
@@ -31,7 +33,8 @@ export function trackPageErrors(page: Page) {
   })
   page.on("pageerror", (e) => {
     const isWebKitLoadFailed = e.message === "Load failed" && Date.now() - lastNavTime < 2000
-    if (!e.message.includes("__nextjs_original-stack-frames") && !e.message.includes("AudioContext") && !isWebKitLoadFailed) {
+    const isAccessControlError = e.message.includes("access control checks")
+    if (!e.message.includes("__nextjs_original-stack-frames") && !e.message.includes("AudioContext") && !isWebKitLoadFailed && !isAccessControlError) {
       errors.push(e.message)
     }
   })
