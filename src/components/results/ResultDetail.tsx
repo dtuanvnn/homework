@@ -154,6 +154,12 @@ export default function ResultDetail({
               )}
             </div>
           )}
+          {r.durationMinutes !== undefined && (
+            <span className="rounded-full bg-white/20 px-3 py-1 text-base font-bold">
+              ⏱ Thời gian làm bài: {r.durationMinutes}
+              {r.timeLimitMinutes ? `/${r.timeLimitMinutes}` : ""} phút
+            </span>
+          )}
         </div>
       </section>
 

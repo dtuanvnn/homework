@@ -195,6 +195,15 @@ describe("buildResultDetail", () => {
     id: `ans-${q.id}`, attemptId: "x", questionId: q.id, position: 0, question: q, response, isCorrect, pointsAwarded: isCorrect ? q.points : 0, comment, hint,
   })
 
+  it("reports the work time and the exam limit", () => {
+    const first = graded(8, { durationSeconds: 1200 })
+    const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { timeLimitMinutes: 20, attempts: [first] }), answers: [] }, now)
+    expect(view).toMatchObject({ durationMinutes: 20, timeLimitMinutes: 20 })
+    const untimed = graded(8, { durationSeconds: 20 })
+    const short = buildResultDetail({ attempt: { ...untimed, assignmentId: "b" }, assignment: assignment("b", { attempts: [untimed] }), answers: [] }, now)
+    expect(short).toMatchObject({ durationMinutes: 1, timeLimitMinutes: undefined })
+  })
+
   it("hides correct answers while a retry is open and shows hints instead", () => {
     const first = graded(6, { feedback: "Cố lên nhé!" })
     const record = assignment("a", { attempts: [first] })

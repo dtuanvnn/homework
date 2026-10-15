@@ -131,6 +131,9 @@ export interface ResultView {
   previousScore?: number
   stars: 0 | 1 | 2 | 3
   parentComment: string
+  /** Work time in whole minutes (at least 1), when recorded. */
+  durationMinutes?: number
+  timeLimitMinutes?: number
   canRetry: boolean
   /**
    * Correct answers are shown only when no more attempts are possible, so the
@@ -371,6 +374,8 @@ export function buildResultDetail(
     previousScore: attempt.attemptNo > 1 ? (first?.score ?? undefined) : undefined,
     stars: attemptStars(attempt.attemptNo, g.score),
     parentComment: attempt.feedback ?? "",
+    durationMinutes: attempt.durationSeconds !== null ? Math.max(1, Math.round(attempt.durationSeconds / 60)) : undefined,
+    timeLimitMinutes: assignment.timeLimitMinutes ?? undefined,
     canRetry: latest?.id === attempt.id && state.canRetry,
     answersRevealed,
     hintsPending:

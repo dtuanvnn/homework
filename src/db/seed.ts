@@ -133,6 +133,7 @@ interface AssignmentPlan {
   dueHour: number
   mode?: "web" | "paper"
   maxAttempts?: 1 | 2
+  timeLimitMinutes?: number
   note?: string
   attempts?: AttemptPlan[]
 }
@@ -185,8 +186,8 @@ const CURRENT: AssignmentPlan[] = [
   { set: "bt-03", availableDay: 0, dueDay: 1, dueHour: 20 },
   { set: "bt-14", availableDay: 0, dueDay: 1, dueHour: 20 },
   { set: "bt-09", availableDay: 1, dueDay: 2, dueHour: 19, mode: "paper", maxAttempts: 1 },
-  // Scheduled: hidden from the student until it opens.
-  { set: "bt-04", availableDay: 3, dueDay: 4, dueHour: 20, note: "Nhớ tóm tắt đề trước khi giải nhé." },
+  // Scheduled exam-mode work: hidden from the student until it opens.
+  { set: "bt-04", availableDay: 3, dueDay: 4, dueHour: 20, timeLimitMinutes: 20, note: "Nhớ tóm tắt đề trước khi giải nhé." },
 ]
 
 /* ---------- Run ---------- */
@@ -258,6 +259,7 @@ async function main() {
         dueAt: at(plan.dueDay, plan.dueHour),
         mode,
         maxAttempts: plan.maxAttempts ?? 2,
+        timeLimitMinutes: plan.timeLimitMinutes ?? null,
         parentNote: plan.note ?? null,
         createdAt: at(plan.availableDay - 1, 21),
       })

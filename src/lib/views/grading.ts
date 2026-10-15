@@ -128,6 +128,8 @@ export interface GradingDetail {
   gradedAt: string | null
   gradedBy: "auto" | "ai" | "parent" | null
   durationSeconds: number | null
+  /** Exam mode limit of the assignment. */
+  timeLimitMinutes: number | null
   feedback: string
   retryAllowed: boolean
   /** A later attempt exists, so the retry choice is already used. */

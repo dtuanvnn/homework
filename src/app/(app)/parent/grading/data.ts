@@ -48,6 +48,7 @@ export async function loadGradingDetail(attemptId: string): Promise<GradingDetai
     gradedAt: attempt.gradedAt?.toISOString() ?? null,
     gradedBy: attempt.gradedBy,
     durationSeconds: attempt.durationSeconds,
+    timeLimitMinutes: assignment.timeLimitMinutes,
     feedback: attempt.feedback ?? "",
     retryAllowed: attempt.retryAllowed,
     retryUsed: assignment.attempts.some((t) => t.attemptNo > attempt.attemptNo),

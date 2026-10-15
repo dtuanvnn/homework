@@ -359,7 +359,17 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
             {paper ? <ScanLine className="size-3.5" /> : <Monitor className="size-3.5" />}
             {paper ? "Giấy scan" : "Web"}
           </span>
-          {d.durationSeconds !== null && <span>Làm trong {Math.max(1, Math.round(d.durationSeconds / 60))} phút</span>}
+          {d.durationSeconds !== null && (
+            <span>
+              Làm trong {Math.max(1, Math.round(d.durationSeconds / 60))}
+              {d.timeLimitMinutes ? `/${d.timeLimitMinutes}` : ""} phút
+            </span>
+          )}
+          {d.timeLimitMinutes !== null && d.durationSeconds !== null && d.durationSeconds >= d.timeLimitMinutes * 60 && (
+            <Badge variant="outline" className="border-amber-200 bg-amber-50 text-xs text-amber-800">
+              ⏰ Hết giờ – tự nộp
+            </Badge>
+          )}
           <span>{d.answers.length} câu</span>
         </div>
         {paper && <p className="text-sm text-amber-700">Bài làm trên giấy: đối chiếu ảnh scan và chấm từng câu.</p>}
