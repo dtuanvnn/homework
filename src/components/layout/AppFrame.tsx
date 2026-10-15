@@ -31,7 +31,7 @@ import { navFor, type NavCounts, type TabId } from "./nav-config"
 
 import { MODE_HOME, TAB_PATHS, resolveRoute } from "./routes"
 
-import type { AppMode, Assignment, ExerciseSet, Student } from "@/lib/types"
+import type { AppMode, Assignment, ChildOption, ExerciseSet, Student } from "@/lib/types"
 
 export type LeaveGuard = (next: () => void) => void
 
@@ -45,12 +45,18 @@ const NavContext = createContext<NavigationContext | null>(null)
 
 const StudentContext = createContext<Student | null>(null)
 
+const HouseholdContext = createContext<ChildOption[]>([])
+
 export function useStudent(): Student {
   const ctx = useContext(StudentContext)
 
   if (!ctx) throw new Error("useStudent must be used inside <AppFrame>")
 
   return ctx
+}
+
+export function useHousehold(): ChildOption[] {
+  return useContext(HouseholdContext)
 }
 
 export function useAppNavigation(): NavigationContext {
@@ -72,6 +78,8 @@ interface AppFrameProps {
 
   assignments: Assignment[]
 
+  household: ChildOption[]
+
   children: React.ReactNode
 }
 
@@ -80,6 +88,7 @@ export default function AppFrame({
   navCounts,
   sets,
   assignments,
+  household,
   children,
 }: AppFrameProps) {
   const pathname = usePathname()
@@ -111,11 +120,13 @@ export default function AppFrame({
     document.documentElement.dataset.mode = mode
   }, [mode])
 
-  const handleModeChange = (next: AppMode) => {
+  const openMode = (next: AppMode) => {
     if (next === mode) return
 
     // Full page load: each mode has its own PIN (proxy.ts asks for it), and
-    // the other mode's pages must not linger in the client router cache.
+    // the other mode's pages must not linger in the client router cache. On a
+    // device with a student token and a parent PIN set, the proxy turns
+    // `/parent` into the parent PIN page.
     const go = () => window.location.assign(MODE_HOME[next])
 
     if (leaveGuard.current) leaveGuard.current(go)
@@ -130,24 +141,27 @@ export default function AppFrame({
   return (
     <NavContext.Provider value={nav}>
       <StudentContext.Provider value={student ?? NO_STUDENT}>
-        <LibraryProvider initialSets={sets} initialAssignments={assignments}>
-          <AppShell
-            student={student ?? NO_STUDENT}
-            mode={mode}
-            onModeChange={handleModeChange}
-            items={navFor(mode, navCounts)}
-            activeTab={route.tab}
-            onTabChange={(tab: TabId) => navigate(TAB_PATHS[tab])}
-            pageTitle={route.subPageTitle}
-            onBack={
-              route.parentPath ? () => navigate(route.parentPath!) : undefined
-            }
-          >
-            {children}
-          </AppShell>
-          {/* Phone: keep toasts below the app bar so they never cover the mode toggle. */}
-          <Toaster position="top-center" mobileOffset={{ top: "calc(env(safe-area-inset-top) + 72px)" }} />
-        </LibraryProvider>
+        <HouseholdContext.Provider value={household}>
+          <LibraryProvider initialSets={sets} initialAssignments={assignments}>
+            <AppShell
+              student={student ?? NO_STUDENT}
+              mode={mode}
+              onOpenMode={openMode}
+              household={household}
+              items={navFor(mode, navCounts)}
+              activeTab={route.tab}
+              onTabChange={(tab: TabId) => navigate(TAB_PATHS[tab])}
+              pageTitle={route.subPageTitle}
+              onBack={
+                route.parentPath ? () => navigate(route.parentPath!) : undefined
+              }
+            >
+              {children}
+            </AppShell>
+            {/* Phone: keep toasts below the app bar so they never cover the header buttons. */}
+            <Toaster position="top-center" mobileOffset={{ top: "calc(env(safe-area-inset-top) + 72px)" }} />
+          </LibraryProvider>
+        </HouseholdContext.Provider>
       </StudentContext.Provider>
     </NavContext.Provider>
   )

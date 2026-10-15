@@ -4,7 +4,7 @@ import { parentPage, studentPage } from '@/lib/animations'
 import { setSoundMode } from '@/hooks/useSound'
 import { useMediaQuery } from '@/lib/use-media-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AppMode, Student } from '@/lib/types'
+import type { AppMode, ChildOption, Student } from '@/lib/types'
 import BottomTabBar from './BottomTabBar'
 import Sidebar from './Sidebar'
 import TopAppBar from './TopAppBar'
@@ -13,7 +13,8 @@ import type { NavItem, TabId } from './nav-config'
 interface AppShellProps {
   student: Student
   mode: AppMode
-  onModeChange: (mode: AppMode) => void
+  onOpenMode: (mode: AppMode) => void
+  household: ChildOption[]
   items: NavItem[]
   activeTab: TabId
   onTabChange: (tab: TabId) => void
@@ -24,7 +25,7 @@ interface AppShellProps {
   onBack?: () => void
 }
 
-export default function AppShell({ student, mode, onModeChange, items, activeTab, onTabChange, children, pageTitle, onBack }: AppShellProps) {
+export default function AppShell({ student, mode, onOpenMode, household, items, activeTab, onTabChange, children, pageTitle, onBack }: AppShellProps) {
   // Collapsed by default on iPad portrait so content keeps a 2-column grid.
   const narrow = useMediaQuery('(max-width: 1023px)')
   const [userCollapsed, setCollapsed] = useState<boolean | null>(null)
@@ -50,7 +51,8 @@ export default function AppShell({ student, mode, onModeChange, items, activeTab
         <div className="flex">
           <Sidebar
             mode={mode}
-            onModeChange={onModeChange}
+            onOpenMode={onOpenMode}
+            household={household}
             items={items}
             activeTab={activeItem.id}
             onTabChange={onTabChange}
@@ -59,7 +61,7 @@ export default function AppShell({ student, mode, onModeChange, items, activeTab
             student={student}
           />
           <div className="flex min-w-0 flex-1 flex-col">
-            <TopAppBar title={pageTitle ?? activeItem.label} mode={mode} onModeChange={onModeChange} onBack={onBack} />
+            <TopAppBar title={pageTitle ?? activeItem.label} mode={mode} onOpenMode={onOpenMode} student={student} household={household} onBack={onBack} />
             <main
               className={
                 onBack

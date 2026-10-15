@@ -111,6 +111,13 @@
   .anim-scan { animation: none !important; top: 50%; }
 }
 
+/* Hold-to-open progress ring. */
+@keyframes hold-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 @media print {
   body > *:not(#homework-print) { display: none !important; }
   #homework-print { display: block !important; }

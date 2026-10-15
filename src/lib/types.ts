@@ -34,6 +34,15 @@ export interface PinStudent {
   hasPin: boolean
 }
 
+/** A child in the parent's header menu and assign picker. */
+export interface ChildOption {
+  id: string
+  name: string
+  avatarEmoji: string
+  grade: number
+  locked: boolean
+}
+
 export interface ExerciseSet {
   id: string
   title: string

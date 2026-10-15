@@ -1,17 +1,20 @@
 import { ArrowLeft } from 'lucide-react'
-import type { AppMode } from '@/lib/types'
-import ModeToggle from './ModeToggle'
+import type { AppMode, ChildOption, Student } from '@/lib/types'
+import HoldToOpen from './HoldToOpen'
+import ParentMenu from './ParentMenu'
 import SoundControls from './SoundControls'
 
 interface TopAppBarProps {
   title: string
   mode: AppMode
-  onModeChange: (mode: AppMode) => void
-  /** When set, shows a back button instead of the mode toggle (sub-pages). */
+  onOpenMode: (mode: AppMode) => void
+  student: Student | null
+  household: ChildOption[]
+  /** When set, shows a back button instead of the header buttons (sub-pages). */
   onBack?: () => void
 }
 
-export default function TopAppBar({ title, mode, onModeChange, onBack }: TopAppBarProps) {
+export default function TopAppBar({ title, mode, onOpenMode, student, household, onBack }: TopAppBarProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden">
       <div className="flex h-[60px] items-center justify-between gap-[12px] px-[16px]">
@@ -37,7 +40,15 @@ export default function TopAppBar({ title, mode, onModeChange, onBack }: TopAppB
             </div>
             <div className="flex shrink-0 items-center gap-[4px]">
               {mode === 'student' && <SoundControls />}
-              <ModeToggle mode={mode} onModeChange={onModeChange} variant="compact" className="shrink-0" />
+              {mode === 'student' ? (
+                <HoldToOpen onOpen={() => onOpenMode('parent')}>
+                  <span className="grid size-[40px] place-items-center rounded-full bg-gradient-to-br from-amber-100 to-orange-200 text-[20px]" aria-hidden>
+                    {student?.avatarEmoji}
+                  </span>
+                </HoldToOpen>
+              ) : (
+                <ParentMenu compact student={student} household={household} onOpenStudentMode={() => onOpenMode('student')} />
+              )}
             </div>
           </>
         )}

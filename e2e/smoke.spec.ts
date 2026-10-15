@@ -25,26 +25,19 @@ for (const { path, heading } of ROUTES) {
   })
 }
 
-test("mode toggle switches between parent and student", async ({ page }) => {
+test("hold avatar to open parent mode from student", async ({ page }) => {
   const errors = trackPageErrors(page)
-  const toggle = page.getByRole("radiogroup", { name: "Chọn chế độ" }).filter({ visible: true })
-  // The dev-tools badge sits on top of the collapsed iPad sidebar's toggle.
-  const hideDevBadge = () => page.addStyleTag({ content: "nextjs-portal { display: none !important; }" })
-
-  await open(page, "/parent")
-  await hideDevBadge()
-  await toggle.getByRole("radio", { name: "Học sinh" }).tap()
-  // Student mode now requires picking a child on the PIN page
-  await expect(page).toHaveURL(/\/pin\?next=%2Fstudent&role=student/)
-  await page.getByRole("button", { name: "Minh An" }).click()
-  await page.waitForURL(/\/student$/)
-  await expect(toggle.getByRole("radio", { name: "Học sinh" })).toHaveAttribute("aria-checked", "true")
-
-  // Switching is a full page load (each mode has its own PIN); start the way back fresh too.
+  // Student mode has no visible way to parent mode; a 2 s hold on the avatar opens it.
   await open(page, "/student")
-  await hideDevBadge()
-  await toggle.getByRole("radio", { name: "Phụ huynh" }).tap()
-  await expect(page).toHaveURL(/\/parent$/)
-  await expect(toggle.getByRole("radio", { name: "Phụ huynh" })).toHaveAttribute("aria-checked", "true")
+  await expect(page.getByRole("radiogroup", { name: "Chọn chế độ" })).toHaveCount(0)
+  const avatar = page.getByTestId("hold-to-open").filter({ visible: true })
+  await avatar.click()
+  await page.waitForTimeout(300)
+  await expect(page).toHaveURL(/\/student$/)
+  const box = (await avatar.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.waitForURL(/\/parent/, { timeout: 5_000 })
+  await page.mouse.up()
   expect(errors).toEqual([])
 })

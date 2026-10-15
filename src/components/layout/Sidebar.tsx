@@ -2,16 +2,17 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { AppMode, Student } from '@/lib/types'
+import type { AppMode, ChildOption, Student } from '@/lib/types'
 import BrandMark from './BrandMark'
-import ModeToggle from './ModeToggle'
+import ParentMenu from './ParentMenu'
 import SoundControls from './SoundControls'
 import StudentChip from './StudentChip'
 import type { NavItem, TabId } from './nav-config'
 
 interface SidebarProps {
   mode: AppMode
-  onModeChange: (mode: AppMode) => void
+  onOpenMode: (mode: AppMode) => void
+  household: ChildOption[]
   items: NavItem[]
   activeTab: TabId
   onTabChange: (tab: TabId) => void
@@ -22,7 +23,8 @@ interface SidebarProps {
 
 export default function Sidebar({
   mode,
-  onModeChange,
+  onOpenMode,
+  household,
   items,
   activeTab,
   onTabChange,
@@ -60,7 +62,11 @@ export default function Sidebar({
       </div>
 
       <div className="px-4 pb-2">
-        <StudentChip student={student} mode={mode} collapsed={collapsed} />
+        {mode === 'student' ? (
+          <StudentChip student={student} mode={mode} collapsed={collapsed} onHold={() => onOpenMode('parent')} />
+        ) : (
+          <ParentMenu student={student} household={household} compact={collapsed} onOpenStudentMode={() => onOpenMode('student')} />
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto px-4 py-3">
@@ -121,16 +127,14 @@ export default function Sidebar({
         </ul>
       </nav>
 
-      <div className={cn('border-t border-slate-100 p-4', collapsed && 'flex flex-col items-center')}>
-        {isStudent && (
-          <div className={cn('mb-3 flex items-center', collapsed ? 'justify-center' : 'justify-between px-1')}>
+      {isStudent && (
+        <div className={cn('border-t border-slate-100 p-4', collapsed && 'flex flex-col items-center')}>
+          <div className={cn('flex items-center', collapsed ? 'justify-center' : 'justify-between px-1')}>
             {!collapsed && <span className="text-xs font-semibold text-slate-400">Âm thanh</span>}
             <SoundControls stacked={collapsed} />
           </div>
-        )}
-        {!collapsed && <div className="px-1 pb-2 text-xs font-semibold text-slate-400">Chế độ</div>}
-        <ModeToggle mode={mode} onModeChange={onModeChange} variant={collapsed ? 'stacked' : 'full'} />
-      </div>
+        </div>
+      )}
     </aside>
   )
 }

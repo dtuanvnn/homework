@@ -33,6 +33,8 @@ export const gradingPaths = {
 
 export const parentPaths = {
   rewards: "/parent/rewards" as Route,
+  students: "/parent/students" as Route,
+  student: (id: string) => `/parent/students/${encodeURIComponent(id)}` as Route,
 }
 
 export const libraryPaths = {
@@ -48,6 +50,8 @@ const SUB_PAGE_TITLES: [RegExp, string][] = [
   [/^\/parent\/library\/[^/]+$/, "Chi tiết bộ bài tập"],
   [/^\/parent\/grading\/[^/]+$/, "Chấm bài"],
   [/^\/parent\/rewards$/, "Phần thưởng"],
+  [/^\/parent\/students$/, "Học sinh"],
+  [/^\/parent\/students\/[^/]+$/, "Chi tiết học sinh"],
   [/^\/student\/assignments\/[^/]+\/do$/, "Làm bài"],
   [/^\/student\/assignments\/[^/]+\/paper$/, "Nộp bài giấy"],
   [/^\/student\/results\/[^/]+$/, "Kết quả"],

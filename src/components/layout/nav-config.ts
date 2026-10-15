@@ -56,7 +56,3 @@ export function navFor(mode: AppMode, counts: NavCounts): NavItem[] {
   )
 }
 
-export const MODE_LABELS: Record<AppMode, string> = {
-  parent: 'Phụ huynh',
-  student: 'Học sinh',
-}

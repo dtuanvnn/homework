@@ -25,3 +25,12 @@ test("a child only sees their own work", async ({ page }) => {
   expect(response?.status()).toBe(404)
   expect(errors).toEqual([])
 })
+
+test("parent switches the viewing child from the header", async ({ page }) => {
+  await open(page, "/parent/grading")
+  await expect(page.getByText("Đọc hiểu: Cậu bé thông minh").first()).toBeVisible()
+  await page.getByRole("button", { name: /Đang xem: Minh An/ }).filter({ visible: true }).click()
+  await page.getByRole("menuitemradio", { name: /Bảo Ngọc/ }).click()
+  await expect(page.getByRole("button", { name: /Đang xem: Bảo Ngọc/ }).filter({ visible: true })).toBeVisible()
+  await expect(page.getByText("Đọc hiểu: Cậu bé thông minh")).toHaveCount(0)
+})
