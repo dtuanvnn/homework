@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
 
@@ -24,6 +24,10 @@ export default function HoldToOpen({ onOpen, children, className }: { onOpen: ()
     start.current = null
     setHolding(false)
   }
+
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current)
+  }, [])
 
   return (
     <div
