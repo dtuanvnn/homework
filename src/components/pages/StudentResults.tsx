@@ -40,6 +40,7 @@ export default function StudentResults({ results }: { results: ResultListItem[] 
             <motion.li key={r.id} variants={listItem(reduced)} className="min-w-0">
               <motion.button
                 type="button"
+                data-testid="result-item"
                 {...pressable(reduced)}
                 onClick={() => { play("tap"); navigate(studentPaths.result(r.id)) }}
                 className={cn("flex w-full items-center gap-4 rounded-3xl border-2 bg-white p-4 text-left md:p-5", s.border)}

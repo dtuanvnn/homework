@@ -1,5 +1,5 @@
 import "server-only"
-import { asc } from "drizzle-orm"
+import { asc, eq } from "drizzle-orm"
 import { cache } from "react"
 import { db, schema } from "@/db"
 import { loadRewardFacts } from "@/db/reward-facts"
@@ -19,6 +19,7 @@ export const loadRewards = cache(async () => {
 })
 
 export async function listRewards(): Promise<RewardRow[]> {
-  const rows = await db.select().from(schema.rewards).orderBy(asc(schema.rewards.position), asc(schema.rewards.cost))
+  const { householdId } = await getContext()
+  const rows = await db.select().from(schema.rewards).where(eq(schema.rewards.householdId, householdId)).orderBy(asc(schema.rewards.position), asc(schema.rewards.cost))
   return rows.map(({ createdAt: _, ...r }) => r)
 }

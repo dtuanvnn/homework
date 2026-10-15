@@ -10,6 +10,7 @@ import { canRedeem } from "@/lib/rewards/stars"
 import { computeRewards } from "@/lib/views/rewards"
 import { assertAccess } from "../access"
 import { isUuid } from "../queries"
+import { assertRedemptionInScope, assertRewardInHousehold } from "../ownership"
 
 const { rewards, rewardRedemptions, starAdjustments, badgeSeen } = schema
 
@@ -34,12 +35,12 @@ export async function saveReward(input: RewardInput): Promise<ActionResult<{ id:
     const ctx = await assertAccess("parent")
     const { id, ...data } = rewardSchema.parse(input)
     if (id) {
-      const [row] = await db.update(rewards).set(data).where(eq(rewards.id, id)).returning({ id: rewards.id })
+      const [row] = await db.update(rewards).set(data).where(and(eq(rewards.id, id), eq(rewards.householdId, ctx.householdId))).returning({ id: rewards.id })
       if (!row) throw new Error("Không tìm thấy phần thưởng")
       refresh()
       return row
     }
-    const [{ next }] = await db.select({ next: sql<number>`coalesce(max(${rewards.position}) + 1, 0)::int` }).from(rewards)
+    const [{ next }] = await db.select({ next: sql<number>`coalesce(max(${rewards.position}) + 1, 0)::int` }).from(rewards).where(eq(rewards.householdId, ctx.householdId))
     const [row] = await db.insert(rewards).values({ ...data, householdId: ctx.householdId, position: next }).returning({ id: rewards.id })
     refresh()
     return row
@@ -49,7 +50,8 @@ export async function saveReward(input: RewardInput): Promise<ActionResult<{ id:
 /** Deletes a reward that was never requested; otherwise hides it so history keeps its link. */
 export async function deleteReward(id: string): Promise<ActionResult<{ hidden: boolean }>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
+    await assertRewardInHousehold(ctx, id)
     checkId(id)
     const [used] = await db.select({ id: rewardRedemptions.id }).from(rewardRedemptions).where(eq(rewardRedemptions.rewardId, id)).limit(1)
     if (used) await db.update(rewards).set({ active: false }).where(eq(rewards.id, id))
@@ -61,8 +63,9 @@ export async function deleteReward(id: string): Promise<ActionResult<{ hidden: b
 
 export async function reorderRewards(ids: string[]): Promise<ActionResult<null>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
     const list = z.array(z.uuid()).max(200).parse(ids)
+    for (const id of list) await assertRewardInHousehold(ctx, id)
     await db.transaction(async (tx) => {
       for (const [position, id] of list.entries()) await tx.update(rewards).set({ position }).where(eq(rewards.id, id))
     })
@@ -75,10 +78,11 @@ export async function reorderRewards(ids: string[]): Promise<ActionResult<null>>
 export async function requestRedemption(rewardId: string): Promise<ActionResult<null>> {
   return runAction(async () => {
     const ctx = await assertAccess("student")
+    await assertRewardInHousehold(ctx, rewardId)
     checkId(rewardId)
     const studentId = ctx.studentId!
     await db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(${REDEEM_LOCK})`)
+      await tx.execute(sql`select pg_advisory_xact_lock(${REDEEM_LOCK}, hashtext(${studentId}))`)
       const [reward] = await tx.select().from(rewards).where(eq(rewards.id, rewardId))
       if (!reward) throw new Error("Không tìm thấy phần thưởng")
       const { facts, seen } = await loadRewardFacts(tx, { studentId, serial: true })
@@ -96,7 +100,8 @@ export async function requestRedemption(rewardId: string): Promise<ActionResult<
 /** The child changed their mind: a pending request disappears and the stars come back. */
 export async function cancelRedemption(id: string): Promise<ActionResult<null>> {
   return runAction(async () => {
-    await assertAccess("student")
+    const ctx = await assertAccess("student")
+    await assertRedemptionInScope(ctx, id)
     checkId(id)
     const [row] = await db
       .delete(rewardRedemptions)
@@ -110,7 +115,8 @@ export async function cancelRedemption(id: string): Promise<ActionResult<null>> 
 
 export async function decideRedemption(id: string, decision: "given" | "declined"): Promise<ActionResult<null>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
+    await assertRedemptionInScope(ctx, id)
     checkId(id)
     const status = z.enum(["given", "declined"]).parse(decision)
     const [row] = await db

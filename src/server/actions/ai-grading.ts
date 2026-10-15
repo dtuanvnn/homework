@@ -23,6 +23,7 @@ import { assertAccess } from "../access"
 import { inkPagePngs } from "../ai/ink-image"
 import { ask, storageFileBlocks, type ContentBlock } from "../ai/llm"
 import { isUuid } from "../queries"
+import { assertAttemptInScope } from "../ownership"
 
 /*
  * AI suggestions for the grading screen. These actions only read: they
@@ -102,10 +103,11 @@ async function gradeEssays(items: { row: AnswerRow; number: number }[]): Promise
 /** Suggested mark for one essay answer (web attempts): points on the screen's step, isCorrect, a short comment for the child. */
 export async function suggestEssayGrade(answerId: string): Promise<ActionResult<AiMark>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
     if (!isUuid(answerId)) throw new Error("Mã câu trả lời không hợp lệ")
     const [answer] = await db.select({ attemptId: answers.attemptId }).from(answers).where(eq(answers.id, answerId))
     if (!answer) throw new Error("Không tìm thấy câu trả lời")
+    await assertAttemptInScope(ctx, answer.attemptId)
     await submittedAttempt(answer.attemptId)
     const rows = await answerRows(answer.attemptId)
     const index = rows.findIndex((r) => r.id === answerId)
@@ -121,7 +123,8 @@ export async function suggestEssayGrade(answerId: string): Promise<ActionResult<
 /** Suggested marks for every essay of a web attempt in one request, by answer id. */
 export async function suggestAllEssayGrades(attemptId: string): Promise<ActionResult<Record<string, AiMark>>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
+    await assertAttemptInScope(ctx, attemptId)
     await submittedAttempt(attemptId)
     const rows = await answerRows(attemptId)
     const items = rows.flatMap((row, i) => (row.question.type === "tu-luan" ? [{ row, number: i + 1 }] : []))
@@ -139,7 +142,8 @@ export async function suggestAllEssayGrades(attemptId: string): Promise<ActionRe
  */
 export async function gradePaperWithAI(attemptId: string): Promise<ActionResult<AiPaperResult>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
+    await assertAttemptInScope(ctx, attemptId)
     const attempt = await submittedAttempt(attemptId)
     if (attempt.mode !== "paper") throw new Error("Chỉ chấm bằng ảnh scan cho bài làm trên giấy")
     const [rows, scans] = await Promise.all([

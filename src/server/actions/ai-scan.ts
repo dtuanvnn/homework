@@ -17,6 +17,9 @@ import {
 import { assertAccess } from "../access"
 import { ask, storageFileBlocks, type ContentBlock } from "../ai/llm"
 import { isUploaded } from "../storage"
+import { assertSetInHousehold } from "../ownership"
+import { db, schema } from "@/db"
+import { eq } from "drizzle-orm"
 
 const scanInputSchema = z.object({
   setId: z.uuid(),
@@ -44,10 +47,11 @@ function payloadBytes(blocks: ContentBlock[]): number {
  */
 export async function scanDocuments(input: ScanInput): Promise<ActionResult<ScanResult>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
     const { setId, files, ...meta } = scanInputSchema.parse(input)
+    if (await db.$count(schema.exerciseSets, eq(schema.exerciseSets.id, setId))) await assertSetInHousehold(ctx, setId)
     for (const f of files) {
-      if (!(await isUploaded("sets", setId, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
+      if (!(await isUploaded("sets", setId, f.path))) throw new Error(`Tệp "${f.name}" chưa tải lên xong`)
     }
     const perFile = await Promise.all(files.map((f, i) => storageFileBlocks(f.path, scanFileLabel(i, f))))
     if (payloadBytes(perFile.flat()) > MAX_SCAN_BASE64_BYTES) {

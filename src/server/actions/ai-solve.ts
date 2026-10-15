@@ -8,6 +8,9 @@ import { editedQuestionSchema } from "@/lib/question-schema"
 import type { Question } from "@/lib/types"
 import { assertAccess } from "../access"
 import { ask, storageFileBlocks } from "../ai/llm"
+import { assertSetInHousehold } from "../ownership"
+import { db, schema } from "@/db"
+import { eq } from "drizzle-orm"
 
 const solveInputSchema = z.object({
   setId: z.uuid(),
@@ -26,8 +29,9 @@ export type SolveInput = z.input<typeof solveInputSchema>
  */
 export async function solveQuestion(input: SolveInput): Promise<ActionResult<Question>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
     const { setId, subject, grade, question } = solveInputSchema.parse(input)
+    if (await db.$count(schema.exerciseSets, eq(schema.exerciseSets.id, setId))) await assertSetInHousehold(ctx, setId)
     const q = question as Question
     // Only figures of this set (the schema already checks the path's shape).
     const figure = q.image && figureOwner(q.image.path) === setId ? await storageFileBlocks(q.image.path, "Hình minh họa của câu hỏi:") : []

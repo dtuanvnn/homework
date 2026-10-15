@@ -8,6 +8,7 @@ import { buildResultDetail } from "@/lib/views/student"
 import { assertAccess } from "../access"
 import { ask, storageFileBlocks, type ContentBlock } from "../ai/llm"
 import { getAttemptDetail, isUuid } from "../queries"
+import { assertAttemptInScope } from "../ownership"
 
 const { answers } = schema
 
@@ -18,7 +19,8 @@ const { answers } = schema
  */
 export async function explainMistakes(attemptId: string): Promise<ActionResult<Record<string, string>>> {
   return runAction(async () => {
-    await assertAccess("student")
+    const ctx = await assertAccess("student")
+    await assertAttemptInScope(ctx, attemptId)
     if (!isUuid(attemptId)) throw new Error("Không tìm thấy bài.")
     const detail = await getAttemptDetail(attemptId)
     const view = detail && buildResultDetail(detail, new Date())

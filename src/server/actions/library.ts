@@ -8,9 +8,10 @@ import { figureOwner, figurePaths, unusedFigures } from "@/lib/figures"
 import { editedQuestionSchema } from "@/lib/question-schema"
 import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
 import { runAction, type ActionResult } from "@/lib/action-result"
-import { assertAccess, getContext } from "../access"
+import { assertAccess, getContext, type Context } from "../access"
 import { getExerciseSetDetail, getQuestions, getQuestionsWithImages, getViewingStudent, isUuid, toExerciseSet } from "../queries"
 import { attachmentUrl, createUploadTargets, isUploaded, listFolder, removeFromStorage, type UploadTarget } from "../storage"
+import { assertAssignmentInScope, assertSetInHousehold, NOT_FOUND } from "../ownership"
 
 const { exerciseSets, questions, attachments, assignments, attempts, answers } = schema
 
@@ -49,7 +50,8 @@ export type SavePayload = z.input<typeof savePayloadSchema>
 /** Questions of one set, fetched lazily by the library store. */
 export async function loadQuestions(setId: string): Promise<ActionResult<Question[]>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
+    await assertSetInHousehold(ctx, setId)
     return isUuid(setId) ? getQuestionsWithImages(setId) : []
   })
 }
@@ -71,8 +73,9 @@ export async function createExerciseSet(): Promise<ActionResult<ExerciseSet>> {
 /** One-time upload URLs for files of a (possibly not yet saved) set. */
 export async function requestSetUploads(setId: string, names: string[]): Promise<ActionResult<UploadTarget[]>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
     if (!isUuid(setId)) throw new Error("Mã bộ bài không hợp lệ")
+    if (await db.$count(exerciseSets, eq(exerciseSets.id, setId))) await assertSetInHousehold(ctx, setId)
     return createUploadTargets("sets", setId, names.slice(0, 30))
   })
 }
@@ -85,6 +88,8 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
   return runAction(async () => {
     const ctx = await assertAccess("parent")
     const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
+    const [existing] = await db.select({ householdId: exerciseSets.householdId }).from(exerciseSets).where(eq(exerciseSets.id, set.id))
+    if (existing && existing.householdId !== ctx.householdId) throw new Error(NOT_FOUND)
     for (const f of newFiles) {
       if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp "${f.name}" chưa tải lên xong`)
     }
@@ -136,7 +141,8 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
 
 export async function duplicateExerciseSet(id: string): Promise<ActionResult<ExerciseSet>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
+    await assertSetInHousehold(ctx, id)
     if (!isUuid(id)) throw new Error("Mã bộ bài không hợp lệ")
     const original = await db.query.exerciseSets.findFirst({ where: eq(exerciseSets.id, id) })
     if (!original) throw new Error("Không tìm thấy bộ bài")
@@ -165,7 +171,8 @@ export async function duplicateExerciseSet(id: string): Promise<ActionResult<Exe
 
 export async function deleteExerciseSet(id: string): Promise<ActionResult<void>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
+    await assertSetInHousehold(ctx, id)
     if (!isUuid(id)) throw new Error("Mã bộ bài không hợp lệ")
     const used = await db.$count(assignments, eq(assignments.setId, id))
     if (used > 0) throw new Error("Bộ bài đã được giao nên không thể xóa. Hãy chuyển về Nháp nếu không dùng nữa.")
@@ -223,14 +230,14 @@ export type NewAssignment = z.input<typeof newAssignmentSchema>
 /** Time limits only apply to web work. */
 const limitFor = (i: { mode: "web" | "paper"; timeLimitMinutes?: number | null }) => (i.mode === "web" ? (i.timeLimitMinutes ?? null) : null)
 
-async function insertAssignments(items: NewAssignment[]): Promise<Assignment[]> {
+async function insertAssignments(items: NewAssignment[], ctx: Context): Promise<Assignment[]> {
   const parsed = z.array(newAssignmentSchema).min(1).max(14).parse(items)
   for (const item of parsed) {
     if (new Date(item.dueAt) <= new Date(item.availableFrom)) throw new Error("Hạn nộp phải sau thời điểm giao bài")
+    await assertSetInHousehold(ctx, item.setId)
     const n = await db.$count(questions, eq(questions.setId, item.setId))
     if (n === 0) throw new Error("Hãy chọn bộ bài có ít nhất một câu hỏi.")
   }
-  const ctx = await getContext()
   if (!ctx.studentId) throw new Error("Chưa có học sinh nào.")
   const studentId = ctx.studentId
   const rows = await db
@@ -265,8 +272,8 @@ async function insertAssignments(items: NewAssignment[]): Promise<Assignment[]> 
 
 export async function createAssignments(items: NewAssignment[]): Promise<ActionResult<Assignment[]>> {
   return runAction(async () => {
-    await assertAccess("parent")
-    return insertAssignments(items)
+    const ctx = await assertAccess("parent")
+    return insertAssignments(items, ctx)
   })
 }
 
@@ -276,10 +283,10 @@ export async function quickAssign(setId: string): Promise<ActionResult<Assignmen
     const due = new Date()
     due.setDate(due.getDate() + 1)
     due.setHours(20, 0, 0, 0)
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
     const [created] = await insertAssignments([
       { setId, availableFrom: new Date().toISOString(), dueAt: due.toISOString(), mode: "web", maxAttempts: 2 },
-    ])
+    ], ctx)
     return created
   })
 }
@@ -290,7 +297,8 @@ export type AssignmentChanges = z.input<typeof assignmentChangesSchema>
 /** Reschedules an assignment or changes its settings; once the child has started, mode, time limit and a lower attempt cap are locked. */
 export async function updateAssignment(id: string, changes: AssignmentChanges): Promise<ActionResult<void>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
+    await assertAssignmentInScope(ctx, id)
     if (!isUuid(id)) throw new Error("Mã bài giao không hợp lệ")
     const c = assignmentChangesSchema.parse(changes)
     if (new Date(c.dueAt) <= new Date(c.availableFrom)) throw new Error("Hạn nộp phải sau thời điểm giao bài")
@@ -318,7 +326,8 @@ export async function updateAssignment(id: string, changes: AssignmentChanges): 
 /** Deletes an assignment together with the child's attempts, answers and photographed pages. */
 export async function deleteAssignment(id: string): Promise<ActionResult<void>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
+    await assertAssignmentInScope(ctx, id)
     if (!isUuid(id)) throw new Error("Mã bài giao không hợp lệ")
     const [current] = await db.select({ setId: assignments.setId }).from(assignments).where(eq(assignments.id, id))
     if (!current) throw new Error("Không tìm thấy bài giao")
@@ -339,8 +348,9 @@ export async function deleteAssignment(id: string): Promise<ActionResult<void>> 
 /** Preview URLs for files already uploaded under a not-yet-saved set (restoring an unsaved scan). */
 export async function previewSetUploads(setId: string, paths: string[]): Promise<ActionResult<Record<string, string>>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
     if (!isUuid(setId)) throw new Error("Mã bộ bài không hợp lệ")
+    if (await db.$count(exerciseSets, eq(exerciseSets.id, setId))) await assertSetInHousehold(ctx, setId)
     const prefix = `sets/${setId}/`
     const own = paths.slice(0, 200).filter((p) => p.startsWith(prefix) && !p.includes(".."))
     const entries = await Promise.all(own.map(async (p) => [p, await attachmentUrl({ storagePath: p, externalUrl: null })] as const))

@@ -7,7 +7,7 @@ import { runAction, type ActionResult } from "@/lib/action-result"
 import { candidateList, candidateSets, SUMMARY_SYSTEM, summaryFacts, summaryResultSchema, validateSummary, type AiSummary } from "@/lib/ai/summary"
 import { buildReport, rangePeriod } from "@/lib/analytics"
 import { dateInput } from "@/lib/schedule"
-import { assertAccess } from "../access"
+import { assertAccess, getContext } from "../access"
 import { ask } from "../ai/llm"
 import { loadReportInput } from "../analytics"
 import { getViewingStudent } from "../queries"
@@ -31,6 +31,8 @@ export async function summarizeProgress(input: SummarizeInput): Promise<ActionRe
   return runAction(async () => {
     await assertAccess("parent")
     const { rangeId, subjects, custom } = inputSchema.parse(input)
+    const { studentId } = await getContext()
+    if (!studentId) throw new Error("Chưa có học sinh nào.")
     const now = new Date()
     const period = rangePeriod(rangeId, now, rangeId === "custom" ? custom : undefined)
     const [reportInput, maybeStudent, feedbackRows] = await Promise.all([
@@ -43,6 +45,7 @@ export async function summarizeProgress(input: SummarizeInput): Promise<ActionRe
         .innerJoin(exerciseSets, eq(exerciseSets.id, assignments.setId))
         .where(
           and(
+            eq(assignments.studentId, studentId),
             isNotNull(attempts.feedback),
             gte(attempts.gradedAt, period.from),
             lt(attempts.gradedAt, period.to),

@@ -23,6 +23,7 @@ import { startOfWeek } from "@/lib/dates"
 import type { AssignmentStatus, SubjectId } from "@/lib/types"
 import { listAssignments, listExerciseSets, listGradedAnswers, type AssignmentRecord } from "./queries"
 import { toAssignment } from "./views"
+import { getContext } from "./access"
 
 /*
  * Loads the facts the analytics in lib/analytics.ts work on. Everything
@@ -73,12 +74,15 @@ async function loadAnswers(): Promise<AnswerFact[]> {
 }
 
 async function loadSetSkills(): Promise<SetSkills[]> {
-  const { questions } = schema
+  const { questions, exerciseSets } = schema
+  const { householdId } = await getContext()
   const [sets, skillRows] = await Promise.all([
     listExerciseSets(),
     db.execute<{ set_id: string; skills: string[] }>(sql`
       select q.set_id, array_agg(distinct s.skill) as skills
-      from ${questions} q, jsonb_array_elements_text(coalesce(q.content->'skills', '[]'::jsonb)) as s(skill)
+      from ${questions} q
+      join ${exerciseSets} es on es.id = q.set_id and es.household_id = ${householdId},
+      jsonb_array_elements_text(coalesce(q.content->'skills', '[]'::jsonb)) as s(skill)
       group by q.set_id
     `),
   ])

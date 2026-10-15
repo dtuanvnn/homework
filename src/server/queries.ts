@@ -1,6 +1,7 @@
 import "server-only"
-import { asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { db, schema } from "@/db"
+import { isUuid } from "@/lib/ids"
 import { withLaterAnswerKey } from "@/lib/answer-key"
 import type { Attachment, Difficulty, ExerciseSet, Question, Student } from "@/lib/types"
 import { settleExpiredAttempts } from "./attempt-finalize"
@@ -12,7 +13,8 @@ import { toStudent } from "./students"
 
 /*
  * Read-side data access. Returns the UI's own types (see lib/types.ts) so
- * page components stay unaware of the database. Only one student exists.
+ * page components stay unaware of the database. Scoped by the request context
+ * (server/access.ts): sets by household, assignments and attempts by child.
  */
 
 const { students, exerciseSets, questions, assignments, attempts, answers, attachments, rewardRedemptions } = schema
@@ -82,6 +84,7 @@ export async function getViewingStudent(): Promise<Student | null> {
 /* ---------- Library ---------- */
 
 export async function listExerciseSets(): Promise<ExerciseSet[]> {
+  const { householdId } = await getContext()
   const questionCounts = db
     .select({ setId: questions.setId, n: count().as("question_count") })
     .from(questions)
@@ -97,6 +100,7 @@ export async function listExerciseSets(): Promise<ExerciseSet[]> {
     .from(exerciseSets)
     .leftJoin(questionCounts, eq(questionCounts.setId, exerciseSets.id))
     .leftJoin(assignedCounts, eq(assignedCounts.setId, exerciseSets.id))
+    .where(eq(exerciseSets.householdId, householdId))
     .orderBy(desc(exerciseSets.createdAt))
   return rows.map((r) => toExerciseSet(r.set, Number(r.questionCount ?? 0), Number(r.timesAssigned ?? 0)))
 }
@@ -113,7 +117,8 @@ export async function getQuestionsWithImages(setId: string): Promise<Question[]>
 
 export async function getExerciseSetDetail(id: string) {
   if (!isUuid(id)) return null
-  const row = await db.query.exerciseSets.findFirst({ where: eq(exerciseSets.id, id) })
+  const { householdId } = await getContext()
+  const row = await db.query.exerciseSets.findFirst({ where: and(eq(exerciseSets.id, id), eq(exerciseSets.householdId, householdId)) })
   if (!row) return null
   const [qs, files, [{ n: timesAssigned }]] = await Promise.all([
     getQuestionsWithImages(id),
@@ -131,11 +136,13 @@ export async function getExerciseSetDetail(id: string) {
 
 export async function listAssignments(filter?: { ids?: string[] }): Promise<AssignmentRecord[]> {
   await settleExpiredAttempts()
+  const { studentId } = await getContext()
+  if (!studentId) return []
   const rows = await db
     .select({ assignment: assignments, set: exerciseSets })
     .from(assignments)
     .innerJoin(exerciseSets, eq(exerciseSets.id, assignments.setId))
-    .where(filter?.ids ? inArray(assignments.id, filter.ids) : undefined)
+    .where(and(eq(assignments.studentId, studentId), filter?.ids ? inArray(assignments.id, filter.ids) : undefined))
     .orderBy(asc(assignments.dueAt))
   if (!rows.length) return []
 
@@ -198,6 +205,8 @@ export async function getAttemptDetail(attemptId: string) {
 /** Answer rows of graded attempts, for skill analytics. */
 export async function listGradedAnswers() {
   await settleExpiredAttempts()
+  const { studentId } = await getContext()
+  if (!studentId) return []
   return db
     .select({
       question: answers.question,
@@ -212,12 +221,14 @@ export async function listGradedAnswers() {
     .innerJoin(attempts, eq(attempts.id, answers.attemptId))
     .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))
     .innerJoin(exerciseSets, eq(exerciseSets.id, assignments.setId))
-    .where(isNotNull(attempts.gradedAt))
+    .where(and(isNotNull(attempts.gradedAt), eq(assignments.studentId, studentId)))
 }
 
 /** Counts shown as badges in the navigation. */
 export async function getNavCounts(now = new Date()) {
   await settleExpiredAttempts()
+  const { studentId } = await getContext()
+  if (!studentId) return { awaitingGrading: 0, openAssignments: 0, pendingRedemptions: 0 }
   const {
     rows: [row],
   } = await db.execute<{ awaiting: number; open: number; redemptions: number }>(sql`
@@ -228,11 +239,11 @@ export async function getNavCounts(now = new Date()) {
     select
       count(*) filter (where l.submitted_at is not null and l.graded_at is null)::int as awaiting,
       count(*) filter (where l.submitted_at is null and a.available_from <= ${now.toISOString()})::int as open,
-      (select count(*) from ${rewardRedemptions} r where r.status = 'pending')::int as redemptions
+      (select count(*) from ${rewardRedemptions} r where r.status = 'pending' and r.student_id = ${studentId})::int as redemptions
     from ${assignments} a left join latest l on l.assignment_id = a.id
+    where a.student_id = ${studentId}
   `)
   return { awaitingGrading: row?.awaiting ?? 0, openAssignments: row?.open ?? 0, pendingRedemptions: row?.redemptions ?? 0 }
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-export const isUuid = (value: string) => UUID.test(value)
+export { isUuid }
