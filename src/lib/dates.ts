@@ -14,3 +14,6 @@ export function startOfWeek(d: Date): Date {
   const day = startOfDay(d)
   return addDays(day, -((day.getDay() + 6) % 7))
 }
+
+/** Local calendar day as "yyyy-mm-dd". */
+export const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
