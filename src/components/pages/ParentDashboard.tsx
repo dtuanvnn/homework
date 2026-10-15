@@ -9,7 +9,7 @@ import QuickActions, { buildQuickActions } from '@/components/dashboard/QuickAct
 import RewardsCard from '@/components/dashboard/RewardsCard'
 import SubjectScoreChart from '@/components/dashboard/SubjectScoreChart'
 import TodayAssignmentList from '@/components/dashboard/TodayAssignmentList'
-import { useAppNavigation, useStudent } from '@/components/layout/AppFrame'
+import { useAppNavigation, useRequiredStudent } from '@/components/layout/AppFrame'
 import { TAB_PATHS } from '@/components/layout/routes'
 import SectionHeader from '@/components/shared/SectionHeader'
 import { formatVietnameseDate, getGreeting } from '@/lib/format'
@@ -19,7 +19,7 @@ import { useLibrary } from '@/state/library-store'
 
 export default function ParentDashboard({ data, rewards }: { data: DashboardData; rewards: RewardSummary }) {
   const { navigate } = useAppNavigation()
-  const student = useStudent()
+  const student = useRequiredStudent()
   const { assignSet } = useLibrary()
   const [assignedInsights, setAssignedInsights] = useState<Set<string>>(new Set())
   const [pending, setPending] = useState<string | null>(null)

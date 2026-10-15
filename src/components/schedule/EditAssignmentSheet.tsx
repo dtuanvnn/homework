@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/sheet"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useLibrary } from "@/state/library-store"
-import { useStudent } from "@/components/layout/AppFrame"
+import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { SUBJECTS } from "@/lib/subjects"
 import { dateTimeInput } from "@/lib/schedule"
 import { cn } from "@/lib/utils"
@@ -34,7 +34,7 @@ export default function EditAssignmentSheet({
   onSaved: (date: Date) => void
 }) {
   const library = useLibrary()
-  const student = useStudent()
+  const student = useRequiredStudent()
   const set = library.getSet(assignment.exerciseSetId)
   const tone = set ? SUBJECTS[set.subject] : null
   const started = assignment.attemptCount ?? 0

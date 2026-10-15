@@ -23,7 +23,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Badge } from "@/components/ui/badge"
 import { useLibrary } from "@/state/library-store"
-import { useStudent } from "@/components/layout/AppFrame"
+import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
 import { normalizeText } from "@/lib/library"
 import {
@@ -52,7 +52,7 @@ export default function AssignSheet({
   onCreated: (date: Date) => void
 }) {
   const library = useLibrary()
-  const student = useStudent()
+  const student = useRequiredStudent()
   const [query, setQuery] = useState("")
   const [saving, setSaving] = useState(false)
   const [subject, setSubject] = useState("all")

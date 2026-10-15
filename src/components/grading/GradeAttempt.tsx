@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { useAppNavigation, useStudent } from "@/components/layout/AppFrame"
+import { useAppNavigation, useRequiredStudent } from "@/components/layout/AppFrame"
 import { TAB_PATHS } from "@/components/layout/routes"
 import { gradeAttempt } from "@/server/actions/grading"
 import { gradePaperWithAI, suggestAllEssayGrades, suggestEssayGrade } from "@/server/actions/ai-grading"
@@ -63,7 +63,7 @@ const markOf = (a: GradingAnswer): Mark => ({ isCorrect: a.isCorrect, pointsAwar
 
 export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail; now: string }) {
   const { navigate } = useAppNavigation()
-  const student = useStudent()
+  const student = useRequiredStudent()
   const [marks, setMarks] = useState<Record<string, Mark>>(() => Object.fromEntries(d.answers.map((a) => [a.id, markOf(a)])))
   const [feedback, setFeedback] = useState(d.feedback)
   const canRetry = d.attemptNo < d.maxAttempts && !d.retryUsed

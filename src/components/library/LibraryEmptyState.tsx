@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useStudent } from '@/components/layout/AppFrame'
+import { useRequiredStudent } from '@/components/layout/AppFrame'
 import { Button } from '@/components/ui/button'
 import type { ExerciseSource } from '@/lib/types'
 import AddExerciseMenu from './AddExerciseMenu'
@@ -43,7 +43,7 @@ interface LibraryEmptyStateProps {
 }
 
 export default function LibraryEmptyState({ filtered, onAdd, onReset }: LibraryEmptyStateProps) {
-  const student = useStudent()
+  const student = useRequiredStudent()
   return (
     <div className="flex flex-col items-center rounded-2xl border-2 border-dashed border-slate-200 bg-white/60 px-6 py-12 text-center">
       <EmptyIllustration />

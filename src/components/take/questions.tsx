@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Keyboard, PenLine } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { InkEditor } from "@/components/ink/InkEditor"
-import { useStudent } from "@/components/layout/AppFrame"
+import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { Textarea } from "@/components/ui/textarea"
 import type { EssayValue } from "@/lib/grading"
 import { isInkEmpty, newInk, paperFor } from "@/lib/ink"
@@ -383,7 +383,7 @@ export function Ordering({ q, value = [], onChange, tone }: Props<Q<"sap-xep">, 
 export type { EssayValue }
 
 export function Essay({ value = { text: "" }, onChange, tone }: Props<Q<"tu-luan">, EssayValue>) {
-  const student = useStudent()
+  const student = useRequiredStudent()
   const [hand, setHand] = useState(Boolean(value.drawing || !isInkEmpty(value.ink)) && !value.text)
   return (
     <div className="space-y-3">

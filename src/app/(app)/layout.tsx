@@ -25,7 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )
       : []
   return (
-    <AppFrame student={student} navCounts={navCounts} sets={sets} assignments={assignments.map((a) => toAssignment(a, now))} household={household}>
+    <AppFrame student={student} navCounts={navCounts} sets={sets} assignments={assignments.map((a) => toAssignment(a, now))} household={household} now={now.toISOString()}>
       {children}
     </AppFrame>
   )

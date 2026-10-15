@@ -32,7 +32,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { toast } from "sonner"
-import { useStudent } from "@/components/layout/AppFrame"
+import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { buildReport, rangePeriod, summarize, type RangeId, type ReportInput } from "@/lib/analytics"
 import { addDays } from "@/lib/dates"
 import { formatDayMonth, formatShortDate, formatTime, formatVietnameseDate } from "@/lib/format"
@@ -100,7 +100,7 @@ function ChartTooltip({ active, payload, label, suffix = "" }: { active?: boolea
 }
 
 export default function Reports({ input, now: nowIso }: { input: ReportInput; now: string }) {
-  const student = useStudent()
+  const student = useRequiredStudent()
   const { assignSet: quickAssign } = useLibrary()
   const now = useMemo(() => new Date(nowIso), [nowIso])
   const [range, setRange] = useState<RangeId>("4w")

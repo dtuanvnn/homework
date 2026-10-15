@@ -8,7 +8,7 @@ import ExerciseCard, {
 } from "@/components/library/ExerciseCard"
 import LibraryEmptyState from "@/components/library/LibraryEmptyState"
 import LibraryFilterBar from "@/components/library/LibraryFilterBar"
-import { useStudent } from "@/components/layout/AppFrame"
+import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { useLibrary } from "@/state/library-store"
 import { formatVietnameseDate } from "@/lib/format"
 import {
@@ -31,7 +31,7 @@ export default function ExerciseLibrary({
   onGenerate,
 }: ExerciseLibraryProps) {
   const library = useLibrary()
-  const student = useStudent()
+  const student = useRequiredStudent()
   const sets = library.sets
   const [creating, setCreating] = useState(false)
   const [query, setQuery] = useState("")

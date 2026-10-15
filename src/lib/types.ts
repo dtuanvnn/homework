@@ -43,6 +43,21 @@ export interface ChildOption {
   locked: boolean
 }
 
+/** A child on the Students page. */
+export interface StudentCard {
+  id: string
+  name: string
+  avatarEmoji: string
+  grade: number
+  className: string | null
+  schoolYear: number
+  stars: number
+  hasPin: boolean
+  locked: boolean
+  lockedUntil: string | null
+  archived: boolean
+}
+
 export interface ExerciseSet {
   id: string
   title: string

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useAppNavigation, useStudent } from "@/components/layout/AppFrame"
+import { useAppNavigation, useRequiredStudent } from "@/components/layout/AppFrame"
 import { gradingPaths } from "@/components/layout/routes"
 import ScanThumb from "@/components/grading/ScanThumb"
 import { fmt, scoreTone, submittedLabel } from "@/components/grading/format"
@@ -24,7 +24,7 @@ import type { GradingQueueItem } from "@/lib/views/grading"
 
 export default function Grading({ items, now }: { items: GradingQueueItem[]; now: string }) {
   const { navigate } = useAppNavigation()
-  const student = useStudent()
+  const student = useRequiredStudent()
   const [tab, setTab] = useState("pending")
   // `items` arrive sorted newest first.
   const pending = items.filter((s) => s.awaiting)

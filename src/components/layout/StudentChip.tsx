@@ -4,13 +4,15 @@ import HoldToOpen from './HoldToOpen'
 import StarCount from './StarCount'
 
 interface StudentChipProps {
-  student: Student
+  student: Student | null
   mode: AppMode
   collapsed?: boolean
   onHold?: () => void
 }
 
 export default function StudentChip({ student, mode, collapsed, onHold }: StudentChipProps) {
+  if (!student) return null
+
   const avatar = (
     <div
       className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-100 to-orange-200 text-xl ring-2 ring-white"

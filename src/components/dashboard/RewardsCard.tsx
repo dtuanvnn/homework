@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronRight } from 'lucide-react'
-import { useAppNavigation, useStudent } from '@/components/layout/AppFrame'
+import { useAppNavigation, useRequiredStudent } from '@/components/layout/AppFrame'
 import { parentPaths } from '@/components/layout/routes'
 import RedemptionRequests from '@/components/rewards/RedemptionRequests'
 import SectionHeader from '@/components/shared/SectionHeader'
@@ -10,7 +10,7 @@ import type { RewardSummary } from '@/lib/views/rewards'
 
 export default function RewardsCard({ summary }: { summary: RewardSummary }) {
   const { navigate } = useAppNavigation()
-  const student = useStudent()
+  const student = useRequiredStudent()
   return (
     <section className="flex flex-col gap-3">
       <SectionHeader

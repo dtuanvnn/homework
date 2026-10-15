@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom"
 import { useEffect } from "react"
 import { CardTitle } from "@/components/ui/card"
-import { useStudent } from "@/components/layout/AppFrame"
+import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { OPTION_LETTERS } from "@/lib/questions"
 import type { ExerciseSet, Question } from "@/lib/types"
 import RichText from "@/components/question/RichText"
@@ -19,7 +19,7 @@ export default function PrintableExercise({
   note?: string
   onDone: () => void
 }) {
-  const student = useStudent()
+  const student = useRequiredStudent()
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       window.print()

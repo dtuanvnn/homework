@@ -25,11 +25,13 @@ import { Toaster } from "@/components/ui/sonner"
 
 import { LibraryProvider } from "@/state/library-store"
 
+import NoStudents from "@/components/students/NoStudents"
+
 import AppShell from "./AppShell"
 
 import { navFor, type NavCounts, type TabId } from "./nav-config"
 
-import { MODE_HOME, TAB_PATHS, resolveRoute } from "./routes"
+import { MODE_HOME, parentPaths, TAB_PATHS, resolveRoute } from "./routes"
 
 import type { AppMode, Assignment, ChildOption, ExerciseSet, Student } from "@/lib/types"
 
@@ -47,12 +49,15 @@ const StudentContext = createContext<Student | null>(null)
 
 const HouseholdContext = createContext<ChildOption[]>([])
 
-export function useStudent(): Student {
-  const ctx = useContext(StudentContext)
+export function useStudent(): Student | null {
+  return useContext(StudentContext)
+}
 
-  if (!ctx) throw new Error("useStudent must be used inside <AppFrame>")
-
-  return ctx
+/** For pages that only render with a child (everything except the Students page and the empty state). */
+export function useRequiredStudent(): Student {
+  const student = useStudent()
+  if (!student) throw new Error("useRequiredStudent needs a child")
+  return student
 }
 
 export function useHousehold(): ChildOption[] {
@@ -67,8 +72,6 @@ export function useAppNavigation(): NavigationContext {
   return ctx
 }
 
-const NO_STUDENT: Student = { id: "", householdId: "", name: "Chưa có học sinh", grade: 1, schoolYear: 0, avatarEmoji: "👤", totalStars: 0 }
-
 interface AppFrameProps {
   student: Student | null
 
@@ -80,6 +83,8 @@ interface AppFrameProps {
 
   household: ChildOption[]
 
+  now: string
+
   children: React.ReactNode
 }
 
@@ -89,6 +94,7 @@ export default function AppFrame({
   sets,
   assignments,
   household,
+  now,
   children,
 }: AppFrameProps) {
   const pathname = usePathname()
@@ -138,13 +144,15 @@ export default function AppFrame({
     [navigate, registerLeaveGuard],
   )
 
+  const showEmptyState = student === null && pathname !== parentPaths.students
+
   return (
     <NavContext.Provider value={nav}>
-      <StudentContext.Provider value={student ?? NO_STUDENT}>
+      <StudentContext.Provider value={student}>
         <HouseholdContext.Provider value={household}>
           <LibraryProvider initialSets={sets} initialAssignments={assignments}>
             <AppShell
-              student={student ?? NO_STUDENT}
+              student={student}
               mode={mode}
               onOpenMode={openMode}
               household={household}
@@ -156,7 +164,7 @@ export default function AppFrame({
                 route.parentPath ? () => navigate(route.parentPath!) : undefined
               }
             >
-              {children}
+              {showEmptyState ? <NoStudents now={now} /> : children}
             </AppShell>
             {/* Phone: keep toasts below the app bar so they never cover the header buttons. */}
             <Toaster position="top-center" mobileOffset={{ top: "calc(env(safe-area-inset-top) + 72px)" }} />

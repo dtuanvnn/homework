@@ -18,7 +18,7 @@ interface SidebarProps {
   onTabChange: (tab: TabId) => void
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
-  student: Student
+  student: Student | null
 }
 
 export default function Sidebar({

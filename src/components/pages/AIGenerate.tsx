@@ -38,7 +38,7 @@ import DifficultyStars from "@/components/exercise-detail/DifficultyStars"
 import QuestionList from "@/components/exercise-detail/QuestionList"
 import QuestionEditorSheet from "@/components/exercise-detail/QuestionEditorSheet"
 import { findInvalidQuestion } from "@/components/exercise-detail/question-draft"
-import { useStudent } from "@/components/layout/AppFrame"
+import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { GRADES, EXERCISE_KINDS } from "@/lib/library"
 import { QUESTION_TYPE_LIST } from "@/lib/questions"
 import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
@@ -95,7 +95,7 @@ export default function AIGenerate({
   registerLeaveGuard: (guard: LeaveGuard | null) => void
 }) {
   const library = useLibrary()
-  const student = useStudent()
+  const student = useRequiredStudent()
   const [subject, setSubject] = useState<SubjectId>("toan")
   const [grade, setGrade] = useState(() =>
     (GRADES as readonly number[]).includes(student.grade) ? student.grade : 3,

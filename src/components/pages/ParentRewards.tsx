@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useStudent } from '@/components/layout/AppFrame'
+import { useRequiredStudent } from '@/components/layout/AppFrame'
 import RedemptionRequests from '@/components/rewards/RedemptionRequests'
 import SectionHeader from '@/components/shared/SectionHeader'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,7 @@ async function run(action: Promise<ActionResult<unknown>>, success?: string): Pr
 }
 
 export default function ParentRewards({ view }: { view: ParentRewardsView }) {
-  const student = useStudent()
+  const student = useRequiredStudent()
   const [editing, setEditing] = useState<RewardInput | null>(null)
   const [busy, setBusy] = useState(false)
   const [amount, setAmount] = useState('')

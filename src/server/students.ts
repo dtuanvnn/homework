@@ -2,9 +2,13 @@ import "server-only"
 import { and, asc, eq, isNull } from "drizzle-orm"
 import { cache } from "react"
 import { db, schema } from "@/db"
+import { loadRewardFacts } from "@/db/reward-facts"
 import { localDay } from "@/lib/dates"
 import { currentEnrollment, schoolYearOf, type Enrollment } from "@/lib/school-year"
-import type { PinStudent, Student } from "@/lib/types"
+import { isLocked } from "@/lib/student-lock"
+import { computeRewards } from "@/lib/views/rewards"
+import type { PinStudent, Student, StudentCard } from "@/lib/types"
+import { settleExpiredAttempts } from "./attempt-finalize"
 
 /*
  * Read side for children and their school years. Callers pass the household
@@ -54,4 +58,36 @@ export async function toStudent(row: StudentRow, totalStars: number): Promise<St
 export async function listPinStudents(): Promise<PinStudent[]> {
   const rows = await listHouseholdStudents(await defaultHouseholdId())
   return rows.map((r) => ({ id: r.id, name: r.name, avatarEmoji: r.avatarEmoji, hasPin: Boolean(r.pinHash) }))
+}
+
+/** Star balance of any child (the Students page shows every child, not just the viewing one). */
+export async function starBalance(studentId: string): Promise<number> {
+  const { facts, seen } = await loadRewardFacts(db, { studentId })
+  return computeRewards(facts, seen, new Date()).ledger.balance
+}
+
+export async function toCard(row: StudentRow, stars: number, now: Date): Promise<StudentCard> {
+  const s = await toStudent(row, stars)
+  const locked = isLocked(row, now)
+  return {
+    id: row.id,
+    name: row.name,
+    avatarEmoji: row.avatarEmoji,
+    grade: s.grade,
+    className: s.className ?? null,
+    schoolYear: s.schoolYear,
+    stars,
+    hasPin: Boolean(row.pinHash),
+    locked,
+    lockedUntil: locked ? (row.lockedUntil?.toISOString() ?? null) : null,
+    archived: Boolean(row.archivedAt),
+  }
+}
+
+/** Every child of the household, archived ones included. */
+export async function listStudentCards(householdId: string): Promise<StudentCard[]> {
+  await settleExpiredAttempts()
+  const rows = await db.select().from(students).where(eq(students.householdId, householdId)).orderBy(asc(students.createdAt))
+  const now = new Date()
+  return Promise.all(rows.map(async (r) => toCard(r, await starBalance(r.id), now)))
 }

@@ -20,7 +20,7 @@ import AssignSheet from "@/components/schedule/AssignSheet"
 import EditAssignmentSheet from "@/components/schedule/EditAssignmentSheet"
 import PrintableExercise from "@/components/schedule/PrintableExercise"
 import { useLibrary } from "@/state/library-store"
-import { useStudent } from "@/components/layout/AppFrame"
+import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { addDays, startOfWeek } from "@/lib/dates"
 import { DAY_LABELS, DAY_SHORT, dateInput, shortDate, timeLabel } from "@/lib/schedule"
 import { SUBJECT_LIST, SUBJECTS, STATUSES } from "@/lib/subjects"
@@ -29,7 +29,7 @@ import type { Assignment } from "@/lib/types"
 
 export default function Schedule({ now }: { now: string }) {
   const library = useLibrary()
-  const student = useStudent()
+  const student = useRequiredStudent()
   const todayKey = dateInput(new Date(now))
   const [view, setView] = useState("week")
   const [date, setDate] = useState(() => new Date(now))

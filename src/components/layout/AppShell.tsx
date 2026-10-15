@@ -11,7 +11,7 @@ import TopAppBar from './TopAppBar'
 import type { NavItem, TabId } from './nav-config'
 
 interface AppShellProps {
-  student: Student
+  student: Student | null
   mode: AppMode
   onOpenMode: (mode: AppMode) => void
   household: ChildOption[]

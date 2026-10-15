@@ -17,7 +17,7 @@ import { useLibrary } from '@/state/library-store'
 import { solveQuestion } from '@/server/actions/ai-solve'
 import type { Attachment, ExerciseSet, ExerciseSetStatus, Question } from '@/lib/types'
 
-import { useStudent, type LeaveGuard } from '@/components/layout/AppFrame'
+import { useRequiredStudent, type LeaveGuard } from '@/components/layout/AppFrame'
 
 interface ExerciseSetDetailProps {
   initialSet: ExerciseSet
@@ -57,7 +57,7 @@ export default function ExerciseSetDetail({
   registerLeaveGuard,
 }: ExerciseSetDetailProps) {
   const library = useLibrary()
-  const student = useStudent()
+  const student = useRequiredStudent()
   const setId = initialSet.id
 
   const [draft, setDraft] = useState<ExerciseSet>(initialSet)
