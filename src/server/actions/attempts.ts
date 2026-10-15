@@ -48,6 +48,16 @@ const ERR_CLOSED = "Bài này không làm tiếp được nữa."
 const ERR_TIME_UP = "Đã hết giờ làm bài. Bài của em đã được nộp."
 const ERR_HANDED_IN = "Bài của em đã được nộp."
 
+/** Access check for the Result-returning actions: a refusal (PIN, lock) becomes an error result. */
+async function studentGate(): Promise<{ ok: false; error: string } | null> {
+  try {
+    await assertAccess("student")
+    return null
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Cần mã PIN để tiếp tục." }
+  }
+}
+
 function parseResponses(input: unknown): Record<string, Response> | null {
   const parsed = responsesSchema.safeParse(input)
   if (!parsed.success) return null
@@ -116,7 +126,8 @@ async function writableAttempt(record: AssignmentRecord): Promise<{ attempt: Att
 
 /** "Bắt đầu" on a timed assignment: starts (or resumes) the attempt and returns its deadline. */
 export async function startAttempt(assignmentId: string): Promise<Result<{ deadline: string; serverNow: string }>> {
-  await assertAccess("student")
+  const denied = await studentGate()
+  if (denied) return denied
   const loaded = await loadWebAssignment(assignmentId)
   if ("error" in loaded) return { ok: false, error: loaded.error }
   const limit = loaded.record.timeLimitMinutes
@@ -136,7 +147,8 @@ export async function startAttempt(assignmentId: string): Promise<Result<{ deadl
  * save; `activeSeconds` is the untimed work time so far (ignored when timed).
  */
 export async function saveDraft(assignmentId: string, responses: Record<string, unknown>, activeSeconds?: number): Promise<Result<{ attemptId: string }>> {
-  await assertAccess("student")
+  const denied = await studentGate()
+  if (denied) return denied
   const parsed = parseResponses(responses)
   if (!parsed) return { ok: false, error: "Bài làm không hợp lệ." }
   const loaded = await loadWebAssignment(assignmentId)
@@ -169,7 +181,8 @@ export async function submitAttempt(
   responses: Record<string, unknown>,
   durationSeconds: number,
 ): Promise<Result<{ attemptId: string; graded: boolean; score: number | null }>> {
-  await assertAccess("student")
+  const denied = await studentGate()
+  if (denied) return denied
   const parsed = parseResponses(responses)
   if (!parsed) return { ok: false, error: "Bài làm không hợp lệ." }
   const loaded = await loadWebAssignment(assignmentId)
@@ -224,7 +237,8 @@ const newFilesSchema = z
 
 /** Hands in paper work: a submitted attempt with empty answers (the parent marks them) and the page photos. */
 export async function submitPaper(assignmentId: string, files: NewFile[]): Promise<Result<{ attemptId: string }>> {
-  await assertAccess("student")
+  const denied = await studentGate()
+  if (denied) return denied
   const parsed = newFilesSchema.safeParse(files)
   if (!parsed.success) return { ok: false, error: "Em cần chụp ít nhất một trang." }
   const record = await loadPaperAssignment(assignmentId)

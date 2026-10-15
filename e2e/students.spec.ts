@@ -83,3 +83,40 @@ test("promoting keeps stars and adds a school year", async ({ page }) => {
   await open(page, "/parent/students")
   await expect(page.getByTestId("student-card").filter({ hasText: "Minh An" }).getByTestId("student-stars")).toHaveText(starsBefore!)
 })
+
+test("a locked child sees the lock screen until unlocked", async ({ browser }, testInfo) => {
+  // Two devices: separate cookie jars.
+  const parentCtx = await browser.newContext(testInfo.project.use)
+  const childCtx = await browser.newContext(testInfo.project.use)
+  const p = await parentCtx.newPage()
+  const c = await childCtx.newPage()
+  try {
+    await open(c, "/student")
+    await open(p, "/parent/students")
+    await p.getByTestId("student-card").filter({ hasText: "Minh An" }).getByRole("button").first().click()
+    await p.getByRole("button", { name: "Khoá tài khoản" }).click()
+    const sheet = p.getByRole("dialog")
+    await sheet.getByRole("radio", { name: "Đến khi mở" }).click()
+    await sheet.getByLabel("Lời nhắn").fill("Nghỉ ngơi chút nhé")
+    await sheet.getByRole("button", { name: "Khoá", exact: true }).click()
+    await expect(p.getByRole("button", { name: "Mở khoá" })).toBeVisible()
+
+    await c.reload()
+    await expect(c.getByText("Tài khoản đang tạm khoá")).toBeVisible()
+    await expect(c.getByText("Nghỉ ngơi chút nhé")).toBeVisible()
+
+    await p.getByRole("button", { name: "Mở khoá" }).click()
+    await expect(p.getByRole("button", { name: "Khoá tài khoản" })).toBeVisible()
+    await c.reload()
+    await expect(c.locator("html")).toHaveAttribute("data-mode", "student")
+    await expect(c.getByText("Tài khoản đang tạm khoá")).toHaveCount(0)
+  } finally {
+    // Ensure Minh An is unlocked for subsequent tests.
+    const unlockBtn = p.getByRole("button", { name: "Mở khoá" })
+    if (await unlockBtn.isVisible().catch(() => false)) {
+      await unlockBtn.click()
+    }
+    await parentCtx.close()
+    await childCtx.close()
+  }
+})

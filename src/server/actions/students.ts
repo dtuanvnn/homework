@@ -8,6 +8,7 @@ import { db, schema } from "@/db"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { isValidPin, studentPinHash, VIEWING_COOKIE } from "@/lib/pin"
 import { schoolYearLabel, schoolYearStart } from "@/lib/school-year"
+import { lockUntil } from "@/lib/student-lock"
 import { assertAccess } from "../access"
 import { listHouseholdStudents } from "../students"
 
@@ -153,6 +154,38 @@ export async function updateEnrollment(input: { id: string } & z.input<typeof en
       .where(and(eq(schema.enrollments.studentId, row.id), eq(schema.enrollments.schoolYear, data.schoolYear)))
       .returning({ id: schema.enrollments.id })
     if (!updated) throw new Error("Không tìm thấy năm học.")
+    refresh()
+    return null
+  })
+}
+
+const lockSchema = z.object({
+  id: z.uuid(),
+  choice: z.union([z.enum(["1h", "today", "manual"]), z.object({ at: z.iso.datetime({ offset: true }) })]),
+  reason: z.string().trim().max(120).optional(),
+})
+
+/** Blocks the child's device until the chosen time (or until unlocked). Assigning and grading go on. */
+export async function lockStudent(input: z.input<typeof lockSchema>): Promise<ActionResult<null>> {
+  return runAction(async () => {
+    const ctx = await assertAccess("parent")
+    const data = lockSchema.parse(input)
+    const row = await ownStudent(ctx.householdId, data.id)
+    const now = new Date()
+    await db
+      .update(schema.students)
+      .set({ lockedAt: now, lockedUntil: lockUntil(data.choice, now), lockReason: data.reason || null })
+      .where(eq(schema.students.id, row.id))
+    refresh()
+    return null
+  })
+}
+
+export async function unlockStudent(id: string): Promise<ActionResult<null>> {
+  return runAction(async () => {
+    const ctx = await assertAccess("parent")
+    const row = await ownStudent(ctx.householdId, id)
+    await db.update(schema.students).set({ lockedAt: null, lockedUntil: null, lockReason: null }).where(eq(schema.students.id, row.id))
     refresh()
     return null
   })

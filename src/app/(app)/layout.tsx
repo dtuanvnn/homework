@@ -1,20 +1,29 @@
 import { connection } from "next/server"
+import { eq } from "drizzle-orm"
 import AppFrame from "@/components/layout/AppFrame"
+import LockScreen from "@/components/layout/LockScreen"
 import { getNavCounts, getViewingStudent, listAssignments, listExerciseSets } from "@/server/queries"
 import { toAssignment } from "@/server/views"
 import { getContext } from "@/server/access"
 import { listHouseholdStudents, toStudent } from "@/server/students"
 import { isLocked } from "@/lib/student-lock"
-import type { ChildOption } from "@/lib/types"
+import { db, schema } from "@/db"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   await connection()
-  const now = new Date()
-  const [student, navCounts, sets, assignments] = await Promise.all([getViewingStudent(), getNavCounts(now), listExerciseSets(), listAssignments()])
   const ctx = await getContext()
-  const household: ChildOption[] =
+  if (ctx.mode === "student" && ctx.locked) {
+    const row = (await db.query.students.findFirst({ where: eq(schema.students.id, ctx.studentId!) }))!
+    return <LockScreen avatarEmoji={row.avatarEmoji} name={row.name} reason={row.lockReason} until={row.lockedUntil?.toISOString() ?? null} />
+  }
+  const now = new Date()
+  const [student, navCounts, sets, assignments, household] = await Promise.all([
+    getViewingStudent(),
+    getNavCounts(now),
+    listExerciseSets(),
+    listAssignments(),
     ctx.mode === "parent"
-      ? await Promise.all(
+      ? Promise.all(
           (await listHouseholdStudents(ctx.householdId)).map(async (r) => ({
             id: r.id,
             name: r.name,
@@ -23,7 +32,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             locked: isLocked(r, now),
           })),
         )
-      : []
+      : Promise.resolve([]),
+  ])
   return (
     <AppFrame student={student} navCounts={navCounts} sets={sets} assignments={assignments.map((a) => toAssignment(a, now))} household={household} now={now.toISOString()}>
       {children}

@@ -8,12 +8,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { unwrap } from "@/lib/action-result"
 import { schoolYearLabel, suggestPromotion, type Enrollment } from "@/lib/school-year"
 import type { StudentDetailData } from "@/lib/types"
-import { archiveStudent, setViewingStudent } from "@/server/actions/students"
+import { archiveStudent, setViewingStudent, unlockStudent } from "@/server/actions/students"
 import { useAppNavigation } from "@/components/layout/AppFrame"
 import { TAB_PATHS, parentPaths } from "@/components/layout/routes"
 import EnrollmentSheet from "./EnrollmentSheet"
 import PromoteSheet from "./PromoteSheet"
 import StudentSheet from "./StudentSheet"
+import LockSheet from "./LockSheet"
 
 const fmtDay = (day: string) => day.split("-").reverse().join("/")
 
@@ -24,9 +25,18 @@ export default function StudentDetail({ detail, now }: { detail: StudentDetailDa
   const [promoting, setPromoting] = useState(false)
   const [yearEdit, setYearEdit] = useState<Enrollment | null>(null)
   const [archiving, setArchiving] = useState(false)
+  const [locking, setLocking] = useState(false)
   const latest = years[0]
 
   const fail = (title: string) => (e: unknown) => toast.error(title, { description: e instanceof Error ? e.message : undefined })
+
+  const unlock = async () => {
+    try {
+      unwrap(await unlockStudent(card.id))
+    } catch (e) {
+      fail("Chưa mở khoá được")(e)
+    }
+  }
 
   const viewNow = async () => {
     try {
@@ -58,6 +68,12 @@ export default function StudentDetail({ detail, now }: { detail: StudentDetailDa
             <p className="text-sm text-slate-500">
               ⭐ {card.stars} sao · 🔥 {detail.streak} ngày · 🏅 {detail.badges}
             </p>
+            {card.locked && (
+              <p className="mt-1 text-sm text-amber-700">
+                🔒 {card.lockedUntil ? `Khoá đến ${new Date(card.lockedUntil).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : "Khoá đến khi mở"}
+                {detail.lockReason ? ` · "${detail.lockReason}"` : ""}
+              </p>
+            )}
           </div>
           <Button variant="ghost" size="icon" aria-label="Sửa" onClick={() => setEditing(true)}>
             <Pencil />
@@ -72,7 +88,15 @@ export default function StudentDetail({ detail, now }: { detail: StudentDetailDa
               <GraduationCap /> Lên lớp
             </Button>
           )}
-          {/* Task 9: lock / unlock button goes here. */}
+          {card.locked ? (
+            <Button variant="outline" onClick={unlock}>
+              🔓 Mở khoá
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => setLocking(true)}>
+              🔒 Khoá tài khoản
+            </Button>
+          )}
         </div>
       </section>
 
@@ -106,6 +130,7 @@ export default function StudentDetail({ detail, now }: { detail: StudentDetailDa
         <PromoteSheet studentId={card.id} name={card.name} from={latest} suggestion={suggestPromotion(latest)} onOpenChange={setPromoting} />
       )}
       {yearEdit && <EnrollmentSheet studentId={card.id} year={yearEdit} onOpenChange={(o) => !o && setYearEdit(null)} />}
+      {locking && <LockSheet studentId={card.id} name={card.name} onOpenChange={setLocking} />}
       <Dialog open={archiving} onOpenChange={setArchiving}>
         <DialogContent>
           <DialogHeader>
