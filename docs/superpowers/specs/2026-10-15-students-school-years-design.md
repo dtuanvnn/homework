@@ -17,6 +17,7 @@ Success: the tutor adds a second child with an avatar and PIN; on the child's iP
 - School year: per-child enrollment rows; promotion is manual ("Lên lớp"); an assignment's year is derived from its due date, not stored.
 - On promotion, stars, badges and streak all carry over (option A). Reports can still be viewed per year.
 - Context travels in cookies (approach 1), not in URLs: routes and `typedRoutes` helpers don't change.
+- A child can be **locked** (temporarily blocked on their device, optional end time and message) separately from **archived** (left; hidden everywhere).
 - The mode toggle is removed. Student mode: long-press (2 s) the header avatar/logo to reach the parent PIN screen. Parent mode: "Mở chế độ học sinh" lives in the header avatar menu.
 
 ### Out of scope
@@ -26,7 +27,9 @@ Real accounts, sign-up, many households (later spec; this one only prepares for 
 ## 1. Data (`src/db/schema.ts`, one migration)
 
 - **`households`** (new): `id uuid pk`, `name text`, `createdAt`. RLS on. The parent PIN stays in env `PARENT_PIN` for now; it moves to this table when accounts arrive.
-- **`students`**: add `householdId uuid not null → households (cascade)`, `pinHash text null` (null = no PIN), `archivedAt timestamptz null`. Drop `grade`, `className`.
+- **`students`**: add `householdId uuid not null → households (cascade)`, `pinHash text null` (null = no PIN), `archivedAt timestamptz null`, `lockedAt timestamptz null`, `lockedUntil timestamptz null`, `lockReason text null`. Drop `grade`, `className`.
+  - **Archived** = the child left (no longer tutored): hidden from the viewing-child menu, PIN grid and assign picker; data kept.
+  - **Locked** = temporarily blocked from using the app: still a normal child everywhere on the parent side (viewing, assigning, grading, reports), but their device shows a lock screen. `lockedAt` set = locked; `lockedUntil` null = until unlocked by hand, otherwise the lock lifts by itself at that time (checked on read, no job). Pure helper `isLocked(student, now)` in `src/lib/student-lock.ts`, tested.
 - **`enrollments`** (new): `id`, `studentId → students (cascade)`, `schoolYear smallint` (start year: 2026 = "2026–2027"), `grade smallint`, `className text null`, `startsOn date`, `createdAt`. Unique `(studentId, schoolYear)`; check `grade between 1 and 12`.
 - **`exercise_sets`, `rewards`**: add `householdId not null`. Index `(householdId, subject, grade)` replaces `exercise_sets_subject_grade_idx`.
 - **`reward_redemptions`, `star_adjustments`, `badge_seen`**: add `studentId not null → students (cascade)`. `badge_seen` primary key becomes `(studentId, badgeId)`. `reward_redemptions_one_pending_idx` becomes `(studentId, rewardId) where status = 'pending'`.
@@ -73,7 +76,8 @@ type Context = { householdId: string; mode: "parent" | "student"; studentId: str
 getContext(): Promise<Context>
 ```
 
-- Student mode: `studentId` from the token; the row must exist, belong to the household and not be archived, otherwise the cookie is cleared and the PIN page shown.
+- Student mode: `studentId` from the token; the row must exist, belong to the household and not be archived, otherwise the cookie is cleared and the PIN page shown. If `isLocked(student, now)`, the `(app)` layout renders the lock screen instead of the student shell, and `assertAccess("student")` throws "Tài khoản đang tạm khoá." so no autosave, submit, start or redemption goes through. The token is kept, so unlocking takes effect on the next load without re-entering the PIN. The proxy doesn't know about locks (no DB); the layout/action check is the gate.
+- Locking does not pause anything: a timed attempt already started keeps its deadline and is handed in by `settleExpiredAttempts()` as usual; due dates and streak rules are unchanged (a missed due day while locked breaks the streak like any other).
 - Parent mode: `studentId` from cookie `hh_student` if it belongs to the household and isn't archived, else the oldest active child. If the household has no children, parent pages show the "add a child" empty state.
 - `assertAccess(role)` returns the `Context`. Every action uses it; **no action accepts a `studentId` or `householdId` from the client** except `setViewingStudent` and `createAssignments` (checked against the household).
 - Ownership helpers in `server/ownership.ts`: `assertSetInHousehold(ctx, setId)`, `assertAssignmentInScope(ctx, assignmentId)` (household; in student mode also `studentId`), `assertAttemptInScope(ctx, attemptId)`. Each throws a Vietnamese "Không tìm thấy." when out of scope.
@@ -102,7 +106,7 @@ getContext(): Promise<Context>
 
 - List of children (avatar, name, "Lớp 4 · 4C1 · 2026–2027"), archived ones collapsed at the bottom with "Khôi phục".
 - Add / edit sheet: name, avatar emoji picker (existing emojis), PIN (4–6 digits, optional; "Xoá PIN"), first enrollment (grade, class name, school year) when adding.
-- Child detail: enrollments by year (edit class name / start date of any year), **"Lên lớp"** sheet prefilled from `suggestPromotion` (grade, class name, school year, start date, all editable), "Lưu trữ học sinh" (hides from pickers and PIN grid; data kept; assignments not deleted).
+- Child detail: enrollments by year (edit class name / start date of any year), **"Lên lớp"** sheet prefilled from `suggestPromotion` (grade, class name, school year, start date, all editable), "Khoá tài khoản" / "Mở khoá" (see screen F), "Lưu trữ học sinh" (hides from pickers and PIN grid; data kept; assignments not deleted).
 #### Screens
 
 Entry points: the parent header avatar menu ("Quản lý học sinh"), and the "add a child" empty state. Same visual language as the rest of the app (cards, sheets from the bottom on phone / centered dialog on iPad, existing motion and sounds).
@@ -113,11 +117,11 @@ Entry points: the parent header avatar menu ("Quản lý học sinh"), and the "
 ┌─ ← Học sinh ───────────────────────────── [+ Thêm học sinh] ┐
 │ ┌──────────────────────────────────────────────────────────┐ │
 │ │ 🦊  Minh An                      Đang xem ✓              │ │
-│ │     Lớp 4 · 4C1 · 2026–2027      ⭐ 128   🔒 Có PIN    › │ │
+│ │     Lớp 4 · 4C1 · 2026–2027      ⭐ 128   🔑 Có PIN    › │ │
 │ └──────────────────────────────────────────────────────────┘ │
 │ ┌──────────────────────────────────────────────────────────┐ │
-│ │ 🐼  Bảo Ngọc                                             │ │
-│ │     Lớp 5 · 5A2 · 2026–2027      ⭐ 40    🔓 Không PIN  › │ │
+│ │ 🐼  Bảo Ngọc                     🔒 Khoá đến 20:00       │ │
+│ │     Lớp 5 · 5A2 · 2026–2027      ⭐ 40    Không PIN     › │ │
 │ └──────────────────────────────────────────────────────────┘ │
 │ ▸ Đã lưu trữ (1)                                             │
 └──────────────────────────────────────────────────────────────┘
@@ -153,6 +157,7 @@ Editing shows only avatar, name and PIN ("Đổi mã PIN" / "Xoá PIN"); grade, 
 │  │ 2025–2026 · Lớp 4 · 4A1 · từ 05/09/2025          ✎│ │
 │  └──────────────────────────────────────────────────┘  │
 │                                                        │
+│  [ 🔒 Khoá tài khoản ]   (hoặc 🔓 Mở khoá khi đang khoá) │
 │  [ Lưu trữ học sinh ]  (đỏ nhạt, hỏi xác nhận)         │
 └────────────────────────────────────────────────────────┘
 ```
@@ -174,7 +179,21 @@ Confirming plays the existing celebration sound/confetti and returns to C with t
 
 **E. First run / no children** — parent Today (and any parent page) when the household has no active child: a centered card "Chưa có học sinh nào" with an illustration and "Thêm học sinh đầu tiên", opening B. The student PIN grid with no children shows "Nhờ bố mẹ thêm học sinh trước nhé."
 
-- Actions in `server/actions/students.ts` (parent access): `createStudent`, `updateStudent`, `setStudentPin`, `archiveStudent`, `restoreStudent`, `promoteStudent`, `updateEnrollment`, `setViewingStudent`. zod validation; unique school year per child enforced by the DB and reported in Vietnamese.
+**F. Lock** — sheet from "Khoá tài khoản", and the child's lock screen
+
+```
+┌─ Khoá tài khoản Bảo Ngọc ──────────────────────── ✕ ┐     Child's device:
+│ Khoá trong   [1 giờ] [Đến hết hôm nay] [Đến khi mở] │     ┌──────────────────────────┐
+│              [Chọn giờ… ]                           │     │          🔒 🐼            │
+│ Lời nhắn     [ Nghỉ ngơi chút nhé ]  (không bắt buộc)│     │  Tài khoản đang tạm khoá  │
+│ Bé vẫn được giao bài; bài có giờ đang làm vẫn       │     │  "Nghỉ ngơi chút nhé"     │
+│ tính giờ và tự nộp khi hết giờ.                     │     │  Mở lại lúc 20:00         │
+│                               [ Huỷ ]  [ Khoá ]     │     │  (đổi học sinh)           │
+└─────────────────────────────────────────────────────┘     └──────────────────────────┘
+```
+The lock screen shows the avatar, the parent's message, and "Mở lại lúc …" (or "Hỏi bố mẹ để mở khoá" when there is no end time); it re-checks every minute and on focus, then reloads into the app once unlocked. It keeps the hidden 2 s hold on the avatar so the parent can still reach parent mode on that device. On the parent side, a locked child gets a "🔒" chip in the header avatar menu and on cards A/C; "Mở khoá" clears `lockedAt` / `lockedUntil` / `lockReason`.
+
+- Actions in `server/actions/students.ts` (parent access): `createStudent`, `updateStudent`, `setStudentPin`, `archiveStudent`, `restoreStudent`, `lockStudent({ id, until: Date | null, reason? })`, `unlockStudent`, `promoteStudent`, `updateEnrollment`, `setViewingStudent`. zod validation; unique school year per child enforced by the DB and reported in Vietnamese.
 
 ### Assigning and library
 
@@ -188,10 +207,11 @@ Confirming plays the existing celebration sound/confetti and returns to C with t
 ## 4. Seed and tests
 
 - **Seed:** one household; two children ("Minh An", grade 3, PIN unset in dev; "Bảo Ngọc", grade 5) each with an enrollment; An also has a 2025–2026 grade-2 enrollment with a few old graded assignments so the year picker has data. Existing demo data goes to An. Earned badges marked seen per child.
-- **Unit (vitest):** `session-token` (sign/verify, tamper, expiry, wrong secret), `school-year` (current, ranges, `yearOf` at boundaries, promotion suggestion), student PIN hashing, `computeRewards` fed with two children's facts not mixing.
+- **Unit (vitest):** `session-token` (sign/verify, tamper, expiry, wrong secret), `school-year` (current, ranges, `yearOf` at boundaries, promotion suggestion), `isLocked` (no lock, open-ended, expired `lockedUntil`), student PIN hashing, `computeRewards` fed with two children's facts not mixing.
 - **E2E (Playwright, iPad + iPhone):**
   - Student device: avatar grid → An → PIN → sees only An's assignments; Bảo Ngọc's attempt URL returns "Không tìm thấy".
   - Hold-to-open: short tap on the avatar does nothing; 2 s hold reaches the parent PIN page. No mode toggle visible in student mode.
+  - Lock: parent locks An "Đến khi mở" with a message → An's device shows the lock screen and an autosave/submit action is refused; parent still sees An and can assign; unlock → An's device opens the app on reload without the PIN.
   - Parent: switch viewing child changes Today/Grading; assign a set to both children → each sees it.
   - Students page: add a child with PIN, archive, restore; "Lên lớp" → Reports shows 2026–2027 by default and 2025–2026 still selectable; stars unchanged after promotion.
 - Existing E2E keep passing with the seed's An as the default child.
