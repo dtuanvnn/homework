@@ -44,6 +44,8 @@ import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 import type { SubjectId } from "@/lib/types"
 import { useLibrary } from "@/state/library-store"
+import { schoolYearLabel, type Enrollment } from "@/lib/school-year"
+import { yearCustomRange } from "@/lib/report-years"
 
 const fmt = (n: number, digits = 1) =>
   n.toLocaleString("vi-VN", { minimumFractionDigits: digits, maximumFractionDigits: digits })
@@ -99,7 +101,7 @@ function ChartTooltip({ active, payload, label, suffix = "" }: { active?: boolea
   )
 }
 
-export default function Reports({ input, now: nowIso }: { input: ReportInput; now: string }) {
+export default function Reports({ input, years, now: nowIso }: { input: ReportInput; years: Enrollment[]; now: string }) {
   const student = useRequiredStudent()
   const { assignSet: quickAssign } = useLibrary()
   const now = useMemo(() => new Date(nowIso), [nowIso])
@@ -112,6 +114,14 @@ export default function Reports({ input, now: nowIso }: { input: ReportInput; no
   /** The AI review and the filters it was made for; shown only while those filters stay selected. */
   const [aiReview, setAiReview] = useState<{ key: string; data: AiSummary } | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
+
+  const today = dateInput(now)
+  const yearChips = [...years].reverse().map((y) => ({ year: y.schoolYear, range: yearCustomRange(years, y.schoolYear, today)! }))
+  const pickYear = (r: { from: string; to: string }) => {
+    setRange("custom")
+    setFrom(r.from)
+    setTo(r.to)
+  }
 
   const period = useMemo(
     () => rangePeriod(range, now, range === "custom" && from && to ? { from, to } : undefined),
@@ -198,6 +208,20 @@ export default function Reports({ input, now: nowIso }: { input: ReportInput; no
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+        {years.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-slate-500">Năm học</span>
+            {yearChips.map(({ year, range: r }) => {
+              const selected = range === "custom" && from === r.from && to === r.to
+              return (
+                <button key={year} type="button" aria-pressed={selected} onClick={() => pickYear(r)}
+                  className={cn("rounded-full border px-3 py-1 text-sm", selected ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-600")}>
+                  {schoolYearLabel(year)}
+                </button>
+              )
+            })}
+          </div>
+        )}
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Lọc theo môn">
           {SUBJECT_LIST.map((s) => {
             const on = subjects.includes(s.id)

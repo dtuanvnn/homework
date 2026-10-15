@@ -141,3 +141,15 @@ test("one set assigned to both children reaches both", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Đang xem: Bảo Ngọc/ }).filter({ visible: true })).toBeVisible()
   await expect(page.getByText("Unit 5: My family").filter({ visible: true }).first()).toBeVisible()
 })
+
+test("reports can show last school year", async ({ page }) => {
+  await open(page, "/parent/reports")
+  const chips = page.getByRole("button", { name: /^\d{4}–\d{4}$/ })
+  await expect(chips.first()).toBeVisible()
+  const count = await chips.count()
+  expect(count).toBeGreaterThanOrEqual(2)
+  const lastYear = chips.last()
+  await lastYear.click()
+  await expect(lastYear).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByLabel("Từ ngày")).toHaveValue(/-09-05$/)
+})
