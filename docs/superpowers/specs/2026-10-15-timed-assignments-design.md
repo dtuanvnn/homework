@@ -56,7 +56,12 @@ For a timed assignment with no open draft, the do page renders a start card inst
 ### Countdown
 `TakeRoute` / `TakeAssignment` receive `timer: { kind: "countdown", deadline: string, serverNow: string } | { kind: "stopwatch", initialSeconds: number }`. The countdown computes a clock offset from `serverNow` vs `Date.now()` at mount so a wrong iPad clock doesn't matter. The countdown is always visible (no hide button) and re-derives the remaining time from the deadline on every tick, so a sleeping tab catches up when it wakes.
 
-### Warnings (`components/take/CountdownClock.tsx`)
+### Clock UI (`components/take/CountdownClock.tsx`)
+- Digits rendered with **`@number-flow/react`** (new dependency): each digit rolls when it changes (`12:00 → 11:59`); it respects `prefers-reduced-motion`. The untimed stopwatch uses the same digits.
+- A thin SVG progress ring around the clock (drawn with `motion`, no extra library) shrinks with the remaining fraction and shifts green → orange → red with the warning level, so the child can read "how much is left" at a glance.
+- Sounds stay synthesized in `useSound` (no audio files for now; `SOUND_FILES` can swap in mp3s later).
+
+### Warnings
 - `warn`: clock turns orange with a `shake`, sound `warn` once, toast "Còn 5 phút nữa!" (or the actual minutes for short limits).
 - `urgent`: clock turns red and pulses (`latePulse`), sound `urgent` once, toast "Còn 1 phút! Em kiểm tra lại bài nhé."
 - `final`: sound `tick` each second, the seconds digit scales up.
