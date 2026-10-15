@@ -1,5 +1,6 @@
 "use client"
 
+import { usePathname } from "next/navigation"
 import { Backpack, Lock, Users } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -16,7 +17,7 @@ import { unwrap } from "@/lib/action-result"
 import type { ChildOption, Student } from "@/lib/types"
 import { setViewingStudent } from "@/server/actions/students"
 import { useAppNavigation } from "./AppFrame"
-import { parentPaths } from "./routes"
+import { parentPaths, resolveRoute, TAB_PATHS } from "./routes"
 
 /** Parent header: who is being viewed, switch child, manage children, open student mode. */
 export default function ParentMenu({ student, household, onOpenStudentMode, compact }: {
@@ -26,10 +27,16 @@ export default function ParentMenu({ student, household, onOpenStudentMode, comp
   compact?: boolean
 }) {
   const { navigate } = useAppNavigation()
+  const pathname = usePathname()
   const choose = async (id: string) => {
     if (id === student?.id) return
     try {
       unwrap(await setViewingStudent(id))
+      // If on a detail page, navigate to the tab root
+      const route = resolveRoute(pathname)
+      if (route.subPageTitle && route.parentPath) {
+        navigate(TAB_PATHS[route.tab])
+      }
     } catch (e) {
       toast.error("Chưa đổi được học sinh", { description: e instanceof Error ? e.message : undefined })
     }

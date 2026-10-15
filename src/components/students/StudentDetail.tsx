@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { unwrap } from "@/lib/action-result"
+import { formatLockEnd } from "@/lib/dates"
 import { schoolYearLabel, suggestPromotion, type Enrollment } from "@/lib/school-year"
 import type { StudentDetailData } from "@/lib/types"
 import { archiveStudent, setViewingStudent, unlockStudent } from "@/server/actions/students"
@@ -70,7 +71,7 @@ export default function StudentDetail({ detail, now }: { detail: StudentDetailDa
             </p>
             {card.locked && (
               <p className="mt-1 text-sm text-amber-700">
-                🔒 {card.lockedUntil ? `Khoá đến ${new Date(card.lockedUntil).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : "Khoá đến khi mở"}
+                🔒 {card.lockedUntil ? `Khoá đến ${formatLockEnd(card.lockedUntil)}` : "Khoá đến khi mở"}
                 {detail.lockReason ? ` · "${detail.lockReason}"` : ""}
               </p>
             )}

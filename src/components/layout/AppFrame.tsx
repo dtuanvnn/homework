@@ -126,6 +126,22 @@ export default function AppFrame({
     document.documentElement.dataset.mode = mode
   }, [mode])
 
+  // Student mode: check for lock every minute, on focus, and on visibility change.
+  useEffect(() => {
+    if (mode !== "student") return
+    const check = () => router.refresh()
+    const timer = window.setInterval(check, 60_000)
+    const onFocus = () => check()
+    const onVisible = () => { if (document.visibilityState === "visible") check() }
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
+  }, [mode, router])
+
   const openMode = (next: AppMode) => {
     if (next === mode) return
 

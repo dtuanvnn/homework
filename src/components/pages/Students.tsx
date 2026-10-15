@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, KeyRound, Lock, Pencil, Plus } from "lucide-
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { unwrap } from "@/lib/action-result"
+import { formatLockEnd } from "@/lib/dates"
 import { schoolYearLabel } from "@/lib/school-year"
 import type { StudentCard } from "@/lib/types"
 import { restoreStudent } from "@/server/actions/students"
@@ -13,7 +14,7 @@ import { parentPaths } from "@/components/layout/routes"
 import StudentSheet from "@/components/students/StudentSheet"
 
 const lockLabel = (until: string | null) =>
-  until ? `Khoá đến ${new Date(until).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : "Đang khoá"
+  until ? `Khoá đến ${formatLockEnd(until)}` : "Đang khoá"
 
 export default function Students({ cards, now }: { cards: StudentCard[]; now: string }) {
   const viewing = useStudent()

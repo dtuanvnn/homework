@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { unwrap } from "@/lib/action-result"
 import { celebrate } from "@/lib/animations"
+import { localDay } from "@/lib/dates"
 import { schoolYearLabel, type Enrollment } from "@/lib/school-year"
 import { promoteStudent } from "@/server/actions/students"
 
@@ -32,7 +33,11 @@ export default function PromoteSheet({ studentId, name, from, suggestion, onOpen
     try {
       unwrap(await promoteStudent({ id: studentId, schoolYear: suggestion.schoolYear, grade, className: className || null, startsOn }))
       celebrate("big")
-      toast.success(`${name} đã lên lớp ${grade}!`)
+      const isFuture = startsOn > localDay(new Date())
+      const msg = isFuture
+        ? `${name} sẽ lên lớp ${grade} từ ${startsOn.split("-").reverse().join("/")}`
+        : `${name} đã lên lớp ${grade}!`
+      toast.success(msg)
       onOpenChange(false)
     } catch (e) {
       toast.error("Chưa lên lớp được", { description: e instanceof Error ? e.message : undefined })

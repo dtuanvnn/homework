@@ -131,11 +131,10 @@ test("one set assigned to both children reaches both", async ({ page }) => {
   await sheet.getByRole("button", { name: "Giao bài", exact: true }).click()
   await expect(page.getByText(/cho Minh An, Bảo Ngọc/)).toBeVisible()
 
-  // Verify both children have the assignment on the parent's schedule (at least 2, since tests run sequentially)
-  const count = await page.getByText("Unit 5: My family").filter({ visible: true }).count()
-  expect(count).toBeGreaterThanOrEqual(2)
+  // Verify the assignment appears for the currently viewing child (Minh An)
+  await expect(page.getByText("Unit 5: My family").filter({ visible: true }).first()).toBeVisible()
 
-  // Verify by switching to Bảo Ngọc's view
+  // Switch to Bảo Ngọc and verify she also has the assignment
   await page.getByRole("button", { name: /Đang xem: Minh An/ }).filter({ visible: true }).click()
   await page.getByRole("menuitemradio", { name: /Bảo Ngọc/ }).click()
   await expect(page.getByRole("button", { name: /Đang xem: Bảo Ngọc/ }).filter({ visible: true })).toBeVisible()

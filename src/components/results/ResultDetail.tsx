@@ -76,6 +76,7 @@ export default function ResultDetail({
     asked.current = r.id
     explainMistakes(r.id)
       .then((res) => { if (res.ok) setHints(res.data) })
+      .catch(() => { /* Aborted request on navigation is fine */ })
       .finally(() => setHintsLoading(false))
   }, [r.id, r.hintsPending])
 

@@ -105,7 +105,7 @@ export default function AssignSheet({
         {
           description:
             draft.mode === "paper"
-              ? "Chọn \"In đề\" trên lịch để in phiếu bài tập."
+              ? 'Chọn "In đề" trên lịch để in phiếu bài tập.'
               : "Bài tập đã được thêm vào lịch.",
         },
       )

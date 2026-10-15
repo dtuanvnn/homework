@@ -1,5 +1,5 @@
 import "server-only"
-import { asc, eq, isNotNull, sql } from "drizzle-orm"
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { db, schema } from "@/db"
 import type { QuestionType } from "@/lib/types"
 import { buildGradingQueue, type GradingDetail } from "@/lib/views/grading"
@@ -15,14 +15,16 @@ const { answers, attempts, attachments } = schema
 
 export async function loadGradingQueue() {
   await settleExpiredAttempts()
-  const [records, stats, scanRows] = await Promise.all([
-    listAssignments(),
+  const records = await listAssignments()
+  const attemptIds = records.flatMap((r) => r.attempts.map((a) => a.id))
+  if (!attemptIds.length) return buildGradingQueue([], [], new Map())
+  const [stats, scanRows] = await Promise.all([
     db
       .select({ attemptId: answers.attemptId, isCorrect: answers.isCorrect, type: sql<QuestionType>`${answers.question}->>'type'` })
       .from(answers)
       .innerJoin(attempts, eq(attempts.id, answers.attemptId))
-      .where(isNotNull(attempts.submittedAt)),
-    db.select().from(attachments).where(isNotNull(attachments.attemptId)).orderBy(asc(attachments.position)),
+      .where(and(isNotNull(attempts.submittedAt), inArray(attempts.id, attemptIds))),
+    db.select().from(attachments).where(and(isNotNull(attachments.attemptId), inArray(attachments.attemptId!, attemptIds))).orderBy(asc(attachments.position)),
   ])
   // First scanned page of each attempt, as a thumbnail.
   const firstScans = [...Map.groupBy(scanRows, (r) => r.attemptId!).values()].map((rows) => rows[0])

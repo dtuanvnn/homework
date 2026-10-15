@@ -17,14 +17,21 @@ export async function open(page: Page, path: string, child = "Minh An") {
 /**
  * Collects uncaught page errors; assert it stays empty. Ignores the dev overlay
  * failing to fetch source-mapped stacks when a navigation cancels the request,
- * and "Can't find variable: AudioContext" in Playwright's WebKit, which has no
+ * "Can't find variable: AudioContext" in Playwright's WebKit (which has no
  * Web Audio: MathLive's playSound() touches its AudioContext on every keypress
- * even with all sounds set to null (real Safari has it).
+ * even with all sounds set to null; real Safari has it), and "Load failed" from
+ * WebKit when a full navigation aborts a server-action RSC stream that's still
+ * arriving after the action resolved (action → redirect/refresh → goto).
  */
 export function trackPageErrors(page: Page) {
   const errors: string[] = []
+  let lastNavTime = 0
+  page.on("request", (r) => {
+    if (r.isNavigationRequest() && r.frame() === page.mainFrame()) lastNavTime = Date.now()
+  })
   page.on("pageerror", (e) => {
-    if (!e.message.includes("__nextjs_original-stack-frames") && !e.message.includes("AudioContext")) {
+    const isWebKitLoadFailed = e.message === "Load failed" && Date.now() - lastNavTime < 2000
+    if (!e.message.includes("__nextjs_original-stack-frames") && !e.message.includes("AudioContext") && !isWebKitLoadFailed) {
       errors.push(e.message)
     }
   })

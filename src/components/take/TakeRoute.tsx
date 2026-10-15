@@ -63,6 +63,10 @@ export default function TakeRoute({
           const res = await startAttempt(assignmentId).catch(() => null)
           if (!res?.ok) {
             if (res?.expired) return timeIsUp(res.error)
+            if (res?.error === "Tài khoản đang tạm khoá.") {
+              router.refresh()
+              return
+            }
             toast.error(res?.error ?? "Chưa bắt đầu được. Em kiểm tra mạng rồi thử lại nhé!")
             return
           }
@@ -103,6 +107,10 @@ export default function TakeRoute({
         if (!res?.ok) {
           if (res?.expired) {
             timeIsUp(res.error)
+            return null
+          }
+          if (res?.error === "Tài khoản đang tạm khoá.") {
+            router.refresh()
             return null
           }
           if (!quiet) toast.error(res?.error ?? "Chưa nộp được bài. Em kiểm tra mạng rồi thử lại nhé!")

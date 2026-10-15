@@ -10,9 +10,11 @@ import { canTake, stateOf } from "@/lib/views/student"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { assertAccess } from "../access"
 import { answerRows, closeAttempt, settleAttempt } from "../attempt-finalize"
+import { assertAssignmentInScope } from "../ownership"
 import { getAssignment, getQuestions, isUuid, type AssignmentRecord, type AttemptRecord } from "../queries"
 import { createUploadTargets, isUploaded, type UploadTarget } from "../storage"
 import type { NewFile } from "./library"
+import type { Context } from "../access"
 
 /*
  * The student's side of an assignment: autosaving a draft, submitting web
@@ -49,12 +51,14 @@ const ERR_TIME_UP = "Đã hết giờ làm bài. Bài của em đã được n�
 const ERR_HANDED_IN = "Bài của em đã được nộp."
 
 /** Access check for the Result-returning actions: a refusal (PIN, lock) becomes an error result. */
-async function studentGate(): Promise<{ ok: false; error: string } | null> {
+async function studentGate(): Promise<{ ctx: Context } | { denied: { ok: false; error: string } }> {
   try {
-    await assertAccess("student")
-    return null
+    const ctx = await assertAccess("student")
+    return { ctx }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Cần mã PIN để tiếp tục." }
+    // Next uses thrown values for redirect()/notFound(); let those through (e.g. archived child → PIN page).
+    if (e && typeof e === "object" && "digest" in e && String((e as { digest: unknown }).digest).startsWith("NEXT_")) throw e
+    return { denied: { ok: false, error: e instanceof Error ? e.message : "Cần mã PIN để tiếp tục." } }
   }
 }
 
@@ -126,8 +130,13 @@ async function writableAttempt(record: AssignmentRecord): Promise<{ attempt: Att
 
 /** "Bắt đầu" on a timed assignment: starts (or resumes) the attempt and returns its deadline. */
 export async function startAttempt(assignmentId: string): Promise<Result<{ deadline: string; serverNow: string }>> {
-  const denied = await studentGate()
-  if (denied) return denied
+  const gated = await studentGate()
+  if ("denied" in gated) return gated.denied
+  try {
+    await assertAssignmentInScope(gated.ctx, assignmentId)
+  } catch {
+    return { ok: false, error: "Không tìm thấy bài." }
+  }
   const loaded = await loadWebAssignment(assignmentId)
   if ("error" in loaded) return { ok: false, error: loaded.error }
   const limit = loaded.record.timeLimitMinutes
@@ -147,8 +156,13 @@ export async function startAttempt(assignmentId: string): Promise<Result<{ deadl
  * save; `activeSeconds` is the untimed work time so far (ignored when timed).
  */
 export async function saveDraft(assignmentId: string, responses: Record<string, unknown>, activeSeconds?: number): Promise<Result<{ attemptId: string }>> {
-  const denied = await studentGate()
-  if (denied) return denied
+  const gated = await studentGate()
+  if ("denied" in gated) return gated.denied
+  try {
+    await assertAssignmentInScope(gated.ctx, assignmentId)
+  } catch {
+    return { ok: false, error: "Không tìm thấy bài." }
+  }
   const parsed = parseResponses(responses)
   if (!parsed) return { ok: false, error: "Bài làm không hợp lệ." }
   const loaded = await loadWebAssignment(assignmentId)
@@ -181,8 +195,13 @@ export async function submitAttempt(
   responses: Record<string, unknown>,
   durationSeconds: number,
 ): Promise<Result<{ attemptId: string; graded: boolean; score: number | null }>> {
-  const denied = await studentGate()
-  if (denied) return denied
+  const gated = await studentGate()
+  if ("denied" in gated) return gated.denied
+  try {
+    await assertAssignmentInScope(gated.ctx, assignmentId)
+  } catch {
+    return { ok: false, error: "Không tìm thấy bài." }
+  }
   const parsed = parseResponses(responses)
   if (!parsed) return { ok: false, error: "Bài làm không hợp lệ." }
   const loaded = await loadWebAssignment(assignmentId)
@@ -215,7 +234,8 @@ async function loadPaperAssignment(assignmentId: string) {
 /** One-time upload URLs for photographed pages (stored under the assignment until the attempt exists). */
 export async function requestAttemptUploads(assignmentId: string, names: string[]): Promise<ActionResult<UploadTarget[]>> {
   return runAction(async () => {
-    await assertAccess("student")
+    const ctx = await assertAccess("student")
+    await assertAssignmentInScope(ctx, assignmentId)
     const record = await loadPaperAssignment(assignmentId)
     if (!record || !canTake(stateOf(record, new Date()))) throw new Error(ERR_CLOSED)
     return createUploadTargets("attempts", assignmentId, z.array(z.string().max(200)).max(30).parse(names))
@@ -237,8 +257,13 @@ const newFilesSchema = z
 
 /** Hands in paper work: a submitted attempt with empty answers (the parent marks them) and the page photos. */
 export async function submitPaper(assignmentId: string, files: NewFile[]): Promise<Result<{ attemptId: string }>> {
-  const denied = await studentGate()
-  if (denied) return denied
+  const gated = await studentGate()
+  if ("denied" in gated) return gated.denied
+  try {
+    await assertAssignmentInScope(gated.ctx, assignmentId)
+  } catch {
+    return { ok: false, error: "Không tìm thấy bài." }
+  }
   const parsed = newFilesSchema.safeParse(files)
   if (!parsed.success) return { ok: false, error: "Em cần chụp ít nhất một trang." }
   const record = await loadPaperAssignment(assignmentId)
@@ -248,7 +273,7 @@ export async function submitPaper(assignmentId: string, files: NewFile[]): Promi
   const attemptNo = (latest?.attemptNo ?? 0) + 1
   if (!canTake(state) || (latest && !latest.submittedAt) || attemptNo > record.maxAttempts) return { ok: false, error: ERR_CLOSED }
   for (const f of parsed.data) {
-    if (!(await isUploaded("attempts", assignmentId, f.path))) return { ok: false, error: `Ảnh “${f.name}” chưa tải lên xong, em thử lại nhé.` }
+    if (!(await isUploaded("attempts", assignmentId, f.path))) return { ok: false, error: `Ảnh "${f.name}" chưa tải lên xong, em thử lại nhé.` }
   }
 
   const questions = await getQuestions(record.setId)
