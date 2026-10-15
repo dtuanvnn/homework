@@ -2,12 +2,14 @@ import { sql } from "drizzle-orm"
 import {
   boolean,
   check,
+  date,
   doublePrecision,
   index,
   integer,
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -34,20 +36,63 @@ export const redemptionStatus = pgEnum("redemption_status", ["pending", "given",
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 
-export const students = pgTable("students", {
+/** A family (one parent account later). Everything the parent owns hangs off it. */
+export const households = pgTable("households", {
   id: uuid().primaryKey().defaultRandom(),
   name: text().notNull(),
-  grade: smallint().notNull(),
-  /** Class label shown in the UI, e.g. "3C1"; `grade` stays numeric for filtering. */
-  className: text("class_name"),
-  avatarEmoji: text("avatar_emoji").notNull().default("🦊"),
   createdAt: createdAt(),
 }).enableRLS()
+
+export const students = pgTable(
+  "students",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    avatarEmoji: text("avatar_emoji").notNull().default("🦊"),
+    /** SHA-256 of the child's PIN (lib/pin.ts studentPinHash); null = no PIN. */
+    pinHash: text("pin_hash"),
+    /** Locked on the child's device while set, until lockedUntil (null = until unlocked). */
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    lockReason: text("lock_reason"),
+    /** Left (no longer tutored): hidden from pickers; data kept. */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("students_household_idx").on(t.householdId)],
+).enableRLS()
+
+/** One row per child per school year (lib/school-year.ts). */
+export const enrollments = pgTable(
+  "enrollments",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    /** Start year: 2026 = "2026–2027". */
+    schoolYear: smallint("school_year").notNull(),
+    grade: smallint().notNull(),
+    className: text("class_name"),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("enrollments_student_year_idx").on(t.studentId, t.schoolYear),
+    check("enrollment_grade_range", sql`${t.grade} between 1 and 12`),
+  ],
+).enableRLS()
 
 export const exerciseSets = pgTable(
   "exercise_sets",
   {
     id: uuid().primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
     title: text().notNull(),
     subject: subject().notNull(),
     grade: smallint().notNull(),
@@ -63,7 +108,7 @@ export const exerciseSets = pgTable(
   },
   (t) => [
     check("difficulty_range", sql`${t.difficulty} between 1 and 5`),
-    index("exercise_sets_subject_grade_idx").on(t.subject, t.grade),
+    index("exercise_sets_household_subject_grade_idx").on(t.householdId, t.subject, t.grade),
   ],
 ).enableRLS()
 
@@ -196,6 +241,9 @@ export const rewards = pgTable(
   "rewards",
   {
     id: uuid().primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
     name: text().notNull(),
     emoji: text().notNull().default("🎁"),
     cost: integer().notNull(),
@@ -216,6 +264,9 @@ export const rewardRedemptions = pgTable(
   "reward_redemptions",
   {
     id: uuid().primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
     rewardId: uuid("reward_id").references(() => rewards.id, { onDelete: "set null" }),
     name: text().notNull(),
     emoji: text().notNull(),
@@ -224,7 +275,7 @@ export const rewardRedemptions = pgTable(
     requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
   },
-  (t) => [uniqueIndex("reward_redemptions_one_pending_idx").on(t.rewardId).where(sql`${t.status} = 'pending'`)],
+  (t) => [uniqueIndex("reward_redemptions_one_pending_idx").on(t.studentId, t.rewardId).where(sql`${t.status} = 'pending'`)],
 ).enableRLS()
 
 /** Stars the parent added or took away by hand. */
@@ -232,6 +283,9 @@ export const starAdjustments = pgTable(
   "star_adjustments",
   {
     id: uuid().primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
     amount: integer().notNull(),
     reason: text().notNull(),
     createdAt: createdAt(),
@@ -239,8 +293,15 @@ export const starAdjustments = pgTable(
   (t) => [check("star_adjustment_nonzero", sql`${t.amount} <> 0`)],
 ).enableRLS()
 
-/** Badges and streak milestones (`streak-7@2026-10-20`) the child has celebrated. */
-export const badgeSeen = pgTable("badge_seen", {
-  badgeId: text("badge_id").primaryKey(),
-  seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
-}).enableRLS()
+/** Badges and streak milestones (`streak-7@2026-10-20`) each child has celebrated. */
+export const badgeSeen = pgTable(
+  "badge_seen",
+  {
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    badgeId: text("badge_id").notNull(),
+    seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.studentId, t.badgeId] })],
+).enableRLS()

@@ -3,9 +3,11 @@ import { asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { db, schema } from "@/db"
 import { withLaterAnswerKey } from "@/lib/answer-key"
 import type { Attachment, Difficulty, ExerciseSet, Question, Student } from "@/lib/types"
+import { currentEnrollment, schoolYearOf } from "@/lib/school-year"
+import { localDay } from "@/lib/dates"
 import { settleExpiredAttempts } from "./attempt-finalize"
 import { withImageUrls } from "./question-images"
-import { loadRewards } from "./rewards"
+import { firstStudentRow, loadRewards } from "./rewards"
 import { attachmentUrl } from "./storage"
 
 /*
@@ -68,11 +70,22 @@ export async function toAttachment(row: AttachmentRow): Promise<Attachment> {
 
 /* ---------- Student ---------- */
 
-export async function getStudent(): Promise<Student & { id: string }> {
-  const row = await db.query.students.findFirst({ orderBy: asc(students.createdAt) })
-  if (!row) throw new Error("No student found. Run `pnpm db:seed`.")
+export async function getStudent(): Promise<Student> {
+  const row = await firstStudentRow()
+  const years = await db.select().from(schema.enrollments).where(eq(schema.enrollments.studentId, row.id))
+  const today = localDay(new Date())
+  const current = currentEnrollment(years, today)
   const totalStars = (await loadRewards()).state.ledger.balance
-  return { id: row.id, name: row.name, grade: row.grade, className: row.className ?? undefined, avatarEmoji: row.avatarEmoji, totalStars }
+  return {
+    id: row.id,
+    householdId: row.householdId,
+    name: row.name,
+    grade: current?.grade ?? 1,
+    className: current?.className ?? undefined,
+    schoolYear: current?.schoolYear ?? schoolYearOf(today),
+    avatarEmoji: row.avatarEmoji,
+    totalStars,
+  }
 }
 
 /* ---------- Library ---------- */

@@ -15,10 +15,13 @@ export type ExerciseSetStatus = "nhap" | "san-sang"
 
 export interface Student {
   id: string
+  householdId: string
   name: string
   grade: number
   /** Class label such as "3C1", when set. */
   className?: string
+  /** Start year of the current school year (2026 = "2026–2027"). */
+  schoolYear: number
   avatarEmoji: string
   totalStars: number
 }

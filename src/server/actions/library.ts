@@ -61,7 +61,7 @@ export async function createExerciseSet(): Promise<ActionResult<ExerciseSet>> {
     const student = await getStudent()
     const [row] = await db
       .insert(exerciseSets)
-      .values({ title: "Bộ bài tập mới", subject: "toan", grade: student.grade, kind: "luyen-tap", source: "thu-cong", status: "nhap" })
+      .values({ householdId: student.householdId, title: "Bộ bài tập mới", subject: "toan", grade: student.grade, kind: "luyen-tap", source: "thu-cong", status: "nhap" })
       .returning()
     refresh()
     return toExerciseSet(row, 0, 0)
@@ -86,7 +86,7 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
     await assertAccess("parent")
     const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
     for (const f of newFiles) {
-      if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
+      if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp "${f.name}" chưa tải lên xong`)
     }
     // Figures the set didn't have yet must really be in Storage (their paths are checked by the schema).
     const known = new Set((await getQuestions(set.id)).flatMap(figurePaths))
@@ -96,11 +96,12 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
       if (!owner || !(await isUploaded("sets", owner, path))) throw new Error("Hình minh họa chưa tải lên xong. Hãy thử lại.")
     }
     const { id, ...meta } = set
+    const { householdId } = await getStudent()
 
     const removedPaths = await db.transaction(async (tx) => {
       await tx
         .insert(exerciseSets)
-        .values({ id, ...meta })
+        .values({ id, householdId, ...meta })
         .onConflictDoUpdate({ target: exerciseSets.id, set: { ...meta, updatedAt: new Date() } })
 
       await tx.delete(questions).where(eq(questions.setId, id))

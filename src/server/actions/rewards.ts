@@ -10,6 +10,7 @@ import { canRedeem } from "@/lib/rewards/stars"
 import { computeRewards } from "@/lib/views/rewards"
 import { assertAccess } from "../access"
 import { isUuid } from "../queries"
+import { firstStudentRow } from "../rewards"
 
 const { rewards, rewardRedemptions, starAdjustments, badgeSeen } = schema
 
@@ -40,7 +41,7 @@ export async function saveReward(input: RewardInput): Promise<ActionResult<{ id:
       return row
     }
     const [{ next }] = await db.select({ next: sql<number>`coalesce(max(${rewards.position}) + 1, 0)::int` }).from(rewards)
-    const [row] = await db.insert(rewards).values({ ...data, position: next }).returning({ id: rewards.id })
+    const [row] = await db.insert(rewards).values({ ...data, householdId: (await firstStudentRow()).householdId, position: next }).returning({ id: rewards.id })
     refresh()
     return row
   })
@@ -76,16 +77,17 @@ export async function requestRedemption(rewardId: string): Promise<ActionResult<
   return runAction(async () => {
     await assertAccess("student")
     checkId(rewardId)
+    const { id: studentId } = await firstStudentRow()
     await db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(${REDEEM_LOCK})`)
       const [reward] = await tx.select().from(rewards).where(eq(rewards.id, rewardId))
       if (!reward) throw new Error("Không tìm thấy phần thưởng")
-      const { facts, seen } = await loadRewardFacts(tx, { serial: true })
+      const { facts, seen } = await loadRewardFacts(tx, { studentId, serial: true })
       const balance = computeRewards(facts, seen, new Date()).ledger.balance
       const hasPending = facts.redemptions.some((r) => r.rewardId === rewardId && r.status === "pending")
       const problem = canRedeem(balance, reward, hasPending)
       if (problem) throw new Error(problem)
-      await tx.insert(rewardRedemptions).values({ rewardId, name: reward.name, emoji: reward.emoji, cost: reward.cost })
+      await tx.insert(rewardRedemptions).values({ studentId, rewardId, name: reward.name, emoji: reward.emoji, cost: reward.cost })
     })
     refresh()
     return null
@@ -131,7 +133,7 @@ const adjustSchema = z.object({
 export async function adjustStars(amount: number, reason: string): Promise<ActionResult<null>> {
   return runAction(async () => {
     await assertAccess("parent")
-    await db.insert(starAdjustments).values(adjustSchema.parse({ amount, reason }))
+    await db.insert(starAdjustments).values({ ...adjustSchema.parse({ amount, reason }), studentId: (await firstStudentRow()).id })
     refresh()
     return null
   })
@@ -141,8 +143,9 @@ export async function adjustStars(amount: number, reason: string): Promise<Actio
 export async function markBadgesSeen(ids: string[]): Promise<ActionResult<null>> {
   return runAction(async () => {
     await assertAccess("student")
+    const { id: studentId } = await firstStudentRow()
     const list = z.array(z.string().min(1).max(100)).max(100).parse(ids)
-    if (list.length) await db.insert(badgeSeen).values(list.map((badgeId) => ({ badgeId }))).onConflictDoNothing()
+    if (list.length) await db.insert(badgeSeen).values(list.map((badgeId) => ({ studentId, badgeId }))).onConflictDoNothing()
     return null
   })
 }

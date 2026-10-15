@@ -1,6 +1,7 @@
 /**
- * Resets the database to a realistic demo: one Grade 3 student, the seed
- * library, six weeks of graded history and a current week with every
+ * Resets the database to a realistic demo: one household with two children —
+ * Minh An (grade 3, with last year's grade-2 history) and Bảo Ngọc (grade 5) —
+ * the seed library, six weeks of graded history and a current week with every
  * assignment state (graded, awaiting grading, in progress, overdue, upcoming).
  *
  * Scores come from simulated answers run through the real grader, so
@@ -16,7 +17,8 @@ import postgres from "postgres"
 import { eq } from "drizzle-orm"
 import { createClient } from "@supabase/supabase-js"
 import { gradeAttempt, scoreOutOf10, type Response } from "@/lib/grading"
-import { addDays, startOfDay } from "@/lib/dates"
+import { addDays, localDay, startOfDay } from "@/lib/dates"
+import { schoolYearOf, schoolYearStart } from "@/lib/school-year"
 import { computeRewards } from "@/lib/views/rewards"
 import type { Question } from "@/lib/types"
 import { loadRewardFacts } from "./reward-facts"
@@ -143,6 +145,24 @@ interface AssignmentPlan {
 /** Skill grows from ~0.72 six weeks ago to ~0.9 now. */
 const skillAt = (dayOffset: number) => 0.9 + (dayOffset / 42) * 0.19
 
+/** Days from today back to a "yyyy-mm-dd" day. */
+const daysAgo = (day: string) => Math.round((today.getTime() - new Date(`${day}T00:00:00`).getTime()) / 86_400_000)
+
+/** Minh An's last school year: a few graded sets about two months before this year started. */
+function lastYear(thisYearStart: string): AssignmentPlan[] {
+  const base = -(daysAgo(thisYearStart) + 70)
+  return ["bt-01", "bt-07", "bt-13"].map((set, i) => {
+    const d = base + i * 3
+    return { set, availableDay: d, dueDay: d, dueHour: 20, maxAttempts: 1, attempts: [{ skill: 0.75, dayOffset: d, hour: 19 }] } satisfies AssignmentPlan
+  })
+}
+
+/** Bảo Ngọc: one graded set and one upcoming. "Unit 5: My family" (bt-15) and "Chính tả: Mùa thu của em" (bt-11) stay Minh An's only (E2E relies on it). */
+const SIBLING: AssignmentPlan[] = [
+  { set: "bt-03", availableDay: -2, dueDay: -2, dueHour: 20, attempts: [{ skill: 0.8, dayOffset: -2, hour: 19 }] },
+  { set: "bt-14", availableDay: 0, dueDay: 1, dueHour: 20 },
+]
+
 function history(): AssignmentPlan[] {
   const rotation = ["bt-01", "bt-07", "bt-13", "bt-04", "bt-08", "bt-12", "bt-02", "bt-09", "bt-14", "bt-03", "bt-07", "bt-13", "bt-14", "bt-05", "bt-10", "bt-12", "bt-03"]
   const days = [-40, -38, -37, -33, -32, -30, -26, -24, -23, -19, -18, -17, -16, -12, -11, -10, -8]
@@ -214,9 +234,22 @@ async function seedFigure(set: Loaded) {
 
 async function main() {
   console.log("Resetting tables…")
-  await client`truncate table answers, attachments, attempts, assignments, questions, exercise_sets, students, reward_redemptions, rewards, star_adjustments, badge_seen restart identity cascade`
+  await client`truncate table answers, attachments, attempts, assignments, questions, exercise_sets, students, reward_redemptions, rewards, star_adjustments, badge_seen, enrollments, households restart identity cascade`
 
-  const [student] = await db.insert(schema.students).values({ name: "Minh An", grade: 3, avatarEmoji: "🦊" }).returning()
+  const [household] = await db.insert(schema.households).values({ name: "Gia đình Minh An" }).returning()
+  const thisYear = schoolYearOf(localDay(today))
+  const [student, sibling] = await db
+    .insert(schema.students)
+    .values([
+      { householdId: household.id, name: "Minh An", avatarEmoji: "🦊", createdAt: at(-400, 8) },
+      { householdId: household.id, name: "Bảo Ngọc", avatarEmoji: "🐼", createdAt: at(-399, 8) },
+    ])
+    .returning()
+  await db.insert(schema.enrollments).values([
+    { studentId: student.id, schoolYear: thisYear - 1, grade: 2, className: "2A1", startsOn: schoolYearStart(thisYear - 1) },
+    { studentId: student.id, schoolYear: thisYear, grade: 3, className: "3C1", startsOn: schoolYearStart(thisYear) },
+    { studentId: sibling.id, schoolYear: thisYear, grade: 5, className: "5A2", startsOn: schoolYearStart(thisYear) },
+  ])
 
   console.log(`Inserting ${SEED_SETS.length} exercise sets…`)
   const sets = new Map<string, Loaded>()
@@ -225,6 +258,7 @@ async function main() {
     const [row] = await db
       .insert(schema.exerciseSets)
       .values({
+        householdId: household.id,
         title: s.title, subject: s.subject, grade: s.grade, topic: s.topic, description: s.description,
         estimatedMinutes: s.estimatedMinutes, difficulty: s.difficulty, kind: s.kind, source: s.source, status: s.status,
         createdAt: created, updatedAt: created,
@@ -244,34 +278,40 @@ async function main() {
 
   await seedFigure(sets.get("bt-20")!)
 
-  const plans = [...history(), ...CURRENT]
-  console.log(`Inserting ${plans.length} assignments with attempts…`)
-  for (const plan of plans) {
-    const set = sets.get(plan.set)
-    if (!set) throw new Error(`Unknown seed set ${plan.set}`)
-    const mode = plan.mode ?? "web"
-    const [assignment] = await db
-      .insert(schema.assignments)
-      .values({
-        studentId: student.id,
-        setId: set.row.id,
-        availableFrom: at(plan.availableDay, 6),
-        dueAt: at(plan.dueDay, plan.dueHour),
-        mode,
-        maxAttempts: plan.maxAttempts ?? 2,
-        timeLimitMinutes: plan.timeLimitMinutes ?? null,
-        parentNote: plan.note ?? null,
-        createdAt: at(plan.availableDay - 1, 21),
-      })
-      .returning()
+  async function insertPlans(studentId: string, sets: Map<string, Loaded>, plans: AssignmentPlan[]) {
+    for (const plan of plans) {
+      const set = sets.get(plan.set)
+      if (!set) throw new Error(`Unknown seed set ${plan.set}`)
+      const mode = plan.mode ?? "web"
+      const [assignment] = await db
+        .insert(schema.assignments)
+        .values({
+          studentId,
+          setId: set.row.id,
+          availableFrom: at(plan.availableDay, 6),
+          dueAt: at(plan.dueDay, plan.dueHour),
+          mode,
+          maxAttempts: plan.maxAttempts ?? 2,
+          timeLimitMinutes: plan.timeLimitMinutes ?? null,
+          parentNote: plan.note ?? null,
+          createdAt: at(plan.availableDay - 1, 21),
+        })
+        .returning()
 
-    const attemptPlans = plan.attempts ?? []
-    for (const [index, a] of attemptPlans.entries()) {
-      await insertAttempt(assignment.id, index + 1, mode, set, a, index === attemptPlans.length - 1)
+      const attemptPlans = plan.attempts ?? []
+      for (const [index, a] of attemptPlans.entries()) {
+        await insertAttempt(assignment.id, index + 1, mode, set, a, index === attemptPlans.length - 1)
+      }
     }
   }
 
-  await seedRewards()
+  const minhAnPlans = [...lastYear(schoolYearStart(thisYear)), ...history(), ...CURRENT]
+  console.log(`Inserting ${minhAnPlans.length} assignments for Minh An…`)
+  await insertPlans(student.id, sets, minhAnPlans)
+  console.log(`Inserting ${SIBLING.length} assignments for Bảo Ngọc…`)
+  await insertPlans(sibling.id, sets, SIBLING)
+
+  await seedRewards(household.id, [student.id, sibling.id])
 
   const counts = await Promise.all(
     [schema.exerciseSets, schema.questions, schema.assignments, schema.attempts, schema.answers].map((t) => db.$count(t)),
@@ -287,23 +327,25 @@ const SEED_REWARDS = [
   { name: "Mua truyện mới", emoji: "📚", cost: 80 },
 ]
 
-async function seedRewards() {
+async function seedRewards(householdId: string, children: string[]) {
   const rows = await db
     .insert(schema.rewards)
-    .values(SEED_REWARDS.map((r, position) => ({ ...r, position, createdAt: at(-30, 21) })))
+    .values(SEED_REWARDS.map((r, position) => ({ ...r, householdId, position, createdAt: at(-30, 21) })))
     .returning()
   const tv = rows[0]
   await db.insert(schema.rewardRedemptions).values([
-    { rewardId: tv.id, name: tv.name, emoji: tv.emoji, cost: tv.cost, status: "given", requestedAt: at(-9, 19), decidedAt: at(-9, 20) },
-    { rewardId: tv.id, name: tv.name, emoji: tv.emoji, cost: tv.cost, status: "pending", requestedAt: at(-1, 19, 30) },
+    { studentId: children[0], rewardId: tv.id, name: tv.name, emoji: tv.emoji, cost: tv.cost, status: "given", requestedAt: at(-9, 19), decidedAt: at(-9, 20) },
+    { studentId: children[0], rewardId: tv.id, name: tv.name, emoji: tv.emoji, cost: tv.cost, status: "pending", requestedAt: at(-1, 19, 30) },
   ])
-  await db.insert(schema.starAdjustments).values({ amount: 10, reason: "Tự giác ôn bài cả tuần", createdAt: at(-6, 20) })
+  await db.insert(schema.starAdjustments).values({ studentId: children[0], amount: 10, reason: "Tự giác ôn bài cả tuần", createdAt: at(-6, 20) })
   // Everything earned so far was already celebrated, so the Today page starts calm (E2E relies on it).
-  const { facts, seen } = await loadRewardFacts(db)
-  const state = computeRewards(facts, seen, now)
-  const ids = state.celebrations.map((c) => c.id)
-  if (ids.length) await db.insert(schema.badgeSeen).values(ids.map((badgeId) => ({ badgeId })))
-  console.log(`Rewards: ${state.ledger.balance} stars, streak ${state.streak.current}, ${state.badges.filter((b) => b.earnedAt).length} badges`)
+  for (const studentId of children) {
+    const { facts, seen } = await loadRewardFacts(db, { studentId })
+    const state = computeRewards(facts, seen, now)
+    const ids = state.celebrations.map((c) => c.id)
+    if (ids.length) await db.insert(schema.badgeSeen).values(ids.map((badgeId) => ({ studentId, badgeId })))
+    console.log(`Rewards (${studentId === children[0] ? "Minh An" : "Bảo Ngọc"}): ${state.ledger.balance} stars, streak ${state.streak.current}`)
+  }
 }
 
 async function insertAttempt(assignmentId: string, attemptNo: number, mode: "web" | "paper", set: Loaded, plan: AttemptPlan, isLast: boolean) {

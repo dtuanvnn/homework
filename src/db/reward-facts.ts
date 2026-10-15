@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm"
+import { and, asc, eq, sql } from "drizzle-orm"
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core"
 import type { RewardFacts } from "@/lib/rewards/stars"
 import * as schema from "./schema"
@@ -23,20 +23,31 @@ async function runAll<const T extends readonly (() => PromiseLike<unknown>)[]>(q
 }
 
 /** `serial`: inside a transaction (one connection), run the queries one after another. */
-export async function loadRewardFacts(db: AnyDb, { serial = false } = {}): Promise<{ facts: RewardFacts; seen: Set<string> }> {
+export async function loadRewardFacts(
+  db: AnyDb,
+  { studentId, serial = false }: { studentId: string; serial?: boolean },
+): Promise<{ facts: RewardFacts; seen: Set<string> }> {
   const [assignmentRows, attemptRows, inkRows, adjustments, redemptions, seenRows] = await runAll([
     () => db
       .select({ id: assignments.id, availableFrom: assignments.availableFrom, dueAt: assignments.dueAt, title: exerciseSets.title, subject: exerciseSets.subject })
       .from(assignments)
-      .innerJoin(exerciseSets, eq(exerciseSets.id, assignments.setId)),
+      .innerJoin(exerciseSets, eq(exerciseSets.id, assignments.setId))
+      .where(eq(assignments.studentId, studentId)),
     () => db
       .select({ id: attempts.id, assignmentId: attempts.assignmentId, attemptNo: attempts.attemptNo, submittedAt: attempts.submittedAt, gradedAt: attempts.gradedAt, score: attempts.score })
       .from(attempts)
+      .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))
+      .where(eq(assignments.studentId, studentId))
       .orderBy(asc(attempts.attemptNo)),
-    () => db.selectDistinct({ attemptId: answers.attemptId }).from(answers).where(sql`${answers.response} -> 'ink' is not null`),
-    () => db.select().from(starAdjustments),
-    () => db.select().from(rewardRedemptions),
-    () => db.select({ id: badgeSeen.badgeId }).from(badgeSeen),
+    () => db
+      .selectDistinct({ attemptId: answers.attemptId })
+      .from(answers)
+      .innerJoin(attempts, eq(attempts.id, answers.attemptId))
+      .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))
+      .where(and(eq(assignments.studentId, studentId), sql`${answers.response} -> 'ink' is not null`)),
+    () => db.select().from(starAdjustments).where(eq(starAdjustments.studentId, studentId)),
+    () => db.select().from(rewardRedemptions).where(eq(rewardRedemptions.studentId, studentId)),
+    () => db.select({ id: badgeSeen.badgeId }).from(badgeSeen).where(eq(badgeSeen.studentId, studentId)),
   ], serial)
   const withInk = new Set(inkRows.map((r) => r.attemptId))
   const byAssignment = Map.groupBy(attemptRows, (a) => a.assignmentId)
