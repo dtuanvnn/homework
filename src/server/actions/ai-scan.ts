@@ -51,7 +51,7 @@ export async function scanDocuments(input: ScanInput): Promise<ActionResult<Scan
     const { setId, files, ...meta } = scanInputSchema.parse(input)
     if (await db.$count(schema.exerciseSets, eq(schema.exerciseSets.id, setId))) await assertSetInHousehold(ctx, setId)
     for (const f of files) {
-      if (!(await isUploaded("sets", setId, f.path))) throw new Error(`Tệp "${f.name}" chưa tải lên xong`)
+      if (!(await isUploaded("sets", setId, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
     }
     const perFile = await Promise.all(files.map((f, i) => storageFileBlocks(f.path, scanFileLabel(i, f))))
     if (payloadBytes(perFile.flat()) > MAX_SCAN_BASE64_BYTES) {

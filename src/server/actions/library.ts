@@ -92,7 +92,7 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
     const [existing] = await db.select({ householdId: exerciseSets.householdId }).from(exerciseSets).where(eq(exerciseSets.id, set.id))
     if (existing && existing.householdId !== ctx.householdId) throw new Error(NOT_FOUND)
     for (const f of newFiles) {
-      if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp "${f.name}" chưa tải lên xong`)
+      if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp “${f.name}” chưa tải lên xong`)
     }
     // Figures the set didn't have yet must really be in Storage (their paths are checked by the schema).
     const known = new Set((await getQuestions(set.id)).flatMap(figurePaths))
