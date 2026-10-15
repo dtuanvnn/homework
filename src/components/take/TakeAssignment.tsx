@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Press from "@/components/fun/Press"
 import { pop, questionSlide, softSpring } from "@/lib/animations"
 import { play } from "@/hooks/useSound"
-import { Check, ChevronLeft, ChevronRight, CloudAlert, CloudCheck, Grid3x3, Loader2, Send, Timer, X } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, CloudAlert, CloudCheck, Grid3x3, Loader2, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -17,6 +17,8 @@ import type { TakeQuestion } from "@/lib/views/student"
 import { Essay, FillBlank, Matching, MultipleChoice, Ordering, ShortAnswer, TrueFalse, type EssayValue } from "./questions"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
+import { clockLabel } from "@/lib/timer"
+import { CountdownClock, StopwatchClock } from "./CountdownClock"
 
 const TYPE_LABEL: Record<QuestionType, string> = {
   "trac-nghiem": "Trắc nghiệm",
@@ -30,8 +32,19 @@ const TYPE_LABEL: Record<QuestionType, string> = {
 
 export type Answers = Record<string, unknown>
 
+/**
+ * Exam mode counts down to a server deadline (`serverNow` corrects the device
+ * clock); untimed work counts up from the seconds already saved with the draft.
+ */
+export type TakeTimer =
+  | { kind: "countdown"; deadline: string; serverNow: string; limitMinutes: number }
+  | { kind: "stopwatch"; initialSeconds: number }
+
 /** Debounce before an autosave after the last change. */
 const SAVE_DELAY = 800
+/** Hand-in tries after time runs out before leaving it to the server. */
+const TIME_UP_TRIES = 5
+const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
 
 function isAnswered(q: TakeQuestion, a: unknown): boolean {
   if (a === undefined || a === null) return false
@@ -45,30 +58,33 @@ function isAnswered(q: TakeQuestion, a: unknown): boolean {
   }
 }
 
-const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
-
 export default function TakeAssignment({
   title,
   subject,
   questions,
   initialAnswers = {},
+  timer,
   onSave,
   onExit,
   onSubmit,
   onSubmitted,
+  onGiveUp,
 }: {
   title: string
   subject: SubjectId
   questions: TakeQuestion[]
   initialAnswers?: Answers
-  /** Persists the answers; resolves false when saving failed. */
-  onSave: (answers: Answers) => Promise<boolean>
+  timer: TakeTimer
+  /** Persists the answers (and the untimed work seconds); resolves false when saving failed. */
+  onSave: (answers: Answers, elapsedSeconds: number) => Promise<boolean>
   /** Called after the answers were saved on "Lưu và thoát". */
   onExit: () => void
   /** Hands the work in; resolves null when it failed (the caller shows the error). */
   onSubmit: (answers: Answers, elapsedSeconds: number) => Promise<{ graded: boolean } | null>
   /** Called once the "sent" animation finished. */
   onSubmitted: () => void
+  /** Time ran out and handing in kept failing; the server hands the saved answers in later. */
+  onGiveUp: () => void
 }) {
   const tone = SUBJECTS[subject]
   const [answers, setAnswers] = useState<Answers>(initialAnswers)
@@ -92,7 +108,19 @@ export default function TakeAssignment({
   const [exiting, setExiting] = useState(false)
   const [graded, setGraded] = useState(false)
   const [showTimer, setShowTimer] = useState(true)
-  const [elapsed, setElapsed] = useState(0)
+  const countdown = timer.kind === "countdown" ? timer : null
+  // Untimed: seconds the page was visible, continuing from what the draft saved.
+  const [elapsed, setElapsed] = useState(timer.kind === "stopwatch" ? timer.initialSeconds : 0)
+  const [deadline] = useState(() => (countdown ? new Date(countdown.deadline) : null))
+  const [offsetMs] = useState(() => (countdown ? new Date(countdown.serverNow).getTime() - Date.now() : 0))
+  const [timeUp, setTimeUp] = useState<null | "up" | "sending">(null)
+  const elapsedRef = useRef(elapsed)
+  useEffect(() => { elapsedRef.current = elapsed })
+  const savedSeconds = useRef(elapsed)
+  const hasDraft = useRef(Object.keys(initialAnswers).length > 0)
+  const submitting = useRef(false)
+  const handedIn = useRef(false)
+  const mounted = useRef(true)
   const saveTimer = useRef<number>(undefined)
   const savedTimer = useRef<number>(undefined)
   const latest = useRef<Answers>(initialAnswers)
@@ -101,16 +129,25 @@ export default function TakeAssignment({
   const onSaveRef = useRef(onSave)
   useEffect(() => { onSaveRef.current = onSave })
 
+  /** Untimed work time also needs saving when no answer changed (only once a draft exists). */
+  const markTimeDirty = () => {
+    if (timer.kind === "stopwatch" && hasDraft.current && elapsedRef.current - savedSeconds.current >= 5) dirty.current = true
+  }
+
   /** Saves the latest answers if they changed; saves run one at a time. */
   const flush = () => {
     window.clearTimeout(saveTimer.current)
     if (!dirty.current) return queue.current
     dirty.current = false
     const snapshot = latest.current
+    const seconds = elapsedRef.current
     setSaving(true)
     const mine = queue.current.then(async () => {
-      const ok = await onSaveRef.current(snapshot).catch(() => false)
-      if (!ok) dirty.current = true
+      const ok = await onSaveRef.current(snapshot, seconds).catch(() => false)
+      if (ok) {
+        hasDraft.current = true
+        savedSeconds.current = Math.max(savedSeconds.current, seconds)
+      } else dirty.current = true
       return ok
     })
     queue.current = mine
@@ -129,21 +166,29 @@ export default function TakeAssignment({
 
   // Leaving any other way (back button, closing the tab) still saves.
   useEffect(() => {
-    const onHide = () => { if (document.visibilityState === "hidden") void flushRef.current() }
-    document.addEventListener("visibilitychange", onHide)
-    return () => {
-      document.removeEventListener("visibilitychange", onHide)
-      window.clearTimeout(savedTimer.current)
+    const onHide = () => {
+      if (document.visibilityState !== "hidden" || submitting.current) return
+      markTimeDirtyRef.current()
       void flushRef.current()
     }
+    document.addEventListener("visibilitychange", onHide)
+    return () => {
+      mounted.current = false
+      document.removeEventListener("visibilitychange", onHide)
+      window.clearTimeout(savedTimer.current)
+      if (!submitting.current && !handedIn.current) void flushRef.current()
+    }
   }, [])
+  const markTimeDirtyRef = useRef(markTimeDirty)
+  useEffect(() => { markTimeDirtyRef.current = markTimeDirty })
 
   useEffect(() => {
-    const id = window.setInterval(() => setElapsed((s) => s + 1), 1000)
+    // The stopwatch only runs while the child can see the page.
+    const id = timer.kind === "stopwatch" ? window.setInterval(() => { if (document.visibilityState === "visible") setElapsed((s) => s + 1) }, 1000) : undefined
     const prev = document.body.style.overflow
     document.body.style.overflow = "hidden"
     return () => { window.clearInterval(id); document.body.style.overflow = prev }
-  }, [])
+  }, [timer.kind])
 
   const set = (id: string, v: unknown) => {
     latest.current = { ...latest.current, [id]: v }
@@ -155,6 +200,7 @@ export default function TakeAssignment({
 
   const exit = async () => {
     setExiting(true)
+    markTimeDirty()
     const ok = await flush()
     setExiting(false)
     if (ok) return onExit()
@@ -175,24 +221,48 @@ export default function TakeAssignment({
     prevAnswered.current = answeredCount
   }, [answeredCount])
 
-  const submit = async () => {
-    setConfirmSubmit(false)
+  /** Sends the work with the paper-plane animation; resolves false when it failed. */
+  const handIn = async (): Promise<boolean> => {
+    submitting.current = true
     window.clearTimeout(saveTimer.current)
     dirty.current = false
     play("submit")
     setFlight("flying")
-    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
     const flown = wait(reduced ? 200 : 750)
-    const result = await queue.current.then(() => onSubmit(latest.current, elapsed)).catch(() => null)
+    const result = await queue.current.then(() => onSubmit(latest.current, elapsedRef.current)).catch(() => null)
     await flown
     if (!result) {
+      submitting.current = false
       setFlight("idle")
-      return
+      return false
     }
+    handedIn.current = true
     setGraded(result.graded)
     setFlight("done")
     await wait(reduced ? 800 : 1150)
     onSubmitted()
+    return true
+  }
+
+  const submit = () => {
+    setConfirmSubmit(false)
+    void handIn()
+  }
+
+  // Exam mode: at zero the work is handed in as it is, retrying while the network is down.
+  const onTimeUp = async () => {
+    setConfirmSubmit(false)
+    setConfirmExit(false)
+    setGridOpen(false)
+    setTimeUp("up")
+    await wait(reduced ? 600 : 1600)
+    while (submitting.current && mounted.current) await wait(200) // a manual submit was already on its way
+    for (let i = 0; i < TIME_UP_TRIES && mounted.current && !handedIn.current; i++) {
+      setTimeUp("sending")
+      if (await handIn()) return
+      await wait(3000)
+    }
+    if (mounted.current && !handedIn.current) onGiveUp()
   }
 
   const renderQuestion = (q: TakeQuestion) => {
@@ -241,15 +311,11 @@ export default function TakeAssignment({
               ) : null}
             </AnimatePresence>
           </span>
-          <button
-            type="button"
-            onClick={() => setShowTimer((v) => !v)}
-            aria-label={showTimer ? "Ẩn đồng hồ" : "Hiện đồng hồ"}
-            className="inline-flex h-11 items-center gap-1.5 rounded-full bg-slate-100 px-3 text-base font-bold tabular-nums text-slate-700"
-          >
-            <Timer className="size-5" />
-            {showTimer && clock(elapsed)}
-          </button>
+          {countdown && deadline ? (
+            <CountdownClock deadline={deadline} offsetMs={offsetMs} limitSeconds={countdown.limitMinutes * 60} onExpire={() => void onTimeUp()} />
+          ) : (
+            <StopwatchClock seconds={elapsed} hidden={!showTimer} onToggle={() => setShowTimer((v) => !v)} />
+          )}
         </div>
         <div className="mx-auto mt-3 flex max-w-4xl items-center gap-3">
           <div className="relative h-3 flex-1 rounded-full bg-slate-100" role="progressbar" aria-valuenow={answeredCount} aria-valuemax={questions.length}>
@@ -286,7 +352,7 @@ export default function TakeAssignment({
               <div>
                 <h2 className="text-3xl font-extrabold text-slate-900">{missing ? `Còn ${missing} câu chưa làm` : "Em đã làm hết các câu!"}</h2>
                 <p className="mt-2 text-lg text-slate-500">
-                  {missing ? "Chạm vào câu màu xám để làm tiếp, hoặc nộp bài luôn." : `Em đã làm xong trong ${clock(elapsed)}. Nộp bài thôi!`}
+                  {missing ? "Chạm vào câu màu xám để làm tiếp, hoặc nộp bài luôn." : countdown ? "Em còn thời gian thì kiểm tra lại, rồi nộp bài nhé!" : `Em đã làm xong trong ${clockLabel(elapsed)}. Nộp bài thôi!`}
                 </p>
               </div>
               <QuestionGrid questions={questions} answers={answers} current={-1} onPick={setIndex} toneBg={tone.bg} />
@@ -369,7 +435,11 @@ export default function TakeAssignment({
         <DialogContent className="z-[60] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-2xl">Lưu và thoát?</DialogTitle>
-            <DialogDescription className="text-base">Bài làm của em đã được lưu. Lần sau em có thể làm tiếp từ chỗ này.</DialogDescription>
+            <DialogDescription className="text-base">
+              {countdown
+                ? "Bài làm của em đã được lưu. Đồng hồ vẫn chạy khi em thoát ra, hết giờ bài sẽ tự nộp."
+                : "Bài làm của em đã được lưu. Lần sau em có thể làm tiếp từ chỗ này."}
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button variant="outline" className="h-12 text-base" onClick={() => setConfirmExit(false)}>Ở lại làm tiếp</Button>
@@ -398,6 +468,35 @@ export default function TakeAssignment({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Exam mode: time is up, inputs are blocked while the work is handed in. */}
+      <AnimatePresence>
+        {timeUp && (
+          <motion.div
+            className="fixed inset-0 z-[65] flex items-center justify-center bg-white/95 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="alertdialog"
+            aria-label="Hết giờ"
+          >
+            <motion.div className="flex flex-col items-center gap-3 text-center" variants={pop} initial="initial" animate="animate">
+              <motion.span
+                className="text-8xl"
+                aria-hidden
+                animate={reduced ? undefined : { rotate: [0, -15, 15, -10, 10, 0] }}
+                transition={{ duration: 0.6, repeat: timeUp === "up" ? 1 : 0 }}
+              >
+                ⏰
+              </motion.span>
+              <p className="text-4xl font-extrabold text-red-600">Hết giờ!</p>
+              <p className="inline-flex items-center gap-2 text-lg text-slate-500">
+                {timeUp === "sending" && <Loader2 className="size-5 animate-spin" />}
+                {timeUp === "sending" ? "Đang nộp bài, em chờ chút nhé…" : "Bài của em sẽ được nộp ngay."}
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Submit: button morphs into a paper plane that flies away, then "Đã nộp!" */}
       <AnimatePresence>
         {flight !== "idle" && (
