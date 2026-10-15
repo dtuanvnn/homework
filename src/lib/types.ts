@@ -58,6 +58,15 @@ export interface StudentCard {
   archived: boolean
 }
 
+/** A child on the Student detail page. */
+export interface StudentDetailData {
+  card: StudentCard
+  years: (import("./school-year").Enrollment & { current: boolean })[]
+  streak: number
+  badges: number
+  lockReason: string | null
+}
+
 export interface ExerciseSet {
   id: string
   title: string

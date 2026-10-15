@@ -14,7 +14,7 @@ import { localDay } from "@/lib/dates"
 import { schoolYearLabel, schoolYearOf } from "@/lib/school-year"
 import { cn } from "@/lib/utils"
 import type { StudentCard } from "@/lib/types"
-import { archiveStudent, createStudent, setStudentPin, updateStudent } from "@/server/actions/students"
+import { createStudent, setStudentPin, updateStudent } from "@/server/actions/students"
 import { AVATAR_EMOJIS } from "./emoji"
 
 const GRADES = [1, 2, 3, 4, 5, 6, 7]
@@ -65,16 +65,6 @@ export default function StudentSheet({ open, onOpenChange, editing, now }: {
       onOpenChange(false)
     } catch (e) {
       fail("Chưa xoá được")(e)
-    }
-  }
-
-  const archive = async () => {
-    if (!editing || !window.confirm(`Lưu trữ ${editing.name}? Bé sẽ không còn trong danh sách chọn; dữ liệu vẫn được giữ.`)) return
-    try {
-      unwrap(await archiveStudent(editing.id))
-      onOpenChange(false)
-    } catch (e) {
-      fail("Chưa lưu trữ được")(e)
     }
   }
 
@@ -170,11 +160,6 @@ export default function StudentSheet({ open, onOpenChange, editing, now }: {
               </button>
             )}
           </div>
-          {editing && (
-            <Button variant="ghost" className="w-full text-red-600 hover:bg-red-50 hover:text-red-700" onClick={archive}>
-              Lưu trữ học sinh
-            </Button>
-          )}
         </div>
         <SheetFooter className="flex-col">
           <div className="flex gap-2">

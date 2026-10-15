@@ -4,10 +4,11 @@ import { cache } from "react"
 import { db, schema } from "@/db"
 import { loadRewardFacts } from "@/db/reward-facts"
 import { localDay } from "@/lib/dates"
+import { isUuid } from "@/lib/ids"
 import { currentEnrollment, schoolYearOf, type Enrollment } from "@/lib/school-year"
 import { isLocked } from "@/lib/student-lock"
 import { computeRewards } from "@/lib/views/rewards"
-import type { PinStudent, Student, StudentCard } from "@/lib/types"
+import type { PinStudent, Student, StudentCard, StudentDetailData } from "@/lib/types"
 import { settleExpiredAttempts } from "./attempt-finalize"
 
 /*
@@ -90,4 +91,22 @@ export async function listStudentCards(householdId: string): Promise<StudentCard
   const rows = await db.select().from(students).where(eq(students.householdId, householdId)).orderBy(asc(students.createdAt))
   const now = new Date()
   return Promise.all(rows.map(async (r) => toCard(r, await starBalance(r.id), now)))
+}
+
+export async function getStudentDetail(householdId: string, id: string): Promise<StudentDetailData | null> {
+  if (!isUuid(id)) return null
+  const row = await db.query.students.findFirst({ where: and(eq(students.id, id), eq(students.householdId, householdId)) })
+  if (!row) return null
+  await settleExpiredAttempts()
+  const now = new Date()
+  const [years, { facts, seen }] = await Promise.all([listEnrollments(row.id), loadRewardFacts(db, { studentId: row.id })])
+  const rewards = computeRewards(facts, seen, now)
+  const current = currentEnrollment(years, localDay(now))
+  return {
+    card: await toCard(row, rewards.ledger.balance, now),
+    years: [...years].reverse().map((y) => ({ ...y, current: y.schoolYear === current?.schoolYear })),
+    streak: rewards.streak.current,
+    badges: rewards.badges.filter((b) => b.earnedAt).length,
+    lockReason: isLocked(row, now) ? row.lockReason : null,
+  }
 }

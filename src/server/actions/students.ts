@@ -7,7 +7,7 @@ import { z } from "zod"
 import { db, schema } from "@/db"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { isValidPin, studentPinHash, VIEWING_COOKIE } from "@/lib/pin"
-import { schoolYearStart } from "@/lib/school-year"
+import { schoolYearLabel, schoolYearStart } from "@/lib/school-year"
 import { assertAccess } from "../access"
 import { listHouseholdStudents } from "../students"
 
@@ -111,6 +111,48 @@ export async function restoreStudent(id: string): Promise<ActionResult<null>> {
     const ctx = await assertAccess("parent")
     const row = await ownStudent(ctx.householdId, id)
     await db.update(schema.students).set({ archivedAt: null }).where(eq(schema.students.id, row.id))
+    refresh()
+    return null
+  })
+}
+
+const enrollmentSchema = z.object({
+  schoolYear: z.number().int().min(2000).max(2100),
+  grade: z.number().int().min(1).max(12),
+  className: z.string().trim().max(20).nullable(),
+  startsOn: z.coerce.date().transform((d) => d.toISOString().slice(0, 10)),
+})
+
+const pgCode = (e: unknown) => (e as { code?: string; cause?: { code?: string } }).code ?? (e as { cause?: { code?: string } }).cause?.code
+
+/** "Lên lớp": a new school year for the child. Stars, badges and streak are untouched. */
+export async function promoteStudent(input: { id: string } & z.input<typeof enrollmentSchema>): Promise<ActionResult<null>> {
+  return runAction(async () => {
+    const ctx = await assertAccess("parent")
+    const row = await ownStudent(ctx.householdId, input.id)
+    const data = enrollmentSchema.parse(input)
+    try {
+      await db.insert(schema.enrollments).values({ studentId: row.id, ...data, className: data.className || null })
+    } catch (e) {
+      if (pgCode(e) === "23505") throw new Error(`Bé đã có năm học ${schoolYearLabel(data.schoolYear)}.`)
+      throw e
+    }
+    refresh()
+    return null
+  })
+}
+
+export async function updateEnrollment(input: { id: string } & z.input<typeof enrollmentSchema>): Promise<ActionResult<null>> {
+  return runAction(async () => {
+    const ctx = await assertAccess("parent")
+    const row = await ownStudent(ctx.householdId, input.id)
+    const data = enrollmentSchema.parse(input)
+    const [updated] = await db
+      .update(schema.enrollments)
+      .set({ grade: data.grade, className: data.className || null, startsOn: data.startsOn })
+      .where(and(eq(schema.enrollments.studentId, row.id), eq(schema.enrollments.schoolYear, data.schoolYear)))
+      .returning({ id: schema.enrollments.id })
+    if (!updated) throw new Error("Không tìm thấy năm học.")
     refresh()
     return null
   })
