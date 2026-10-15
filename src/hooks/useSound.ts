@@ -9,7 +9,7 @@
 import { useCallback, useSyncExternalStore } from "react"
 import type { AppMode } from "@/lib/types"
 
-export type SoundName = "tap" | "select" | "next" | "correct" | "wrong" | "star" | "submit" | "celebrate" | "shutter"
+export type SoundName = "tap" | "select" | "next" | "correct" | "wrong" | "star" | "submit" | "celebrate" | "shutter" | "warn" | "urgent" | "tick"
 
 /** Sounds that have a real file in /public/sounds/<name>.mp3. */
 export const SOUND_FILES: Partial<Record<SoundName, string>> = {
@@ -147,10 +147,14 @@ const SYNTH: Record<SoundName, (c: AudioContext, step: number) => void> = {
     tone(c, 1318, 0.27, 0.45, { gain: 0.15 })
   },
   shutter: (c) => { noise(c, 0, 0.05, { freq: 3000, gain: 0.4, q: 0.5 }); noise(c, 0.07, 0.06, { freq: 2000, gain: 0.3, q: 0.5 }) },
+  // Timer: a soft two-note chime at 5 minutes, three quick beeps at 1 minute, a tick for the last seconds.
+  warn: (c) => { tone(c, 880, 0, 0.35, { type: "triangle", gain: 0.3 }); tone(c, 1175, 0.18, 0.5, { type: "triangle", gain: 0.3 }) },
+  urgent: (c) => [0, 0.16, 0.32].forEach((t) => tone(c, 988, t, 0.12, { type: "square", gain: 0.12 })),
+  tick: (c) => tone(c, 1500, 0, 0.03, { type: "triangle", gain: 0.15 }),
 }
 
 /** Minimum gap per sound so rapid taps don't stack into noise. */
-const THROTTLE: Partial<Record<SoundName, number>> = { tap: 70, select: 90, next: 150, star: 60 }
+const THROTTLE: Partial<Record<SoundName, number>> = { tap: 70, select: 90, next: 150, star: 60, tick: 500 }
 const last = new Map<SoundName, number>()
 
 export function play(name: SoundName, step = 0) {
