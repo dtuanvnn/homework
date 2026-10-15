@@ -15,6 +15,10 @@ export const DAY_SHORT = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
 export function dateInput(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
+/** Value for an `<input type="datetime-local">` (local wall clock, minutes). */
+export function dateTimeInput(date: Date): string {
+  return `${dateInput(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+}
 export function localDate(value: string): Date {
   return new Date(`${value}T00:00:00`)
 }

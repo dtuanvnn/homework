@@ -31,5 +31,6 @@ export function toAssignment(record: AssignmentRecord, now: Date): Assignment {
     parentNote: record.parentNote ?? undefined,
     mode: record.mode,
     maxAttempts: record.maxAttempts,
+    attemptCount: record.attempts.length,
   }
 }

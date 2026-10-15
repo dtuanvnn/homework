@@ -17,6 +17,7 @@ import { Card, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import AssignSheet from "@/components/schedule/AssignSheet"
+import EditAssignmentSheet from "@/components/schedule/EditAssignmentSheet"
 import PrintableExercise from "@/components/schedule/PrintableExercise"
 import { useLibrary } from "@/state/library-store"
 import { useStudent } from "@/components/layout/AppFrame"
@@ -34,6 +35,8 @@ export default function Schedule({ now }: { now: string }) {
   const [date, setDate] = useState(() => new Date(now))
   const [sheetOpen, setSheetOpen] = useState(false)
   const [printing, setPrinting] = useState<Assignment | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editing = library.assignments.find((a) => a.id === editingId)
   const finishPrint = useCallback(() => setPrinting(null), [])
   const days = Array.from({ length: 7 }, (_, i) =>
     addDays(startOfWeek(date), i),
@@ -66,12 +69,19 @@ export default function Schedule({ now }: { now: string }) {
       <Card
         key={assignment.id}
         className={cn(
-          "gap-2 p-3 shadow-none",
+          "relative gap-2 p-3 shadow-none transition-shadow hover:shadow-md",
           tone?.softBg,
           tone?.border,
           !compact && "md:p-5",
         )}
       >
+        {/* The whole card opens the editor; "In đề" sits above this layer. */}
+        <button
+          type="button"
+          className="absolute inset-0 rounded-[inherit] focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          aria-label={`Sửa bài giao: ${set?.title ?? "Bài tập"}`}
+          onClick={() => setEditingId(assignment.id)}
+        />
         <div
           className={cn(
             "flex items-center gap-1.5 text-xs font-semibold",
@@ -140,7 +150,7 @@ export default function Schedule({ now }: { now: string }) {
             variant="ghost"
             size="sm"
             className={cn(
-              "w-fit px-0 text-slate-600",
+              "relative w-fit px-0 text-slate-600",
               compact && "gap-1 text-xs",
             )}
             onClick={() => startPrint(assignment)}
@@ -412,6 +422,14 @@ export default function Schedule({ now }: { now: string }) {
           date={date}
           onClose={() => setSheetOpen(false)}
           onCreated={setDate}
+        />
+      )}
+      {editing && (
+        <EditAssignmentSheet
+          key={editing.id}
+          assignment={editing}
+          onClose={() => setEditingId(null)}
+          onSaved={setDate}
         />
       )}
       {printing && printSet && printReady && (

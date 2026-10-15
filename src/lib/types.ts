@@ -49,6 +49,8 @@ export interface Assignment {
   parentNote?: string
   mode?: "web" | "paper"
   maxAttempts?: 1 | 2
+  /** Attempts the child has started (drafts included); 0 means the assignment can change freely. */
+  attemptCount?: number
 }
 
 export interface Attempt {

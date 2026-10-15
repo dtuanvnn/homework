@@ -12,7 +12,7 @@ import { assertAccess } from "../access"
 import { getExerciseSetDetail, getQuestions, getQuestionsWithImages, getStudent, isUuid, toExerciseSet } from "../queries"
 import { attachmentUrl, createUploadTargets, isUploaded, listFolder, removeFromStorage, type UploadTarget } from "../storage"
 
-const { exerciseSets, questions, attachments, assignments, answers } = schema
+const { exerciseSets, questions, attachments, assignments, attempts, answers } = schema
 
 const setMetaSchema = z.object({
   id: z.uuid(),
@@ -250,6 +250,7 @@ async function insertAssignments(items: NewAssignment[]): Promise<Assignment[]> 
     parentNote: r.parentNote ?? undefined,
     mode: r.mode,
     maxAttempts: r.maxAttempts as 1 | 2,
+    attemptCount: 0,
   }))
 }
 
@@ -271,6 +272,56 @@ export async function quickAssign(setId: string): Promise<ActionResult<Assignmen
       { setId, availableFrom: new Date().toISOString(), dueAt: due.toISOString(), mode: "web", maxAttempts: 2 },
     ])
     return created
+  })
+}
+
+const assignmentChangesSchema = newAssignmentSchema.omit({ setId: true })
+export type AssignmentChanges = z.input<typeof assignmentChangesSchema>
+
+/** Reschedules an assignment or changes its settings; once the child has started, mode and a lower attempt cap are locked. */
+export async function updateAssignment(id: string, changes: AssignmentChanges): Promise<ActionResult<void>> {
+  return runAction(async () => {
+    await assertAccess("parent")
+    if (!isUuid(id)) throw new Error("Mã bài giao không hợp lệ")
+    const c = assignmentChangesSchema.parse(changes)
+    if (new Date(c.dueAt) <= new Date(c.availableFrom)) throw new Error("Hạn nộp phải sau thời điểm giao bài")
+    const [current] = await db.select().from(assignments).where(eq(assignments.id, id))
+    if (!current) throw new Error("Không tìm thấy bài giao")
+    const started = await db.$count(attempts, eq(attempts.assignmentId, id))
+    if (started > 0 && c.mode !== current.mode) throw new Error("Con đã bắt đầu làm nên không đổi được hình thức.")
+    if (c.maxAttempts < started) throw new Error(`Con đã làm ${started} lần nên không giảm số lần được.`)
+    await db
+      .update(assignments)
+      .set({
+        availableFrom: new Date(c.availableFrom),
+        dueAt: new Date(c.dueAt),
+        mode: c.mode,
+        maxAttempts: c.maxAttempts,
+        parentNote: c.note?.trim() || null,
+      })
+      .where(eq(assignments.id, id))
+    refresh()
+  })
+}
+
+/** Deletes an assignment together with the child's attempts, answers and photographed pages. */
+export async function deleteAssignment(id: string): Promise<ActionResult<void>> {
+  return runAction(async () => {
+    await assertAccess("parent")
+    if (!isUuid(id)) throw new Error("Mã bài giao không hợp lệ")
+    const [current] = await db.select({ setId: assignments.setId }).from(assignments).where(eq(assignments.id, id))
+    if (!current) throw new Error("Không tìm thấy bài giao")
+    const files = await db
+      .select({ path: attachments.storagePath })
+      .from(attachments)
+      .innerJoin(attempts, eq(attachments.attemptId, attempts.id))
+      .where(eq(attempts.assignmentId, id))
+    await db.delete(assignments).where(eq(assignments.id, id))
+    // Pages uploaded but never handed in also sit under the assignment's folder.
+    const leftovers = await listFolder("attempts", id)
+    await removeUnreferenced([...new Set([...files.flatMap((f) => (f.path ? [f.path] : [])), ...leftovers])])
+    await removeUnusedFigures(current.setId)
+    refresh()
   })
 }
 

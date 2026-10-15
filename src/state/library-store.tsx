@@ -5,12 +5,15 @@ import { toast } from "sonner"
 import {
   createAssignments,
   createExerciseSet,
+  deleteAssignment,
   deleteExerciseSet,
   duplicateExerciseSet,
   loadQuestions,
   quickAssign,
   requestSetUploads,
   saveExerciseSet,
+  updateAssignment,
+  type AssignmentChanges,
   type NewAssignment,
 } from "@/server/actions/library"
 import { unwrap } from "@/lib/action-result"
@@ -27,6 +30,10 @@ interface LibraryStore {
   assignments: Assignment[]
   /** Creates assignments (validated server side) and returns them. */
   addAssignments: (items: NewAssignment[]) => Promise<Assignment[]>
+  /** Saves new times/settings of an assignment; throws the server's message on failure. */
+  editAssignment: (id: string, changes: AssignmentChanges) => Promise<void>
+  /** Deletes an assignment and the child's work on it; throws on failure. */
+  removeAssignment: (id: string) => Promise<void>
   sets: ExerciseSet[]
   getSet: (id: string) => ExerciseSet | undefined
   /** Cached questions of a set; fetched on first request, [] until loaded. */
@@ -192,6 +199,32 @@ export function LibraryProvider({
     return created
   }, [])
 
+  const editAssignment = useCallback(async (id: string, changes: AssignmentChanges) => {
+    unwrap(await updateAssignment(id, changes))
+    // Status may change too (e.g. a new due time); refresh() brings it with the layout props.
+    setAssignments((prev) =>
+      prev.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              assignedDate: changes.availableFrom,
+              dueDate: changes.dueAt,
+              mode: changes.mode,
+              maxAttempts: changes.maxAttempts,
+              parentNote: changes.note?.trim() || undefined,
+            }
+          : a,
+      ),
+    )
+  }, [])
+
+  const removeAssignment = useCallback(async (id: string) => {
+    unwrap(await deleteAssignment(id))
+    const setId = assignments.find((a) => a.id === id)?.exerciseSetId
+    setAssignments((prev) => prev.filter((a) => a.id !== id))
+    setSets((prev) => prev.map((s) => (s.id === setId ? { ...s, timesAssigned: Math.max(0, s.timesAssigned - 1) } : s)))
+  }, [assignments])
+
   const assignSet = useCallback(async (id: string) => {
     try {
       const created = unwrap(await quickAssign(id))
@@ -216,6 +249,8 @@ export function LibraryProvider({
     () => ({
       assignments,
       addAssignments,
+      editAssignment,
+      removeAssignment,
       sets,
       getSet,
       getQuestions,
@@ -229,7 +264,7 @@ export function LibraryProvider({
       assignSet,
       createSet,
     }),
-    [assignments, addAssignments, sets, getSet, getQuestions, questionsLoaded, getAttachments, primeSet, persist, duplicateSet, deleteSet, assignSet, createSet],
+    [assignments, addAssignments, editAssignment, removeAssignment, sets, getSet, getQuestions, questionsLoaded, getAttachments, primeSet, persist, duplicateSet, deleteSet, assignSet, createSet],
   )
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>

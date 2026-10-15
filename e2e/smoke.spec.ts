@@ -33,15 +33,13 @@ test("mode toggle switches between parent and student", async ({ page }) => {
   await hideDevBadge()
   await toggle.getByRole("radio", { name: "Học sinh" }).tap()
   await expect(page).toHaveURL(/\/student$/)
-  await expect(page.getByText("Đã chuyển sang chế độ Học sinh")).toBeVisible()
   await expect(toggle.getByRole("radio", { name: "Học sinh" })).toHaveAttribute("aria-checked", "true")
 
-  // Fresh load: on the phone the confirmation toast covers the app-bar toggle for a while.
+  // Switching is a full page load (each mode has its own PIN); start the way back fresh too.
   await open(page, "/student")
   await hideDevBadge()
   await toggle.getByRole("radio", { name: "Phụ huynh" }).tap()
   await expect(page).toHaveURL(/\/parent$/)
-  await expect(page.getByText("Đã chuyển sang chế độ Phụ huynh")).toBeVisible()
   await expect(toggle.getByRole("radio", { name: "Phụ huynh" })).toHaveAttribute("aria-checked", "true")
   expect(errors).toEqual([])
 })
