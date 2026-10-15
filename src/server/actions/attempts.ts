@@ -3,13 +3,14 @@
 import { and, eq, isNull } from "drizzle-orm"
 import { z } from "zod"
 import { db, schema } from "@/db"
-import { gradeAttempt, type Response } from "@/lib/grading"
+import type { Response } from "@/lib/grading"
 import { inkSchema } from "@/lib/ink"
-import type { Question } from "@/lib/types"
-import { autoFeedback, canTake, stateOf } from "@/lib/views/student"
+import { deadlineOf, isExpired, mergeActiveSeconds, timedDuration } from "@/lib/timer"
+import { canTake, stateOf } from "@/lib/views/student"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { assertAccess } from "../access"
-import { getAssignment, getQuestions, isUuid, type AssignmentRecord } from "../queries"
+import { answerRows, closeAttempt, settleAttempt } from "../attempt-finalize"
+import { getAssignment, getQuestions, isUuid, type AssignmentRecord, type AttemptRecord } from "../queries"
 import { createUploadTargets, isUploaded, type UploadTarget } from "../storage"
 import type { NewFile } from "./library"
 
@@ -23,7 +24,8 @@ import type { NewFile } from "./library"
 
 const { attempts, answers, attachments } = schema
 
-type Result<T> = ({ ok: true } & T) | { ok: false; error: string }
+/** `expired`: a timed attempt ran out of time and was handed in as saved. */
+type Result<T> = ({ ok: true } & T) | { ok: false; error: string; expired?: boolean }
 
 const MAX_RESPONSE_CHARS = 2_000_000
 
@@ -43,6 +45,7 @@ const responsesSchema = z
   .refine((r) => JSON.stringify(r).length <= MAX_RESPONSE_CHARS, "Bài làm quá lớn")
 
 const ERR_CLOSED = "Bài này không làm tiếp được nữa."
+const ERR_TIME_UP = "Đã hết giờ làm bài. Bài của em đã được nộp."
 
 function parseResponses(input: unknown): Record<string, Response> | null {
   const parsed = responsesSchema.safeParse(input)
@@ -61,10 +64,13 @@ async function loadWebAssignment(assignmentId: string): Promise<{ record: Assign
 /**
  * The attempt the student is working on: the open draft, or a new attempt
  * (next number) when the assignment is not started or a retry is allowed.
+ * Timed assignments only get a new attempt from startAttempt ("Bắt đầu"), so a
+ * late autosave can never open the retry after time ran out.
  */
-async function openAttempt(record: AssignmentRecord): Promise<string | null> {
+async function openAttempt(record: AssignmentRecord, { create }: { create: boolean }): Promise<AttemptRecord | null> {
   const latest = record.attempts.at(-1)
-  if (latest && !latest.submittedAt) return latest.id
+  if (latest && !latest.submittedAt) return latest
+  if (!create) return null
   const state = stateOf(record, new Date())
   if (!canTake(state)) return null
   const attemptNo = (latest?.attemptNo ?? 0) + 1
@@ -73,38 +79,81 @@ async function openAttempt(record: AssignmentRecord): Promise<string | null> {
     .insert(attempts)
     .values({ assignmentId: record.id, attemptNo, mode: record.mode })
     .onConflictDoNothing({ target: [attempts.assignmentId, attempts.attemptNo] })
-    .returning({ id: attempts.id })
-  if (created) return created.id
+    .returning()
+  if (created) return created
   // Another request created it first.
   const existing = await db.query.attempts.findFirst({
     where: and(eq(attempts.assignmentId, record.id), eq(attempts.attemptNo, attemptNo), isNull(attempts.submittedAt)),
   })
-  return existing?.id ?? null
+  return existing ?? null
 }
 
-/** Answer rows with a snapshot of each question as stored in the database. */
-function answerRows(attemptId: string, questions: Question[], responses: Record<string, Response>, onlyAnswered: boolean) {
-  return questions
-    .map((q, position) => ({ attemptId, questionId: q.id, position, question: q, response: responses[q.id] ?? null }))
-    .filter((row) => !onlyAnswered || row.response !== null)
+/** Handed in by the timer: the stored duration is the whole limit. */
+const timedOut = (attempt: AttemptRecord | undefined, limit: number) =>
+  Boolean(attempt?.submittedAt && attempt.durationSeconds !== null && attempt.durationSeconds >= limit * 60)
+
+/**
+ * The attempt a save or submit writes to. A timed attempt past its deadline
+ * (plus grace) is handed in as saved instead, and the caller is told so.
+ */
+async function writableAttempt(record: AssignmentRecord): Promise<{ attempt: AttemptRecord } | { error: string; expired?: true }> {
+  const limit = record.timeLimitMinutes
+  const attempt = await openAttempt(record, { create: limit === null })
+  if (!attempt) {
+    // getAssignment already handed in the expired attempt: tell the page time is up.
+    if (limit !== null && timedOut(record.attempts.at(-1), limit)) return { error: ERR_TIME_UP, expired: true }
+    return { error: ERR_CLOSED }
+  }
+  if (limit !== null && isExpired(attempt.startedAt, limit, new Date())) {
+    await settleAttempt({ id: attempt.id, setId: record.setId, startedAt: attempt.startedAt, timeLimitMinutes: limit })
+    return { error: ERR_TIME_UP, expired: true }
+  }
+  return { attempt }
 }
 
-/** Autosave: replaces the draft's answers. Creates the attempt on first save. */
-export async function saveDraft(assignmentId: string, responses: Record<string, unknown>): Promise<Result<{ attemptId: string }>> {
+/** "Bắt đầu" on a timed assignment: starts (or resumes) the attempt and returns its deadline. */
+export async function startAttempt(assignmentId: string): Promise<Result<{ deadline: string; serverNow: string }>> {
+  await assertAccess("student")
+  const loaded = await loadWebAssignment(assignmentId)
+  if ("error" in loaded) return { ok: false, error: loaded.error }
+  const limit = loaded.record.timeLimitMinutes
+  if (limit === null) return { ok: false, error: "Bài này không giới hạn thời gian." }
+  const attempt = await openAttempt(loaded.record, { create: true })
+  if (!attempt) return { ok: false, error: ERR_CLOSED }
+  const now = new Date()
+  if (isExpired(attempt.startedAt, limit, now)) {
+    await settleAttempt({ id: attempt.id, setId: loaded.record.setId, startedAt: attempt.startedAt, timeLimitMinutes: limit })
+    return { ok: false, error: ERR_TIME_UP, expired: true }
+  }
+  return { ok: true, deadline: deadlineOf(attempt.startedAt, limit).toISOString(), serverNow: now.toISOString() }
+}
+
+/**
+ * Autosave: replaces the draft's answers. Creates an untimed attempt on first
+ * save; `activeSeconds` is the untimed work time so far (ignored when timed).
+ */
+export async function saveDraft(assignmentId: string, responses: Record<string, unknown>, activeSeconds?: number): Promise<Result<{ attemptId: string }>> {
   await assertAccess("student")
   const parsed = parseResponses(responses)
   if (!parsed) return { ok: false, error: "Bài làm không hợp lệ." }
   const loaded = await loadWebAssignment(assignmentId)
   if ("error" in loaded) return { ok: false, error: loaded.error }
-  const attemptId = await openAttempt(loaded.record)
-  if (!attemptId) return { ok: false, error: ERR_CLOSED }
+  const open = await writableAttempt(loaded.record)
+  if ("error" in open) return { ok: false, error: open.error, expired: open.expired }
+  const attemptId = open.attempt.id
+  const timed = loaded.record.timeLimitMinutes !== null
 
   const questions = await getQuestions(loaded.record.setId)
   const rows = answerRows(attemptId, questions, parsed, true)
   await db.transaction(async (tx) => {
     // Re-check inside the transaction so a late autosave can't rewrite a submitted attempt.
-    const [open] = await tx.select({ id: attempts.id }).from(attempts).where(and(eq(attempts.id, attemptId), isNull(attempts.submittedAt))).for("update")
-    if (!open) return
+    const [row] = await tx
+      .select({ id: attempts.id, durationSeconds: attempts.durationSeconds })
+      .from(attempts)
+      .where(and(eq(attempts.id, attemptId), isNull(attempts.submittedAt)))
+      .for("update")
+    if (!row) return
+    if (!timed) await tx.update(attempts).set({ durationSeconds: mergeActiveSeconds(row.durationSeconds, activeSeconds) }).where(eq(attempts.id, attemptId))
     await tx.delete(answers).where(eq(answers.attemptId, attemptId))
     if (rows.length) await tx.insert(answers).values(rows)
   })
@@ -122,38 +171,19 @@ export async function submitAttempt(
   if (!parsed) return { ok: false, error: "Bài làm không hợp lệ." }
   const loaded = await loadWebAssignment(assignmentId)
   if ("error" in loaded) return { ok: false, error: loaded.error }
-  const attemptId = await openAttempt(loaded.record)
-  if (!attemptId) return { ok: false, error: ERR_CLOSED }
+  const open = await writableAttempt(loaded.record)
+  if ("error" in open) return { ok: false, error: open.error, expired: open.expired }
+  const { attempt } = open
 
   const questions = await getQuestions(loaded.record.setId)
   if (!questions.length) return { ok: false, error: "Bài này chưa có câu hỏi." }
-  const grade = gradeAttempt(questions, parsed)
   const now = new Date()
-  const duration = Number.isFinite(durationSeconds) ? Math.min(Math.max(Math.round(durationSeconds), 0), 6 * 3600) : null
-
-  const submitted = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(attempts)
-      .set({
-        submittedAt: now,
-        durationSeconds: duration,
-        ...(grade.needsReview ? {} : { gradedAt: now, gradedBy: "auto" as const, score: grade.score, feedback: autoFeedback(grade.score ?? 0) }),
-      })
-      .where(and(eq(attempts.id, attemptId), isNull(attempts.submittedAt)))
-      .returning({ id: attempts.id })
-    if (!row) return false
-    await tx.delete(answers).where(eq(answers.attemptId, attemptId))
-    await tx.insert(answers).values(
-      answerRows(attemptId, questions, parsed, false).map((r, i) => ({
-        ...r,
-        isCorrect: grade.grades[i].isCorrect,
-        pointsAwarded: grade.grades[i].pointsAwarded,
-      })),
-    )
-    return true
-  })
-  if (!submitted) return { ok: false, error: "Bài này đã được nộp rồi." }
-  return { ok: true, attemptId, graded: !grade.needsReview, score: grade.score }
+  const limit = loaded.record.timeLimitMinutes
+  // Timed: measured on the server. Untimed: the visible-page seconds the browser counted.
+  const duration = limit !== null ? timedDuration(attempt.startedAt, limit, now) : mergeActiveSeconds(attempt.durationSeconds, durationSeconds)
+  const result = await closeAttempt({ attemptId: attempt.id, questions, responses: parsed, submittedAt: now, durationSeconds: duration })
+  if (!result.closed) return { ok: false, error: "Bài này đã được nộp rồi." }
+  return { ok: true, attemptId: attempt.id, graded: result.graded, score: result.score }
 }
 
 /* ---------- Paper work ---------- */

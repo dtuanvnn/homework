@@ -3,6 +3,7 @@ import { asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { db, schema } from "@/db"
 import { withLaterAnswerKey } from "@/lib/answer-key"
 import type { Attachment, Difficulty, ExerciseSet, Question, Student } from "@/lib/types"
+import { settleExpiredAttempts } from "./attempt-finalize"
 import { withImageUrls } from "./question-images"
 import { loadRewards } from "./rewards"
 import { attachmentUrl } from "./storage"
@@ -125,6 +126,7 @@ export async function getExerciseSetDetail(id: string) {
 /* ---------- Assignments & attempts ---------- */
 
 export async function listAssignments(filter?: { ids?: string[] }): Promise<AssignmentRecord[]> {
+  await settleExpiredAttempts()
   const rows = await db
     .select({ assignment: assignments, set: exerciseSets })
     .from(assignments)
@@ -168,6 +170,7 @@ export type AnswerRecord = typeof answers.$inferSelect
 
 export async function getAttemptDetail(attemptId: string) {
   if (!isUuid(attemptId)) return null
+  await settleExpiredAttempts()
   const attempt = await db.query.attempts.findFirst({ where: eq(attempts.id, attemptId) })
   if (!attempt) return null
   const [assignment, answerRows, scanRows] = await Promise.all([
@@ -190,6 +193,7 @@ export async function getAttemptDetail(attemptId: string) {
 
 /** Answer rows of graded attempts, for skill analytics. */
 export async function listGradedAnswers() {
+  await settleExpiredAttempts()
   return db
     .select({
       question: answers.question,
@@ -209,6 +213,7 @@ export async function listGradedAnswers() {
 
 /** Counts shown as badges in the navigation. */
 export async function getNavCounts(now = new Date()) {
+  await settleExpiredAttempts()
   const {
     rows: [row],
   } = await db.execute<{ awaiting: number; open: number; redemptions: number }>(sql`

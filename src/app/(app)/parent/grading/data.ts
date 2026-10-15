@@ -4,6 +4,7 @@ import { db, schema } from "@/db"
 import type { QuestionType } from "@/lib/types"
 import { buildGradingQueue, type GradingDetail } from "@/lib/views/grading"
 import { getAttemptDetail, listAssignments, toAttachment } from "@/server/queries"
+import { settleExpiredAttempts } from "@/server/attempt-finalize"
 
 /*
  * Loaders of the grading screens. They could move to server/queries.ts; they
@@ -13,6 +14,7 @@ import { getAttemptDetail, listAssignments, toAttachment } from "@/server/querie
 const { answers, attempts, attachments } = schema
 
 export async function loadGradingQueue() {
+  await settleExpiredAttempts()
   const [records, stats, scanRows] = await Promise.all([
     listAssignments(),
     db

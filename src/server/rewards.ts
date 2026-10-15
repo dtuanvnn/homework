@@ -3,10 +3,12 @@ import { asc } from "drizzle-orm"
 import { cache } from "react"
 import { db, schema } from "@/db"
 import { loadRewardFacts } from "@/db/reward-facts"
+import { settleExpiredAttempts } from "./attempt-finalize"
 import { computeRewards, type RewardRow } from "@/lib/views/rewards"
 
 /** Stars, streak, badges and celebrations, computed once per request. */
 export const loadRewards = cache(async () => {
+  await settleExpiredAttempts()
   const now = new Date()
   const { facts, seen } = await loadRewardFacts(db)
   return { now, facts, state: computeRewards(facts, seen, now) }
