@@ -127,8 +127,7 @@ test("one set assigned to both children reaches both", async ({ page }) => {
   const sheet = page.getByRole("dialog", { name: "Giao bài mới" })
   await sheet.getByLabel("Tìm bộ bài tập").fill("Unit 5")
   await sheet.getByRole("radio", { name: /Unit 5: My family/ }).click()
-  await sheet.getByText("Giao cho").waitFor()
-  await sheet.locator("label", { hasText: "Bảo Ngọc" }).click()
+  await sheet.getByRole("checkbox", { name: "Bảo Ngọc" }).check({ force: true })
   await sheet.getByRole("button", { name: "Giao bài", exact: true }).click()
   await expect(page.getByText(/cho Minh An, Bảo Ngọc/)).toBeVisible()
 
