@@ -103,6 +103,77 @@ getContext(): Promise<Context>
 - List of children (avatar, name, "Lớp 4 · 4C1 · 2026–2027"), archived ones collapsed at the bottom with "Khôi phục".
 - Add / edit sheet: name, avatar emoji picker (existing emojis), PIN (4–6 digits, optional; "Xoá PIN"), first enrollment (grade, class name, school year) when adding.
 - Child detail: enrollments by year (edit class name / start date of any year), **"Lên lớp"** sheet prefilled from `suggestPromotion` (grade, class name, school year, start date, all editable), "Lưu trữ học sinh" (hides from pickers and PIN grid; data kept; assignments not deleted).
+#### Screens
+
+Entry points: the parent header avatar menu ("Quản lý học sinh"), and the "add a child" empty state. Same visual language as the rest of the app (cards, sheets from the bottom on phone / centered dialog on iPad, existing motion and sounds).
+
+**A. Students list** — `/parent/students`
+
+```
+┌─ ← Học sinh ───────────────────────────── [+ Thêm học sinh] ┐
+│ ┌──────────────────────────────────────────────────────────┐ │
+│ │ 🦊  Minh An                      Đang xem ✓              │ │
+│ │     Lớp 4 · 4C1 · 2026–2027      ⭐ 128   🔒 Có PIN    › │ │
+│ └──────────────────────────────────────────────────────────┘ │
+│ ┌──────────────────────────────────────────────────────────┐ │
+│ │ 🐼  Bảo Ngọc                                             │ │
+│ │     Lớp 5 · 5A2 · 2026–2027      ⭐ 40    🔓 Không PIN  › │ │
+│ └──────────────────────────────────────────────────────────┘ │
+│ ▸ Đã lưu trữ (1)                                             │
+└──────────────────────────────────────────────────────────────┘
+```
+Tapping a card opens C. Archived children expand under "Đã lưu trữ" with a "Khôi phục" button each.
+
+**B. Add / edit child** — sheet
+
+```
+┌─ Thêm học sinh ─────────────────────────────────────── ✕ ┐
+│ Ảnh đại diện   🦊 🐼 🐰 🐯 🦁 🐸 🐨 🐧 🦄 🐙   (chọn 1)     │
+│ Tên            [ Bảo Ngọc                      ]          │
+│ Lớp            [1][2][3][4][5][6][7]  (chip)              │
+│ Tên lớp        [ 5A2            ]  (không bắt buộc)       │
+│ Năm học        [ 2026–2027  ▾ ]                           │
+│ Mã PIN         [ • • • • ]  4–6 số, để trống = không PIN  │
+│                                                           │
+│                              [ Huỷ ]   [ Thêm học sinh ] │
+└───────────────────────────────────────────────────────────┘
+```
+Editing shows only avatar, name and PIN ("Đổi mã PIN" / "Xoá PIN"); grade, class and year are edited per year in C. The PIN is shown once as dots with a reveal eye while typing; it is never shown again after saving.
+
+**C. Child detail** — `/parent/students/[id]` (entry in `SUB_PAGE_TITLES`)
+
+```
+┌─ ← Bảo Ngọc ────────────────────────────────── [Sửa] ┐
+│  🐼  Bảo Ngọc        ⭐ 40 sao · 🔥 5 ngày · 🏅 3       │
+│  [ Xem như đang chọn ]        [ 🎓 Lên lớp ]          │
+│                                                        │
+│  Các năm học                                           │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ 2026–2027 · Lớp 5 · 5A2 · từ 05/09/2026  Hiện tại ✎│ │
+│  │ 2025–2026 · Lớp 4 · 4A1 · từ 05/09/2025          ✎│ │
+│  └──────────────────────────────────────────────────┘  │
+│                                                        │
+│  [ Lưu trữ học sinh ]  (đỏ nhạt, hỏi xác nhận)         │
+└────────────────────────────────────────────────────────┘
+```
+"Xem như đang chọn" sets the viewing child and goes to Today. ✎ opens a small sheet to edit grade, class name and start date of that year.
+
+**D. Promote** — sheet from "Lên lớp"
+
+```
+┌─ Lên lớp cho Bảo Ngọc ──────────────────────────── ✕ ┐
+│ Lớp 5 (2026–2027)  →  Lớp [6] (2027–2028)             │
+│ Tên lớp        [ 6A?            ]                     │
+│ Bắt đầu từ     [ 05/09/2027 ]                         │
+│ Sao, huy hiệu và chuỗi ngày được giữ nguyên.          │
+│ Bài của năm cũ vẫn xem được trong Báo cáo.            │
+│                                 [ Huỷ ]  [ Lên lớp 🎉 ] │
+└───────────────────────────────────────────────────────┘
+```
+Confirming plays the existing celebration sound/confetti and returns to C with the new year marked "Hiện tại".
+
+**E. First run / no children** — parent Today (and any parent page) when the household has no active child: a centered card "Chưa có học sinh nào" with an illustration and "Thêm học sinh đầu tiên", opening B. The student PIN grid with no children shows "Nhờ bố mẹ thêm học sinh trước nhé."
+
 - Actions in `server/actions/students.ts` (parent access): `createStudent`, `updateStudent`, `setStudentPin`, `archiveStudent`, `restoreStudent`, `promoteStudent`, `updateEnrollment`, `setViewingStudent`. zod validation; unique school year per child enforced by the DB and reported in Vietnamese.
 
 ### Assigning and library
