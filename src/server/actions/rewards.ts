@@ -10,7 +10,6 @@ import { canRedeem } from "@/lib/rewards/stars"
 import { computeRewards } from "@/lib/views/rewards"
 import { assertAccess } from "../access"
 import { isUuid } from "../queries"
-import { firstStudentRow } from "../rewards"
 
 const { rewards, rewardRedemptions, starAdjustments, badgeSeen } = schema
 
@@ -32,7 +31,7 @@ const checkId = (id: string) => {
 
 export async function saveReward(input: RewardInput): Promise<ActionResult<{ id: string }>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
     const { id, ...data } = rewardSchema.parse(input)
     if (id) {
       const [row] = await db.update(rewards).set(data).where(eq(rewards.id, id)).returning({ id: rewards.id })
@@ -41,7 +40,7 @@ export async function saveReward(input: RewardInput): Promise<ActionResult<{ id:
       return row
     }
     const [{ next }] = await db.select({ next: sql<number>`coalesce(max(${rewards.position}) + 1, 0)::int` }).from(rewards)
-    const [row] = await db.insert(rewards).values({ ...data, householdId: (await firstStudentRow()).householdId, position: next }).returning({ id: rewards.id })
+    const [row] = await db.insert(rewards).values({ ...data, householdId: ctx.householdId, position: next }).returning({ id: rewards.id })
     refresh()
     return row
   })
@@ -75,9 +74,9 @@ export async function reorderRewards(ids: string[]): Promise<ActionResult<null>>
 /** The child asks for a reward; its stars are held until the parent decides. */
 export async function requestRedemption(rewardId: string): Promise<ActionResult<null>> {
   return runAction(async () => {
-    await assertAccess("student")
+    const ctx = await assertAccess("student")
     checkId(rewardId)
-    const { id: studentId } = await firstStudentRow()
+    const studentId = ctx.studentId!
     await db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(${REDEEM_LOCK})`)
       const [reward] = await tx.select().from(rewards).where(eq(rewards.id, rewardId))
@@ -132,8 +131,9 @@ const adjustSchema = z.object({
 
 export async function adjustStars(amount: number, reason: string): Promise<ActionResult<null>> {
   return runAction(async () => {
-    await assertAccess("parent")
-    await db.insert(starAdjustments).values({ ...adjustSchema.parse({ amount, reason }), studentId: (await firstStudentRow()).id })
+    const ctx = await assertAccess("parent")
+    if (!ctx.studentId) throw new Error("Chưa có học sinh nào.")
+    await db.insert(starAdjustments).values({ ...adjustSchema.parse({ amount, reason }), studentId: ctx.studentId })
     refresh()
     return null
   })
@@ -142,8 +142,8 @@ export async function adjustStars(amount: number, reason: string): Promise<Actio
 /** Called after the child saw the celebration for these badges/milestones. */
 export async function markBadgesSeen(ids: string[]): Promise<ActionResult<null>> {
   return runAction(async () => {
-    await assertAccess("student")
-    const { id: studentId } = await firstStudentRow()
+    const ctx = await assertAccess("student")
+    const studentId = ctx.studentId!
     const list = z.array(z.string().min(1).max(100)).max(100).parse(ids)
     if (list.length) await db.insert(badgeSeen).values(list.map((badgeId) => ({ studentId, badgeId }))).onConflictDoNothing()
     return null

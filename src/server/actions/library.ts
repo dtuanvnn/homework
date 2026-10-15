@@ -8,8 +8,8 @@ import { figureOwner, figurePaths, unusedFigures } from "@/lib/figures"
 import { editedQuestionSchema } from "@/lib/question-schema"
 import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
 import { runAction, type ActionResult } from "@/lib/action-result"
-import { assertAccess } from "../access"
-import { getExerciseSetDetail, getQuestions, getQuestionsWithImages, getStudent, isUuid, toExerciseSet } from "../queries"
+import { assertAccess, getContext } from "../access"
+import { getExerciseSetDetail, getQuestions, getQuestionsWithImages, getViewingStudent, isUuid, toExerciseSet } from "../queries"
 import { attachmentUrl, createUploadTargets, isUploaded, listFolder, removeFromStorage, type UploadTarget } from "../storage"
 
 const { exerciseSets, questions, attachments, assignments, attempts, answers } = schema
@@ -57,11 +57,11 @@ export async function loadQuestions(setId: string): Promise<ActionResult<Questio
 /** Creates an empty draft set (the "Soạn thủ công" entry point). */
 export async function createExerciseSet(): Promise<ActionResult<ExerciseSet>> {
   return runAction(async () => {
-    await assertAccess("parent")
-    const student = await getStudent()
+    const ctx = await assertAccess("parent")
+    const defaultGrade = (await getViewingStudent())?.grade ?? 1
     const [row] = await db
       .insert(exerciseSets)
-      .values({ householdId: student.householdId, title: "Bộ bài tập mới", subject: "toan", grade: student.grade, kind: "luyen-tap", source: "thu-cong", status: "nhap" })
+      .values({ householdId: ctx.householdId, title: "Bộ bài tập mới", subject: "toan", grade: defaultGrade, kind: "luyen-tap", source: "thu-cong", status: "nhap" })
       .returning()
     refresh()
     return toExerciseSet(row, 0, 0)
@@ -83,7 +83,7 @@ export async function requestSetUploads(setId: string, names: string[]): Promise
  */
 export async function saveExerciseSet(payload: SavePayload): Promise<ActionResult<{ set: ExerciseSet; attachments: Attachment[] }>> {
   return runAction(async () => {
-    await assertAccess("parent")
+    const ctx = await assertAccess("parent")
     const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
     for (const f of newFiles) {
       if (!(await isUploaded("sets", set.id, f.path))) throw new Error(`Tệp "${f.name}" chưa tải lên xong`)
@@ -96,7 +96,7 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
       if (!owner || !(await isUploaded("sets", owner, path))) throw new Error("Hình minh họa chưa tải lên xong. Hãy thử lại.")
     }
     const { id, ...meta } = set
-    const { householdId } = await getStudent()
+    const { householdId } = ctx
 
     const removedPaths = await db.transaction(async (tx) => {
       await tx
@@ -230,12 +230,14 @@ async function insertAssignments(items: NewAssignment[]): Promise<Assignment[]> 
     const n = await db.$count(questions, eq(questions.setId, item.setId))
     if (n === 0) throw new Error("Hãy chọn bộ bài có ít nhất một câu hỏi.")
   }
-  const student = await getStudent()
+  const ctx = await getContext()
+  if (!ctx.studentId) throw new Error("Chưa có học sinh nào.")
+  const studentId = ctx.studentId
   const rows = await db
     .insert(assignments)
     .values(
       parsed.map((i) => ({
-        studentId: student.id,
+        studentId,
         setId: i.setId,
         availableFrom: new Date(i.availableFrom),
         dueAt: new Date(i.dueAt),

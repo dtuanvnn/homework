@@ -10,7 +10,7 @@ import { dateInput } from "@/lib/schedule"
 import { assertAccess } from "../access"
 import { ask } from "../ai/llm"
 import { loadReportInput } from "../analytics"
-import { getStudent } from "../queries"
+import { getViewingStudent } from "../queries"
 
 const { attempts, assignments, exerciseSets } = schema
 
@@ -33,9 +33,9 @@ export async function summarizeProgress(input: SummarizeInput): Promise<ActionRe
     const { rangeId, subjects, custom } = inputSchema.parse(input)
     const now = new Date()
     const period = rangePeriod(rangeId, now, rangeId === "custom" ? custom : undefined)
-    const [reportInput, student, feedbackRows] = await Promise.all([
+    const [reportInput, maybeStudent, feedbackRows] = await Promise.all([
       loadReportInput(),
-      getStudent(),
+      getViewingStudent(),
       db
         .select({ title: exerciseSets.title, subject: exerciseSets.subject, gradedAt: attempts.gradedAt, score: attempts.score, feedback: attempts.feedback })
         .from(attempts)
@@ -52,6 +52,8 @@ export async function summarizeProgress(input: SummarizeInput): Promise<ActionRe
         .orderBy(desc(attempts.gradedAt))
         .limit(5),
     ])
+    const student = maybeStudent
+    if (!student) throw new Error("Chưa có học sinh nào.")
     const report = buildReport(reportInput, period, now, subjects)
     const candidates = candidateSets(reportInput.sets, report, subjects)
     const facts = summaryFacts({

@@ -2,10 +2,15 @@ import { expect, type Page } from "@playwright/test"
 
 /**
  * Full page load that waits for React to hydrate (AppFrame sets `data-mode` on
- * <html> in an effect), so the first click lands on a live button.
+ * <html> in an effect), so the first click lands on a live button. Student
+ * paths without a student cookie land on the child picker: pick `child`.
  */
-export async function open(page: Page, path: string) {
+export async function open(page: Page, path: string, child = "Minh An") {
   await page.goto(path)
+  if (path.startsWith("/student") && new URL(page.url()).pathname === "/pin") {
+    await page.getByRole("button", { name: child }).click()
+    await page.waitForURL((u) => u.pathname.startsWith("/student"))
+  }
   await expect(page.locator("html")).toHaveAttribute("data-mode", path.startsWith("/student") ? "student" : "parent")
 }
 

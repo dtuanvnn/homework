@@ -61,8 +61,10 @@ export function useAppNavigation(): NavigationContext {
   return ctx
 }
 
+const NO_STUDENT: Student = { id: "", householdId: "", name: "Chưa có học sinh", grade: 1, schoolYear: 0, avatarEmoji: "👤", totalStars: 0 }
+
 interface AppFrameProps {
-  student: Student
+  student: Student | null
 
   navCounts: NavCounts
 
@@ -127,10 +129,10 @@ export default function AppFrame({
 
   return (
     <NavContext.Provider value={nav}>
-      <StudentContext.Provider value={student}>
+      <StudentContext.Provider value={student ?? NO_STUDENT}>
         <LibraryProvider initialSets={sets} initialAssignments={assignments}>
           <AppShell
-            student={student}
+            student={student ?? NO_STUDENT}
             mode={mode}
             onModeChange={handleModeChange}
             items={navFor(mode, navCounts)}

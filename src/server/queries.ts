@@ -3,12 +3,12 @@ import { asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { db, schema } from "@/db"
 import { withLaterAnswerKey } from "@/lib/answer-key"
 import type { Attachment, Difficulty, ExerciseSet, Question, Student } from "@/lib/types"
-import { currentEnrollment, schoolYearOf } from "@/lib/school-year"
-import { localDay } from "@/lib/dates"
 import { settleExpiredAttempts } from "./attempt-finalize"
 import { withImageUrls } from "./question-images"
-import { firstStudentRow, loadRewards } from "./rewards"
+import { loadRewards } from "./rewards"
 import { attachmentUrl } from "./storage"
+import { getContext } from "./access"
+import { toStudent } from "./students"
 
 /*
  * Read-side data access. Returns the UI's own types (see lib/types.ts) so
@@ -70,22 +70,13 @@ export async function toAttachment(row: AttachmentRow): Promise<Attachment> {
 
 /* ---------- Student ---------- */
 
-export async function getStudent(): Promise<Student> {
-  const row = await firstStudentRow()
-  const years = await db.select().from(schema.enrollments).where(eq(schema.enrollments.studentId, row.id))
-  const today = localDay(new Date())
-  const current = currentEnrollment(years, today)
-  const totalStars = (await loadRewards()).state.ledger.balance
-  return {
-    id: row.id,
-    householdId: row.householdId,
-    name: row.name,
-    grade: current?.grade ?? 1,
-    className: current?.className ?? undefined,
-    schoolYear: current?.schoolYear ?? schoolYearOf(today),
-    avatarEmoji: row.avatarEmoji,
-    totalStars,
-  }
+/** The child this request is about (device child or the parent's viewing child); null when the household has none. */
+export async function getViewingStudent(): Promise<Student | null> {
+  const { studentId } = await getContext()
+  if (!studentId) return null
+  const row = await db.query.students.findFirst({ where: eq(students.id, studentId) })
+  if (!row) return null
+  return toStudent(row, (await loadRewards()).state.ledger.balance)
 }
 
 /* ---------- Library ---------- */

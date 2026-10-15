@@ -26,6 +26,14 @@ export interface Student {
   totalStars: number
 }
 
+/** A child on the student PIN page. */
+export interface PinStudent {
+  id: string
+  name: string
+  avatarEmoji: string
+  hasPin: boolean
+}
+
 export interface ExerciseSet {
   id: string
   title: string

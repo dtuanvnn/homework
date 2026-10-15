@@ -34,7 +34,10 @@ test("mode toggle switches between parent and student", async ({ page }) => {
   await open(page, "/parent")
   await hideDevBadge()
   await toggle.getByRole("radio", { name: "Học sinh" }).tap()
-  await expect(page).toHaveURL(/\/student$/)
+  // Student mode now requires picking a child on the PIN page
+  await expect(page).toHaveURL(/\/pin\?next=%2Fstudent&role=student/)
+  await page.getByRole("button", { name: "Minh An" }).click()
+  await page.waitForURL(/\/student$/)
   await expect(toggle.getByRole("radio", { name: "Học sinh" })).toHaveAttribute("aria-checked", "true")
 
   // Switching is a full page load (each mode has its own PIN); start the way back fresh too.
