@@ -120,7 +120,7 @@ const enrollmentSchema = z.object({
   schoolYear: z.number().int().min(2000).max(2100),
   grade: z.number().int().min(1).max(12),
   className: z.string().trim().max(20).nullable(),
-  startsOn: z.coerce.date().transform((d) => d.toISOString().slice(0, 10)),
+  startsOn: z.iso.date(),
 })
 
 const pgCode = (e: unknown) => (e as { code?: string; cause?: { code?: string } }).code ?? (e as { cause?: { code?: string } }).cause?.code
