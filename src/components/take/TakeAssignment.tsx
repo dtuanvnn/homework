@@ -163,6 +163,8 @@ export default function TakeAssignment({
   }
   const flushRef = useRef(flush)
   useEffect(() => { flushRef.current = flush })
+  const markTimeDirtyRef = useRef(markTimeDirty)
+  useEffect(() => { markTimeDirtyRef.current = markTimeDirty })
 
   // Leaving any other way (back button, closing the tab) still saves.
   useEffect(() => {
@@ -171,6 +173,7 @@ export default function TakeAssignment({
       markTimeDirtyRef.current()
       void flushRef.current()
     }
+    mounted.current = true // StrictMode runs this effect twice
     document.addEventListener("visibilitychange", onHide)
     return () => {
       mounted.current = false
@@ -179,8 +182,6 @@ export default function TakeAssignment({
       if (!submitting.current && !handedIn.current) void flushRef.current()
     }
   }, [])
-  const markTimeDirtyRef = useRef(markTimeDirty)
-  useEffect(() => { markTimeDirtyRef.current = markTimeDirty })
 
   useEffect(() => {
     // The stopwatch only runs while the child can see the page.
