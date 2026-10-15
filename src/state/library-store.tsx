@@ -211,6 +211,7 @@ export function LibraryProvider({
               dueDate: changes.dueAt,
               mode: changes.mode,
               maxAttempts: changes.maxAttempts,
+              timeLimitMinutes: changes.mode === "web" ? (changes.timeLimitMinutes ?? undefined) : undefined,
               parentNote: changes.note?.trim() || undefined,
             }
           : a,

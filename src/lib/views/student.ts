@@ -24,6 +24,8 @@ interface ItemBase {
   subject: SubjectId
   questions: number
   minutes: number
+  /** Exam mode: minutes per attempt. */
+  timeLimit?: number
   mode: "web" | "paper"
   status: StudentStatus
   /** Answered share of the draft attempt, 0–100. */
@@ -168,6 +170,7 @@ function itemBase(record: AssignmentRecord, state: DerivedState, drafts: DraftCo
     subject: record.set.subject,
     questions: total,
     minutes: record.set.estimatedMinutes,
+    timeLimit: record.timeLimitMinutes ?? undefined,
     mode: record.mode,
     status: studentStatus(state),
     progress,

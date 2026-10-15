@@ -27,6 +27,7 @@ export interface AssignmentRecord {
   dueAt: Date
   mode: "web" | "paper"
   maxAttempts: 1 | 2
+  timeLimitMinutes: number | null
   parentNote: string | null
   createdAt: Date
   set: ExerciseSet
@@ -149,6 +150,7 @@ export async function listAssignments(filter?: { ids?: string[] }): Promise<Assi
     dueAt: a.dueAt,
     mode: a.mode,
     maxAttempts: a.maxAttempts as 1 | 2,
+    timeLimitMinutes: a.timeLimitMinutes,
     parentNote: a.parentNote,
     createdAt: a.createdAt,
     set: toExerciseSet(set, qCount.get(set.id) ?? 0, aCount.get(set.id) ?? 0),

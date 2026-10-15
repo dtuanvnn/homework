@@ -1,0 +1,2 @@
+ALTER TABLE "assignments" ADD COLUMN "time_limit_minutes" smallint;--> statement-breakpoint
+ALTER TABLE "assignments" ADD CONSTRAINT "time_limit_range" CHECK ("assignments"."time_limit_minutes" between 1 and 240);

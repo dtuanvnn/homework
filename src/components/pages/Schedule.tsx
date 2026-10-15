@@ -137,6 +137,7 @@ export default function Schedule({ now }: { now: string }) {
             <p className="text-xs text-slate-500">
               {assignment.mode === "paper" ? "Làm trên giấy" : "Làm trên web"} ·
               Tối đa {assignment.maxAttempts ?? 2} lần
+              {assignment.timeLimitMinutes ? ` · ⏱ ${assignment.timeLimitMinutes} phút` : ""}
             </p>
             {assignment.parentNote && (
               <p className="mt-1 rounded-lg bg-white/70 p-3 text-sm text-slate-600">

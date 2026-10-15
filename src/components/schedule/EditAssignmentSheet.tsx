@@ -22,6 +22,7 @@ import { SUBJECTS } from "@/lib/subjects"
 import { dateTimeInput } from "@/lib/schedule"
 import { cn } from "@/lib/utils"
 import type { Assignment } from "@/lib/types"
+import TimeLimitField, { suggestedLimit } from "./TimeLimitField"
 
 export default function EditAssignmentSheet({
   assignment,
@@ -41,6 +42,7 @@ export default function EditAssignmentSheet({
   const [due, setDue] = useState(() => dateTimeInput(new Date(assignment.dueDate)))
   const [mode, setMode] = useState(assignment.mode ?? "web")
   const [maxAttempts, setMaxAttempts] = useState(assignment.maxAttempts ?? 2)
+  const [timeLimit, setTimeLimit] = useState<number | null>(assignment.timeLimitMinutes ?? null)
   const [note, setNote] = useState(assignment.parentNote ?? "")
   const [busy, setBusy] = useState<"save" | "delete" | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -63,6 +65,7 @@ export default function EditAssignmentSheet({
         dueAt: until.toISOString(),
         mode,
         maxAttempts,
+        timeLimitMinutes: mode === "web" ? timeLimit : null,
         note,
       })
       toast.success("Đã cập nhật bài giao")
@@ -110,7 +113,7 @@ export default function EditAssignmentSheet({
           </div>
           {started > 0 && (
             <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
-              Con đã bắt đầu làm bài này nên không đổi được hình thức
+              Con đã bắt đầu làm bài này nên không đổi được hình thức, giới hạn thời gian
               {started > 1 ? " và số lần làm" : ""}.
             </p>
           )}
@@ -134,6 +137,15 @@ export default function EditAssignmentSheet({
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
+          {mode === "web" && (
+            <TimeLimitField
+              id="edit-limit"
+              value={timeLimit}
+              onChange={setTimeLimit}
+              suggested={suggestedLimit(set?.estimatedMinutes)}
+              disabled={started > 0}
+            />
+          )}
           <div className="space-y-2">
             <Label htmlFor="edit-start">Hiển thị từ</Label>
             <Input

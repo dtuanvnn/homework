@@ -193,10 +193,11 @@ export default function StudentToday({
                       <span className={cn("rounded-full px-2.5 py-0.5 text-sm font-bold", chip.cls)}>{chip.label}</span>
                       {item.overdue && <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-sm font-bold text-red-700">Trễ hạn</span>}
                       {item.attempt === 2 && <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-sm font-bold text-indigo-700">Lần 2</span>}
+                      {item.timeLimit && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-sm font-bold text-amber-800">⏱ {item.timeLimit} phút</span>}
                     </div>
                     <h3 className="mt-1 text-xl font-extrabold leading-snug text-slate-900 md:text-2xl">{item.title}</h3>
                     <p className="mt-1 flex flex-wrap items-center gap-x-3 text-base text-slate-600">
-                      <span>{item.questions} câu · khoảng {item.minutes} phút</span>
+                      <span>{item.questions} câu · {item.timeLimit ? `làm trong ${item.timeLimit} phút` : `khoảng ${item.minutes} phút`}</span>
                       <span className={cn("inline-flex items-center gap-1 text-sm", item.overdue ? "font-bold text-red-600" : "text-slate-500")}><Clock3 className="size-4" />Hạn {item.due}</span>
                     </p>
                   </div>

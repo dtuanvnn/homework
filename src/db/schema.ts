@@ -96,11 +96,14 @@ export const assignments = pgTable(
     dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
     mode: workMode().notNull().default("web"),
     maxAttempts: smallint("max_attempts").notNull().default(2),
+    /** Exam mode: minutes from the start of each attempt until it is handed in automatically. Null = untimed. */
+    timeLimitMinutes: smallint("time_limit_minutes"),
     parentNote: text("parent_note"),
     createdAt: createdAt(),
   },
   (t) => [
     check("max_attempts_range", sql`${t.maxAttempts} between 1 and 2`),
+    check("time_limit_range", sql`${t.timeLimitMinutes} between 1 and 240`),
     index("assignments_student_due_idx").on(t.studentId, t.dueAt),
   ],
 ).enableRLS()

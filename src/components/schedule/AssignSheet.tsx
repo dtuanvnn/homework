@@ -37,6 +37,7 @@ import {
 import { addDays, startOfWeek } from "@/lib/dates"
 import { cn } from "@/lib/utils"
 import type { NewAssignment } from "@/server/actions/library"
+import TimeLimitField, { suggestedLimit } from "./TimeLimitField"
 
 export default function AssignSheet({
   date,
@@ -66,6 +67,7 @@ export default function AssignSheet({
     dueDate: dateInput(date),
     dueTime: "20:00",
     maxAttempts: 2,
+    timeLimitMinutes: null,
     note: "",
   })
   const patch = (value: Partial<ScheduleDraft>) => {
@@ -90,6 +92,7 @@ export default function AssignSheet({
         dueAt: a.dueDate,
         mode: draft.mode,
         maxAttempts: draft.maxAttempts,
+        timeLimitMinutes: a.timeLimitMinutes ?? null,
         note: a.parentNote,
       }))
       const created = await library.addAssignments(items)
@@ -226,6 +229,14 @@ export default function AssignSheet({
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
+          {draft.mode === "web" && (
+            <TimeLimitField
+              id="assign-limit"
+              value={draft.timeLimitMinutes}
+              onChange={(timeLimitMinutes) => patch({ timeLimitMinutes })}
+              suggested={suggestedLimit(selected?.estimatedMinutes)}
+            />
+          )}
           <div className="space-y-3">
             <Label>Lịch</Label>
             <ToggleGroup

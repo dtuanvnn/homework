@@ -214,9 +214,13 @@ const newAssignmentSchema = z.object({
   dueAt: z.iso.datetime({ offset: true }),
   mode: z.enum(["web", "paper"]),
   maxAttempts: z.union([z.literal(1), z.literal(2)]),
+  timeLimitMinutes: z.number().int().min(1).max(240).nullable().optional(),
   note: z.string().max(500).optional(),
 })
 export type NewAssignment = z.input<typeof newAssignmentSchema>
+
+/** Time limits only apply to web work. */
+const limitFor = (i: { mode: "web" | "paper"; timeLimitMinutes?: number | null }) => (i.mode === "web" ? (i.timeLimitMinutes ?? null) : null)
 
 async function insertAssignments(items: NewAssignment[]): Promise<Assignment[]> {
   const parsed = z.array(newAssignmentSchema).min(1).max(14).parse(items)
@@ -236,6 +240,7 @@ async function insertAssignments(items: NewAssignment[]): Promise<Assignment[]> 
         dueAt: new Date(i.dueAt),
         mode: i.mode,
         maxAttempts: i.maxAttempts,
+        timeLimitMinutes: limitFor(i),
         parentNote: i.note?.trim() || null,
       })),
     )
@@ -250,6 +255,7 @@ async function insertAssignments(items: NewAssignment[]): Promise<Assignment[]> 
     parentNote: r.parentNote ?? undefined,
     mode: r.mode,
     maxAttempts: r.maxAttempts as 1 | 2,
+    timeLimitMinutes: r.timeLimitMinutes ?? undefined,
     attemptCount: 0,
   }))
 }
@@ -278,7 +284,7 @@ export async function quickAssign(setId: string): Promise<ActionResult<Assignmen
 const assignmentChangesSchema = newAssignmentSchema.omit({ setId: true })
 export type AssignmentChanges = z.input<typeof assignmentChangesSchema>
 
-/** Reschedules an assignment or changes its settings; once the child has started, mode and a lower attempt cap are locked. */
+/** Reschedules an assignment or changes its settings; once the child has started, mode, time limit and a lower attempt cap are locked. */
 export async function updateAssignment(id: string, changes: AssignmentChanges): Promise<ActionResult<void>> {
   return runAction(async () => {
     await assertAccess("parent")
@@ -290,6 +296,7 @@ export async function updateAssignment(id: string, changes: AssignmentChanges): 
     const started = await db.$count(attempts, eq(attempts.assignmentId, id))
     if (started > 0 && c.mode !== current.mode) throw new Error("Con đã bắt đầu làm nên không đổi được hình thức.")
     if (c.maxAttempts < started) throw new Error(`Con đã làm ${started} lần nên không giảm số lần được.`)
+    if (started > 0 && limitFor(c) !== current.timeLimitMinutes) throw new Error("Con đã bắt đầu làm nên không đổi được giới hạn thời gian.")
     await db
       .update(assignments)
       .set({
@@ -297,6 +304,7 @@ export async function updateAssignment(id: string, changes: AssignmentChanges): 
         dueAt: new Date(c.dueAt),
         mode: c.mode,
         maxAttempts: c.maxAttempts,
+        timeLimitMinutes: limitFor(c),
         parentNote: c.note?.trim() || null,
       })
       .where(eq(assignments.id, id))

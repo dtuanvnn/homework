@@ -40,6 +40,8 @@ export interface ScheduleDraft {
   dueDate: string
   dueTime: string
   maxAttempts: 1 | 2
+  /** Web work only; null = untimed. */
+  timeLimitMinutes: number | null
   note: string
 }
 
@@ -76,6 +78,7 @@ export function createAssignments(draft: ScheduleDraft): Assignment[] {
       exerciseSetId: draft.exerciseSetId,
       mode: draft.mode,
       maxAttempts: draft.maxAttempts,
+      timeLimitMinutes: draft.mode === "web" ? (draft.timeLimitMinutes ?? undefined) : undefined,
       assignedDate: assigned.toISOString(),
       dueDate: due.toISOString(),
       status: "chua-lam",

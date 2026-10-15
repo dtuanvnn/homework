@@ -181,9 +181,10 @@ export default function StudentAssignments({ items, week }: AssignmentsView) {
                           <span className={s.text}>{s.name}</span>
                           <span className={cn("rounded-full px-2.5 py-0.5", a.attempt === 2 ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600")}>Lần {a.attempt}</span>
                           <span className="text-slate-500">{a.mode === "web" ? "💻 Làm trên web" : "📄 Làm trên giấy"}</span>
+                          {a.timeLimit && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-amber-800">⏱ {a.timeLimit} phút</span>}
                         </div>
                         <h3 className="text-xl leading-snug font-extrabold text-slate-900">{a.title}</h3>
-                        <p className="text-base text-slate-600">{a.questions} câu · khoảng {a.minutes} phút</p>
+                        <p className="text-base text-slate-600">{a.questions} câu · {a.timeLimit ? `làm trong ${a.timeLimit} phút` : `khoảng ${a.minutes} phút`}</p>
                         {a.status !== "graded" && (
                           <p className={cn("text-base font-bold", due.late ? "text-red-600" : "text-slate-500")}>{due.late ? "⏰ " : ""}{due.text}</p>
                         )}

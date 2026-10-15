@@ -49,6 +49,8 @@ export interface Assignment {
   parentNote?: string
   mode?: "web" | "paper"
   maxAttempts?: 1 | 2
+  /** Exam mode: each attempt is handed in automatically this many minutes after it starts. */
+  timeLimitMinutes?: number
   /** Attempts the child has started (drafts included); 0 means the assignment can change freely. */
   attemptCount?: number
 }

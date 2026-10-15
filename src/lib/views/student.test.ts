@@ -38,12 +38,17 @@ const graded = (score: number, over: Partial<AttemptRecord> = {}) =>
 
 function assignment(id: string, over: Partial<AssignmentRecord> = {}): AssignmentRecord {
   return {
-    id, setId: set.id, availableFrom: at(0, 6), dueAt: at(0, 20), mode: "web", maxAttempts: 2, parentNote: null,
+    id, setId: set.id, availableFrom: at(0, 6), dueAt: at(0, 20), mode: "web", maxAttempts: 2, timeLimitMinutes: null, parentNote: null,
     createdAt: at(-1, 21), set: { ...set, title: `Bài ${id}` }, attempts: [], ...over,
   }
 }
 
 describe("buildToday", () => {
+  it("carries the time limit of timed assignments", () => {
+    const view = buildToday([assignment("timed", { timeLimitMinutes: 20 }), assignment("free")], {}, now)
+    expect(view.items.map((i) => [i.id, i.timeLimit])).toEqual([["timed", 20], ["free", undefined]])
+  })
+
   it("picks today's, overdue and freshly graded retryable work; later days go to upcoming", () => {
     const records = [
       assignment("overdue", { availableFrom: at(-2, 6), dueAt: at(-1, 20) }),
