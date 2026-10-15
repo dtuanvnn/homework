@@ -1,6 +1,6 @@
 # Multiple students and school years — design
 
-Date: 2026-10-15 · Status: approved design, not implemented
+Date: 2026-10-15 · Status: implemented (plan docs/superpowers/plans/2026-10-15-students-school-years.md)
 
 ## Goal
 
