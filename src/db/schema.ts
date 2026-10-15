@@ -30,6 +30,7 @@ export const exerciseStatus = pgEnum("exercise_status", ["nhap", "san-sang"])
 export const workMode = pgEnum("work_mode", ["web", "paper"])
 export const gradedBy = pgEnum("graded_by", ["auto", "ai", "parent"])
 export const attachmentKind = pgEnum("attachment_kind", ["image", "pdf"])
+export const redemptionStatus = pgEnum("redemption_status", ["pending", "given", "declined"])
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 
@@ -181,3 +182,62 @@ export const attachments = pgTable(
     index("attachments_attempt_idx").on(t.attemptId),
   ],
 ).enableRLS()
+
+/*
+ * Rewards. Stars, streaks and badges are computed from attempts
+ * (src/lib/rewards/); only what can't be derived is stored here.
+ */
+
+/** Real-life rewards the parent offers for stars. */
+export const rewards = pgTable(
+  "rewards",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    name: text().notNull(),
+    emoji: text().notNull().default("🎁"),
+    cost: integer().notNull(),
+    /** Hidden from the child when false. */
+    active: boolean().notNull().default(true),
+    position: integer().notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [check("reward_cost_positive", sql`${t.cost} > 0`)],
+).enableRLS()
+
+/**
+ * The child asked for a reward: its stars are held while pending and spent
+ * once given. Name, emoji and cost are snapshotted so later edits to the
+ * reward don't rewrite history. A cancelled request is deleted.
+ */
+export const rewardRedemptions = pgTable(
+  "reward_redemptions",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    rewardId: uuid("reward_id").references(() => rewards.id, { onDelete: "set null" }),
+    name: text().notNull(),
+    emoji: text().notNull(),
+    cost: integer().notNull(),
+    status: redemptionStatus().notNull().default("pending"),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("reward_redemptions_one_pending_idx").on(t.rewardId).where(sql`${t.status} = 'pending'`)],
+).enableRLS()
+
+/** Stars the parent added or took away by hand. */
+export const starAdjustments = pgTable(
+  "star_adjustments",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    amount: integer().notNull(),
+    reason: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [check("star_adjustment_nonzero", sql`${t.amount} <> 0`)],
+).enableRLS()
+
+/** Badges and streak milestones (`streak-7@2026-10-20`) the child has celebrated. */
+export const badgeSeen = pgTable("badge_seen", {
+  badgeId: text("badge_id").primaryKey(),
+  seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS()

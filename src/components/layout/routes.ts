@@ -11,6 +11,7 @@ export const TAB_PATHS: Record<TabId, Route> = {
   today: "/student",
   assignments: "/student/assignments",
   results: "/student/results",
+  rewards: "/student/rewards",
 }
 
 export const MODE_HOME: Record<AppMode, Route> = {
@@ -30,6 +31,10 @@ export const gradingPaths = {
   attempt: (attemptId: string) => `/parent/grading/${encodeURIComponent(attemptId)}` as Route,
 }
 
+export const parentPaths = {
+  rewards: "/parent/rewards" as Route,
+}
+
 export const libraryPaths = {
   set: (id: string) => `/parent/library/${encodeURIComponent(id)}` as Route,
   upload: "/parent/library/upload" as Route,
@@ -42,6 +47,7 @@ const SUB_PAGE_TITLES: [RegExp, string][] = [
   [/^\/parent\/library\/generate$/, "Tạo bằng AI"],
   [/^\/parent\/library\/[^/]+$/, "Chi tiết bộ bài tập"],
   [/^\/parent\/grading\/[^/]+$/, "Chấm bài"],
+  [/^\/parent\/rewards$/, "Phần thưởng"],
   [/^\/student\/assignments\/[^/]+\/do$/, "Làm bài"],
   [/^\/student\/assignments\/[^/]+\/paper$/, "Nộp bài giấy"],
   [/^\/student\/results\/[^/]+$/, "Kết quả"],

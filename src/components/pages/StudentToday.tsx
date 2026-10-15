@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "motion/react"
 import CountUp from "@/components/fun/CountUp"
 import Mascot from "@/components/fun/Mascot"
 import Press from "@/components/fun/Press"
+import CelebrationCard from "@/components/rewards/CelebrationCard"
 import { celebrate, list, listItem, pressable } from "@/lib/animations"
 import { play } from "@/hooks/useSound"
 import {
@@ -21,6 +22,7 @@ import { useAppNavigation } from "@/components/layout/AppFrame"
 import { studentPaths } from "@/components/layout/routes"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
+import type { Celebration } from "@/lib/rewards/badges"
 import type { TodayItem, TodayView } from "@/lib/views/student"
 
 const STATUS_CHIP: Record<TodayItem["status"], { label: string; cls: string }> = {
@@ -39,7 +41,8 @@ export default function StudentToday({
   items,
   upcoming,
   streak,
-}: TodayView & { studentName: string; stars: number }) {
+  celebrations,
+}: TodayView & { studentName: string; stars: number; celebrations: Celebration[] }) {
   const reduced = useReducedMotion()
   const { navigate } = useAppNavigation()
   const remaining = items.filter((i) => !isDone(i))
@@ -142,6 +145,8 @@ export default function StudentToday({
           </div>
         </div>
       </section>
+
+      <CelebrationCard items={celebrations} />
 
       {/* Today */}
       <section className="space-y-4">

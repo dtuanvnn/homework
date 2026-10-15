@@ -17,7 +17,9 @@ import { eq } from "drizzle-orm"
 import { createClient } from "@supabase/supabase-js"
 import { gradeAttempt, scoreOutOf10, type Response } from "@/lib/grading"
 import { addDays, startOfDay } from "@/lib/dates"
+import { computeRewards } from "@/lib/views/rewards"
 import type { Question } from "@/lib/types"
+import { loadRewardFacts } from "./reward-facts"
 import * as schema from "./schema"
 import { DEMO_WORKSHEET_URL, SEED_SETS } from "./seed-data"
 
@@ -169,8 +171,8 @@ const CURRENT: AssignmentPlan[] = [
   { set: "bt-07", availableDay: -3, dueDay: -2, dueHour: 20, mode: "paper", maxAttempts: 1, attempts: [{ skill: 0.82, dayOffset: -2, hour: 19, noRetry: true }] },
   // Graded, second attempt still available.
   { set: "bt-12", availableDay: -2, dueDay: -2, dueHour: 20, attempts: [{ skill: 0.7, dayOffset: -2, hour: 19 }] },
-  // Overdue: never started.
-  { set: "bt-02", availableDay: -2, dueDay: -1, dueHour: 20, note: "Con nhớ kiểm tra lại số dư nhé!" },
+  // Overdue: never started (four days back, so the last three days still make a streak).
+  { set: "bt-02", availableDay: -5, dueDay: -4, dueHour: 20, note: "Con nhớ kiểm tra lại số dư nhé!" },
   // Awaiting grading: web attempt with an essay.
   { set: "bt-08", availableDay: -1, dueDay: -1, dueHour: 20, attempts: [{ skill: 0.85, dayOffset: -1, hour: 19, awaitingParent: true }] },
   // Awaiting grading: paper submission.
@@ -211,7 +213,7 @@ async function seedFigure(set: Loaded) {
 
 async function main() {
   console.log("Resetting tables…")
-  await client`truncate table answers, attachments, attempts, assignments, questions, exercise_sets, students restart identity cascade`
+  await client`truncate table answers, attachments, attempts, assignments, questions, exercise_sets, students, reward_redemptions, rewards, star_adjustments, badge_seen restart identity cascade`
 
   const [student] = await db.insert(schema.students).values({ name: "Minh An", grade: 3, avatarEmoji: "🦊" }).returning()
 
@@ -267,11 +269,39 @@ async function main() {
     }
   }
 
+  await seedRewards()
+
   const counts = await Promise.all(
     [schema.exerciseSets, schema.questions, schema.assignments, schema.attempts, schema.answers].map((t) => db.$count(t)),
   )
   console.log(`Done: ${counts.join(" / ")} (sets / questions / assignments / attempts / answers)`)
   await client.end()
+}
+
+const SEED_REWARDS = [
+  { name: "Xem TV 30 phút", emoji: "📺", cost: 20 },
+  { name: "Chơi game 1 giờ", emoji: "🎮", cost: 40 },
+  { name: "Đi ăn kem", emoji: "🍦", cost: 50 },
+  { name: "Mua truyện mới", emoji: "📚", cost: 80 },
+]
+
+async function seedRewards() {
+  const rows = await db
+    .insert(schema.rewards)
+    .values(SEED_REWARDS.map((r, position) => ({ ...r, position, createdAt: at(-30, 21) })))
+    .returning()
+  const tv = rows[0]
+  await db.insert(schema.rewardRedemptions).values([
+    { rewardId: tv.id, name: tv.name, emoji: tv.emoji, cost: tv.cost, status: "given", requestedAt: at(-9, 19), decidedAt: at(-9, 20) },
+    { rewardId: tv.id, name: tv.name, emoji: tv.emoji, cost: tv.cost, status: "pending", requestedAt: at(-1, 19, 30) },
+  ])
+  await db.insert(schema.starAdjustments).values({ amount: 10, reason: "Tự giác ôn bài cả tuần", createdAt: at(-6, 20) })
+  // Everything earned so far was already celebrated, so the Today page starts calm (E2E relies on it).
+  const { facts, seen } = await loadRewardFacts(db)
+  const state = computeRewards(facts, seen, now)
+  const ids = state.celebrations.map((c) => c.id)
+  if (ids.length) await db.insert(schema.badgeSeen).values(ids.map((badgeId) => ({ badgeId })))
+  console.log(`Rewards: ${state.ledger.balance} stars, streak ${state.streak.current}, ${state.badges.filter((b) => b.earnedAt).length} badges`)
 }
 
 async function insertAttempt(assignmentId: string, attemptNo: number, mode: "web" | "paper", set: Loaded, plan: AttemptPlan, isLast: boolean) {

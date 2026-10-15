@@ -14,7 +14,6 @@ import {
   canTake,
   correctAnswerText,
   stateOf,
-  streakDays,
   toTakeQuestion,
 } from "./student"
 
@@ -80,10 +79,10 @@ describe("buildToday", () => {
     expect(d).toMatchObject({ status: "graded", attempt: 2, score: 8.5, previousScore: 5, canRetry: false })
   })
 
-  it("counts the streak of days with submissions", () => {
-    expect(streakDays([at(0, 10), at(-1, 10), at(-2, 10), at(-4, 10)], now)).toBe(3)
-    expect(streakDays([at(-1, 10), at(-2, 10)], now)).toBe(2)
-    expect(streakDays([at(-3, 10)], now)).toBe(0)
+  it("shows the streak of days with all work in on time", () => {
+    const onTime = (id: string, day: number) =>
+      assignment(id, { availableFrom: at(day - 1, 6), dueAt: at(day, 20), attempts: [attempt({ submittedAt: at(day, 10) })] })
+    expect(buildToday([onTime("a", -2), onTime("b", -1)], {}, now).streak).toBe(2)
   })
 })
 
@@ -126,6 +125,11 @@ describe("buildResults", () => {
     expect(results.map((r) => r.title)).toEqual(["Bài b", "Bài a"])
     expect(results[0]).toMatchObject({ stars: 3, canRetry: true, retryPending: false, gradedLabel: "15/10/2026" })
     expect(results[1]).toMatchObject({ id: first.id, stars: 1, canRetry: false, retryPending: true })
+  })
+
+  it("gives no stars to a second attempt", () => {
+    const results = buildResults([assignment("a", { attempts: [graded(5, { gradedAt: at(-2, 9) }), graded(10, { attemptNo: 2 })] })], now)
+    expect(results.map((r) => r.stars)).toEqual([0, 1])
   })
 })
 

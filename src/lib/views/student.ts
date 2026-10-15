@@ -6,8 +6,10 @@
 import { deriveAssignmentState, type DerivedState } from "@/lib/assignment-status"
 import { addDays, startOfDay, startOfWeek } from "@/lib/dates"
 import { formatDayMonth, formatShortDate, formatTime, formatVietnameseDate, formatWeekday } from "@/lib/format"
-import { starsFor, type EssayValue, type Response } from "@/lib/grading"
+import type { EssayValue, Response } from "@/lib/grading"
 import type { Ink } from "@/lib/ink"
+import { attemptStars } from "@/lib/rewards/stars"
+import { streakRuns } from "@/lib/rewards/streak"
 import { answerAsRichText } from "@/lib/rich-text"
 import { essayDrawing, essayInk } from "@/lib/views/grading"
 import type { EssayQuestion, FillBlankQuestion, MultipleChoiceQuestion, Question, ShortAnswerQuestion, SubjectId, TrueFalseQuestion } from "@/lib/types"
@@ -193,19 +195,6 @@ function shortDue(due: Date, now: Date): string {
   return `${t}, ${formatDayMonth(due)}`
 }
 
-/** Consecutive days with at least one submission, ending today (or yesterday if nothing yet today). */
-export function streakDays(submissions: Date[], now: Date): number {
-  const days = new Set(submissions.map((d) => startOfDay(d).getTime()))
-  let day = startOfDay(now)
-  if (!days.has(day.getTime())) day = addDays(day, -1)
-  let n = 0
-  while (days.has(day.getTime())) {
-    n++
-    day = addDays(day, -1)
-  }
-  return n
-}
-
 /* ---------- Today ---------- */
 
 export function buildToday(records: AssignmentRecord[], drafts: DraftCounts, now: Date): TodayView {
@@ -223,8 +212,7 @@ export function buildToday(records: AssignmentRecord[], drafts: DraftCounts, now
       upcoming.push({ id: r.id, day: formatWeekday(r.dueAt), date: formatDayMonth(r.dueAt), title: r.set.title, subject: r.set.subject, minutes: r.set.estimatedMinutes })
     }
   }
-  const submissions = records.flatMap((r) => r.attempts.flatMap((a) => (a.submittedAt ? [a.submittedAt] : [])))
-  return { dateLabel: formatVietnameseDate(now), items, upcoming: upcoming.slice(0, 4), streak: streakDays(submissions, now) }
+  return { dateLabel: formatVietnameseDate(now), items, upcoming: upcoming.slice(0, 4), streak: streakRuns(records, now).current }
 }
 
 /* ---------- My assignments ---------- */
@@ -287,7 +275,7 @@ export function buildResults(records: AssignmentRecord[], now: Date): ResultList
         attempt: a.attemptNo as 1 | 2,
         maxAttempts: r.maxAttempts,
         previousScore: a.attemptNo > 1 ? (first.score ?? undefined) : undefined,
-        stars: starsFor(g.score),
+        stars: attemptStars(a.attemptNo, g.score),
         canRetry: a.id === latest?.id && state.canRetry,
         retryPending: !!later?.submittedAt && !later.gradedAt,
       } })
@@ -378,7 +366,7 @@ export function buildResultDetail(
     attempt: attempt.attemptNo as 1 | 2,
     maxAttempts: assignment.maxAttempts,
     previousScore: attempt.attemptNo > 1 ? (first?.score ?? undefined) : undefined,
-    stars: starsFor(g.score),
+    stars: attemptStars(attempt.attemptNo, g.score),
     parentComment: attempt.feedback ?? "",
     canRetry: latest?.id === attempt.id && state.canRetry,
     answersRevealed,

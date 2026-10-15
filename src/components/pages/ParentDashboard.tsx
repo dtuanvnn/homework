@@ -6,16 +6,18 @@ import { toast } from 'sonner'
 import InsightCard from '@/components/dashboard/InsightCard'
 import KpiGrid from '@/components/dashboard/KpiGrid'
 import QuickActions, { buildQuickActions } from '@/components/dashboard/QuickActions'
+import RewardsCard from '@/components/dashboard/RewardsCard'
 import SubjectScoreChart from '@/components/dashboard/SubjectScoreChart'
 import TodayAssignmentList from '@/components/dashboard/TodayAssignmentList'
 import { useAppNavigation, useStudent } from '@/components/layout/AppFrame'
 import { TAB_PATHS } from '@/components/layout/routes'
 import SectionHeader from '@/components/shared/SectionHeader'
 import { formatVietnameseDate, getGreeting } from '@/lib/format'
+import type { RewardSummary } from '@/lib/views/rewards'
 import type { DashboardData } from '@/server/analytics'
 import { useLibrary } from '@/state/library-store'
 
-export default function ParentDashboard({ data }: { data: DashboardData }) {
+export default function ParentDashboard({ data, rewards }: { data: DashboardData; rewards: RewardSummary }) {
   const { navigate } = useAppNavigation()
   const student = useStudent()
   const { assignSet } = useLibrary()
@@ -71,6 +73,8 @@ export default function ParentDashboard({ data }: { data: DashboardData }) {
         />
         <SubjectScoreChart className="lg:col-span-3" points={data.chart} />
       </div>
+
+      <RewardsCard summary={rewards} />
 
       <section className="flex flex-col gap-3">
         <SectionHeader title="Cần chú ý" description="Kỹ năng có tỉ lệ đúng thấp trong các bài gần đây" />

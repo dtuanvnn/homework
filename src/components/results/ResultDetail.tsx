@@ -95,25 +95,29 @@ export default function ResultDetail({
             <CountUp value={r.score} from={0} duration={1.2} digits={2} />
             <span className="text-3xl font-bold opacity-80 md:text-4xl">/10</span>
           </p>
-          <div className="flex items-center gap-3">
-            <span className="text-4xl tracking-wider" aria-label={`${r.stars} sao`}>
-              {[1, 2, 3].map((i) =>
-                i > r.stars ? (
-                  <span key={i} className="inline-block opacity-30 grayscale">⭐</span>
-                ) : (
-                  <motion.span key={i} className="inline-block" variants={starPop(i - 1, reduced)} initial="initial" animate="animate">⭐</motion.span>
-                ),
-              )}
-            </span>
-            <motion.span
-              className="rounded-full bg-amber-300 px-3 py-1 text-base font-extrabold text-amber-900"
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: reduced ? 0.3 : 1 + r.stars * 0.25, type: "spring", stiffness: 400, damping: 14 }}
-            >
-              +{r.stars} sao
-            </motion.span>
-          </div>
+          {r.attempt === 1 ? (
+            <div className="flex items-center gap-3">
+              <span className="text-4xl tracking-wider" aria-label={`${r.stars} sao`}>
+                {[1, 2, 3].map((i) =>
+                  i > r.stars ? (
+                    <span key={i} className="inline-block opacity-30 grayscale">⭐</span>
+                  ) : (
+                    <motion.span key={i} className="inline-block" variants={starPop(i - 1, reduced)} initial="initial" animate="animate">⭐</motion.span>
+                  ),
+                )}
+              </span>
+              <motion.span
+                className="rounded-full bg-amber-300 px-3 py-1 text-base font-extrabold text-amber-900"
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: reduced ? 0.3 : 1 + r.stars * 0.25, type: "spring", stiffness: 400, damping: 14 }}
+              >
+                +{r.stars} sao
+              </motion.span>
+            </div>
+          ) : (
+            <span className="rounded-full bg-white/20 px-3 py-1 text-base font-bold">Lần làm lại không tính sao</span>
+          )}
           <motion.p className="text-xl font-bold md:text-2xl" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: reduced ? 0.2 : 1.3 }}>
             {message(r)}
           </motion.p>

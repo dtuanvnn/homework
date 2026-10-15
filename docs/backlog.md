@@ -15,7 +15,7 @@ Phụ thuộc: bài viết tay đã lưu dạng nét bút + ảnh PNG trên Stor
 - Giao bài định kỳ (`assignment_templates` + cron).
 - Tạo đề theo kỹ năng yếu từ Reports (dùng `ai-generate`).
 - Thông báo cho phụ huynh (Web Push hoặc Telegram).
-- Chuỗi ngày, huy hiệu, phần thưởng do phụ huynh đặt; chế độ luyện nhanh có giờ.
+- Chế độ luyện nhanh có giờ. (Chuỗi ngày, huy hiệu, phần thưởng: xong, xem `specs/2026-10-15-stars-badges-rewards-design.md`.)
 - Tiếng Anh nghe/nói (TTS, ghi âm); Tiếng Việt chính tả nghe-viết; flashcard từ vựng.
 - Gắn bộ đề với bài học SGK; xuất PDF đề và báo cáo; hỏi AI về bài làm của con.
 - PWA + làm bài offline; nhiều học sinh; tách năm học khi lên lớp.

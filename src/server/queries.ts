@@ -2,9 +2,9 @@ import "server-only"
 import { asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { db, schema } from "@/db"
 import { withLaterAnswerKey } from "@/lib/answer-key"
-import { starsFor } from "@/lib/grading"
 import type { Attachment, Difficulty, ExerciseSet, Question, Student } from "@/lib/types"
 import { withImageUrls } from "./question-images"
+import { loadRewards } from "./rewards"
 import { attachmentUrl } from "./storage"
 
 /*
@@ -12,7 +12,7 @@ import { attachmentUrl } from "./storage"
  * page components stay unaware of the database. Only one student exists.
  */
 
-const { students, exerciseSets, questions, assignments, attempts, answers, attachments } = schema
+const { students, exerciseSets, questions, assignments, attempts, answers, attachments, rewardRedemptions } = schema
 
 type SetRow = typeof exerciseSets.$inferSelect
 type AttemptRow = typeof attempts.$inferSelect
@@ -69,8 +69,7 @@ export async function toAttachment(row: AttachmentRow): Promise<Attachment> {
 export async function getStudent(): Promise<Student & { id: string }> {
   const row = await db.query.students.findFirst({ orderBy: asc(students.createdAt) })
   if (!row) throw new Error("No student found. Run `pnpm db:seed`.")
-  const graded = await db.select({ score: attempts.score }).from(attempts).where(isNotNull(attempts.gradedAt))
-  const totalStars = graded.reduce((sum, a) => sum + starsFor(a.score ?? 0), 0)
+  const totalStars = (await loadRewards()).state.ledger.balance
   return { id: row.id, name: row.name, grade: row.grade, className: row.className ?? undefined, avatarEmoji: row.avatarEmoji, totalStars }
 }
 
@@ -210,17 +209,18 @@ export async function listGradedAnswers() {
 export async function getNavCounts(now = new Date()) {
   const {
     rows: [row],
-  } = await db.execute<{ awaiting: number; open: number }>(sql`
+  } = await db.execute<{ awaiting: number; open: number; redemptions: number }>(sql`
     with latest as (
       select distinct on (t.assignment_id) t.assignment_id, t.submitted_at, t.graded_at
       from ${attempts} t order by t.assignment_id, t.attempt_no desc
     )
     select
       count(*) filter (where l.submitted_at is not null and l.graded_at is null)::int as awaiting,
-      count(*) filter (where l.submitted_at is null and a.available_from <= ${now.toISOString()})::int as open
+      count(*) filter (where l.submitted_at is null and a.available_from <= ${now.toISOString()})::int as open,
+      (select count(*) from ${rewardRedemptions} r where r.status = 'pending')::int as redemptions
     from ${assignments} a left join latest l on l.assignment_id = a.id
   `)
-  return { awaitingGrading: row?.awaiting ?? 0, openAssignments: row?.open ?? 0 }
+  return { awaitingGrading: row?.awaiting ?? 0, openAssignments: row?.open ?? 0, pendingRedemptions: row?.redemptions ?? 0 }
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

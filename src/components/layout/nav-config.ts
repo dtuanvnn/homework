@@ -3,6 +3,7 @@ import {
   CalendarDays,
   ChartColumnBig,
   ClipboardCheck,
+  Gift,
   LayoutDashboard,
   Library,
   Sun,
@@ -12,7 +13,7 @@ import {
 import type { AppMode } from '@/lib/types'
 
 export type ParentTabId = 'dashboard' | 'library' | 'schedule' | 'grading' | 'reports'
-export type StudentTabId = 'today' | 'assignments' | 'results'
+export type StudentTabId = 'today' | 'assignments' | 'results' | 'rewards'
 export type TabId = ParentTabId | StudentTabId
 
 export interface NavItem {
@@ -36,19 +37,23 @@ export const PARENT_NAV: NavItem[] = [
 export const STUDENT_NAV: NavItem[] = [
   { id: 'today', label: 'Hôm nay', icon: Sun, description: 'Những bài em cần làm hôm nay.' },
   { id: 'assignments', label: 'Bài của em', icon: BookOpenCheck, description: 'Tất cả bài tập bố mẹ đã giao cho em.' },
-  { id: 'results', label: 'Kết quả', icon: Trophy, description: 'Điểm số, sao và huy hiệu em đã đạt được.' },
+  { id: 'results', label: 'Kết quả', icon: Trophy, description: 'Điểm số và sao em đã đạt được.' },
+  { id: 'rewards', label: 'Phần thưởng', shortLabel: 'Thưởng', icon: Gift, description: 'Đổi sao lấy quà, xem chuỗi ngày và huy hiệu.' },
 ]
 
 export interface NavCounts {
   awaitingGrading: number
   openAssignments: number
+  pendingRedemptions: number
 }
 
 /** Navigation for a mode, with live badge counts. */
 export function navFor(mode: AppMode, counts: NavCounts): NavItem[] {
   if (mode === 'student')
     return STUDENT_NAV.map((i) => (i.id === 'assignments' ? { ...i, badge: counts.openAssignments || undefined } : i))
-  return PARENT_NAV.map((i) => (i.id === 'grading' ? { ...i, badge: counts.awaitingGrading || undefined } : i))
+  return PARENT_NAV.map((i) =>
+    i.id === 'grading' ? { ...i, badge: counts.awaitingGrading || undefined } : i.id === 'dashboard' ? { ...i, badge: counts.pendingRedemptions || undefined } : i,
+  )
 }
 
 export const MODE_LABELS: Record<AppMode, string> = {

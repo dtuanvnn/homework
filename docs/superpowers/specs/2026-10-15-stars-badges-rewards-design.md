@@ -1,6 +1,6 @@
 # Streaks, badges, stars and rewards — design
 
-Date: 2026-10-15 · Status: approved design, awaiting implementation plan
+Date: 2026-10-15 · Status: implemented (user asked to implement straight after the spec)
 
 ## Goal
 
@@ -102,7 +102,7 @@ The advisory lock serializes concurrent requests (double tap), so stars can't be
   - "Đang chờ bố mẹ": pending requests with "Hủy".
   - Badges: grid, earned in color with date, locked in grey with the hint.
   - "Lịch sử sao": compact ledger ("+3 Bảng nhân 8", "+10 Chuỗi 7 ngày", "−30 Xem TV").
-- Celebration: the student shell shows a confetti + sound overlay for new badges/milestones (from layout props), then calls `markBadgesSeen`.
+- Celebration: an in-page card at the top of "Hôm nay" (confetti + sound) for new badges and streak milestones reached in the last 3 days; "Tuyệt vời!" calls `markBadgesSeen`. A card rather than a modal so it never blocks the day's work (or E2E clicks).
 - Result screen: "+N sao" only on attempt 1; attempt 2 shows "Lần làm lại không tính sao".
 
 **Parent (calm, no sound).**
@@ -112,6 +112,7 @@ The advisory lock serializes concurrent requests (double tap), so stars can't be
 ## 5. Testing, seed, rollout
 
 - Unit (vitest): streaks (weekend gaps, late submission, today pending/overdue, several assignments per day, re-reaching milestones after a break, VN day boundary); stars (attempt 1 only, regrade changes stars, attempt 2 ignored); balance (pending/given/declined/cancelled, negative); `canRedeem`; badge dates; `newBadges`.
-- E2E (Playwright, iPad + iPhone): parent creates a reward → child requests → parent marks given → balance drops; decline refunds; parent adjustment; badge celebration shows once; double-tapping "Đổi" creates one request.
+- E2E (Playwright, iPad + iPhone): parent creates a reward → child requests → parent marks given → balance drops; decline refunds; parent adjustment; double-tapping "Đổi" creates one request.
 - Seed: rewards "📺 Xem TV 30 phút" 20, "🎮 Chơi game 1 giờ" 40, "🍦 Đi ăn kem" 50, "📚 Mua truyện mới" 80; one pending request; one adjustment; demo history yields a streak and a few badges.
+- The seed marks every celebration earned so far as seen (celebration logic is covered by unit tests). The overdue demo assignment moved to four days back so the demo has a 3-day streak.
 - Rollout: one additive migration. Production star totals drop once (attempt 2 no longer counts).

@@ -7,9 +7,11 @@ const ROUTES: { path: string; heading: string | RegExp }[] = [
   { path: "/parent/schedule", heading: "Lịch giao bài" },
   { path: "/parent/grading", heading: "Chấm bài" },
   { path: "/parent/reports", heading: "Báo cáo" },
+  { path: "/parent/rewards", heading: "Phần thưởng" },
   { path: "/student", heading: /^Chào / },
   { path: "/student/assignments", heading: "Bài của em" },
   { path: "/student/results", heading: /^Kết quả/ },
+  { path: "/student/rewards", heading: "Phần thưởng" },
 ]
 
 for (const { path, heading } of ROUTES) {
