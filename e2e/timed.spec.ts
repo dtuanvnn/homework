@@ -23,10 +23,10 @@ const mc = (prompt: string, options: string[], correctIndex: number) => ({ type:
 
 /** A ready two-question set with a unique title. */
 async function createSet(title: string) {
-  const [{ householdId }] = await sql<{ householdId: string }>(`select household_id from students order by created_at limit 1`)
+  const [{ household_id }] = await sql<{ household_id: string }>(`select household_id from students order by created_at limit 1`)
   const [set] = await sql<{ id: string }>(
     `insert into exercise_sets (household_id, title, subject, grade, estimated_minutes, kind, source, status) values ($1, $2, 'toan', 3, 10, 'luyen-tap', 'thu-cong', 'san-sang') returning id`,
-    [householdId, title],
+    [household_id, title],
   )
   const questions = [mc("7 × 8 = ?", ["54", "56", "58", "64"], 1), mc("9 × 6 = ?", ["45", "54", "56", "63"], 1)]
   for (const [position, content] of questions.entries()) {
