@@ -145,3 +145,30 @@ test("a timed attempt left mid-way is handed in once its time has passed", async
 
   expect(errors).toEqual([])
 })
+
+test("time runs out while offline: the child waits on the overlay until it is handed in", async ({ page, context }, testInfo) => {
+  test.setTimeout(90_000)
+  const title = `Thi mất mạng ${testInfo.project.name} ${Date.now()}`
+  const setId = await createSet(title)
+  const [{ id: assignmentId }] = await sql<{ id: string }>(
+    `insert into assignments (student_id, set_id, available_from, due_at, mode, max_attempts, time_limit_minutes)
+     select id, $1, now() - interval '1 hour', now() + interval '1 day', 'web', 2, 1 from students limit 1 returning id`,
+    [setId],
+  )
+
+  await page.clock.install()
+  const take = await startTimed(page, assignmentId, title, 1)
+  await take.getByRole("radio", { name: /56/ }).click()
+  await expect(take.getByText("Đã lưu")).toBeVisible()
+
+  await context.setOffline(true)
+  await page.clock.fastForward("01:00")
+  await expect(page.getByText("Hết giờ!")).toBeVisible()
+  // A long outage: the overlay keeps waiting instead of giving up.
+  await page.clock.runFor(90_000)
+  await expect(page.getByText("Đang nộp bài, em chờ chút nhé…")).toBeVisible()
+  await expect(page).toHaveURL(/\/do$/)
+
+  await context.setOffline(false)
+  await expect(page).toHaveURL(/\/student\/results\//, { timeout: 20_000 })
+})

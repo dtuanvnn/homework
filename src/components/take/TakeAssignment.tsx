@@ -42,9 +42,12 @@ export type TakeTimer =
 
 /** Debounce before an autosave after the last change. */
 const SAVE_DELAY = 800
-/** Hand-in tries after time runs out before leaving it to the server. */
-const TIME_UP_TRIES = 5
+/** A hand-in try after time ran out counts as failed after this long (the network may hang). */
+const TIME_UP_TRY_MS = 20_000
 const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
+/** Resolves when the browser is (back) online. */
+const online = () =>
+  navigator.onLine ? Promise.resolve() : new Promise<void>((r) => window.addEventListener("online", () => r(), { once: true }))
 
 function isAnswered(q: TakeQuestion, a: unknown): boolean {
   if (a === undefined || a === null) return false
@@ -68,7 +71,7 @@ export default function TakeAssignment({
   onExit,
   onSubmit,
   onSubmitted,
-  onGiveUp,
+  onResync,
 }: {
   title: string
   subject: SubjectId
@@ -80,11 +83,11 @@ export default function TakeAssignment({
   /** Called after the answers were saved on "Lưu và thoát". */
   onExit: () => void
   /** Hands the work in; resolves null when it failed (the caller shows the error). */
-  onSubmit: (answers: Answers, elapsedSeconds: number) => Promise<{ graded: boolean } | null>
+  onSubmit: (answers: Answers, elapsedSeconds: number, quiet?: boolean) => Promise<{ graded: boolean } | null>
   /** Called once the "sent" animation finished. */
   onSubmitted: () => void
-  /** Time ran out and handing in kept failing; the server hands the saved answers in later. */
-  onGiveUp: () => void
+  /** Countdown only: fetches a fresh deadline and server time (the props may be stale). */
+  onResync?: () => Promise<{ deadline: string; serverNow: string } | null>
 }) {
   const tone = SUBJECTS[subject]
   const [answers, setAnswers] = useState<Answers>(initialAnswers)
@@ -111,8 +114,9 @@ export default function TakeAssignment({
   const countdown = timer.kind === "countdown" ? timer : null
   // Untimed: seconds the page was visible, continuing from what the draft saved.
   const [elapsed, setElapsed] = useState(timer.kind === "stopwatch" ? timer.initialSeconds : 0)
-  const [deadline] = useState(() => (countdown ? new Date(countdown.deadline) : null))
-  const [offsetMs] = useState(() => (countdown ? new Date(countdown.serverNow).getTime() - Date.now() : 0))
+  const [clock, setClock] = useState(() =>
+    countdown ? { deadline: new Date(countdown.deadline), offsetMs: new Date(countdown.serverNow).getTime() - Date.now() } : null,
+  )
   const [timeUp, setTimeUp] = useState<null | "up" | "sending">(null)
   const elapsedRef = useRef(elapsed)
   useEffect(() => { elapsedRef.current = elapsed })
@@ -179,8 +183,25 @@ export default function TakeAssignment({
       mounted.current = false
       document.removeEventListener("visibilitychange", onHide)
       window.clearTimeout(savedTimer.current)
-      if (!submitting.current && !handedIn.current) void flushRef.current()
+      if (!submitting.current && !handedIn.current) {
+        markTimeDirtyRef.current()
+        void flushRef.current()
+      }
     }
+  }, [])
+
+  // Correct the clock against the server once mounted; the deadline in the props may be from a cached page.
+  const onResyncRef = useRef(onResync)
+  useEffect(() => {
+    const resync = onResyncRef.current
+    if (!resync) return
+    const sentAt = Date.now()
+    void resync().then((fresh) => {
+      if (!fresh || !mounted.current) return
+      // Assume the server answered halfway through the round trip.
+      const midpoint = (sentAt + Date.now()) / 2
+      setClock({ deadline: new Date(fresh.deadline), offsetMs: new Date(fresh.serverNow).getTime() - midpoint })
+    })
   }, [])
 
   useEffect(() => {
@@ -222,15 +243,21 @@ export default function TakeAssignment({
     prevAnswered.current = answeredCount
   }, [answeredCount])
 
-  /** Sends the work with the paper-plane animation; resolves false when it failed. */
-  const handIn = async (): Promise<boolean> => {
+  /**
+   * Sends the work with the paper-plane animation; resolves false when it failed.
+   * `quiet` (time-up retries): no sound, plane or error toast until it got through.
+   */
+  const handIn = async (quiet = false): Promise<boolean> => {
     submitting.current = true
     window.clearTimeout(saveTimer.current)
     dirty.current = false
-    play("submit")
-    setFlight("flying")
-    const flown = wait(reduced ? 200 : 750)
-    const result = await queue.current.then(() => onSubmit(latest.current, elapsedRef.current)).catch(() => null)
+    if (!quiet) {
+      play("submit")
+      setFlight("flying")
+    }
+    const flown = wait(quiet ? 0 : reduced ? 200 : 750)
+    const send = queue.current.then(() => onSubmit(latest.current, elapsedRef.current, quiet))
+    const result = await (quiet ? Promise.race([send, wait(TIME_UP_TRY_MS).then(() => null)]) : send).catch(() => null)
     await flown
     if (!result) {
       submitting.current = false
@@ -250,7 +277,8 @@ export default function TakeAssignment({
     void handIn()
   }
 
-  // Exam mode: at zero the work is handed in as it is, retrying while the network is down.
+  // Exam mode: at zero the work is handed in as it is. Keep trying until it gets through (or the
+  // server says it already has it); every try that reaches the server ends the screen.
   const onTimeUp = async () => {
     setConfirmSubmit(false)
     setConfirmExit(false)
@@ -258,12 +286,12 @@ export default function TakeAssignment({
     setTimeUp("up")
     await wait(reduced ? 600 : 1600)
     while (submitting.current && mounted.current) await wait(200) // a manual submit was already on its way
-    for (let i = 0; i < TIME_UP_TRIES && mounted.current && !handedIn.current; i++) {
-      setTimeUp("sending")
-      if (await handIn()) return
-      await wait(3000)
+    setTimeUp("sending")
+    for (let delay = 2000; mounted.current && !handedIn.current; delay = Math.min(delay * 2, 15_000)) {
+      await online()
+      if (await handIn(true)) return
+      await wait(delay)
     }
-    if (mounted.current && !handedIn.current) onGiveUp()
   }
 
   const renderQuestion = (q: TakeQuestion) => {
@@ -312,8 +340,8 @@ export default function TakeAssignment({
               ) : null}
             </AnimatePresence>
           </span>
-          {countdown && deadline ? (
-            <CountdownClock deadline={deadline} offsetMs={offsetMs} limitSeconds={countdown.limitMinutes * 60} onExpire={() => void onTimeUp()} />
+          {countdown && clock ? (
+            <CountdownClock deadline={clock.deadline} offsetMs={clock.offsetMs} limitSeconds={countdown.limitMinutes * 60} onExpire={() => void onTimeUp()} />
           ) : (
             <StopwatchClock seconds={elapsed} hidden={!showTimer} onToggle={() => setShowTimer((v) => !v)} />
           )}

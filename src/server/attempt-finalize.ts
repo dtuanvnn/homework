@@ -22,57 +22,70 @@ export function answerRows(attemptId: string, qs: Question[], responses: Record<
     .filter((row) => !onlyAnswered || row.response !== null)
 }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+async function savedResponses(tx: Tx, attemptId: string): Promise<Record<string, Response>> {
+  const rows = await tx
+    .select({ questionId: answers.questionId, response: answers.response })
+    .from(answers)
+    .where(and(eq(answers.attemptId, attemptId), isNotNull(answers.response)))
+  return Object.fromEntries(rows.map((r) => [r.questionId, r.response as Response]))
+}
+
 /**
- * Grades and closes an open attempt with these answers. Does nothing (closed:
- * false) when the attempt was already handed in, so racing callers are safe.
+ * Grades and closes an open attempt, with these answers or the ones saved so far.
+ * The attempt row is locked first, so a racing autosave, submit or expiry sweep
+ * waits and then finds it closed (closed: false) instead of overwriting answers.
  */
 export async function closeAttempt(input: {
   attemptId: string
   questions: Question[]
-  responses: Record<string, Response>
+  responses: Record<string, Response> | "saved"
   submittedAt: Date
   durationSeconds: number | null
 }): Promise<{ closed: boolean; graded: boolean; score: number | null }> {
-  const { attemptId, submittedAt } = input
-  const grade = gradeAttempt(input.questions, input.responses)
-  const closed = await db.transaction(async (tx) => {
-    const [row] = await tx
+  const { attemptId, submittedAt, questions: qs } = input
+  return db.transaction(async (tx) => {
+    const [open] = await tx
+      .select({ id: attempts.id })
+      .from(attempts)
+      .where(and(eq(attempts.id, attemptId), isNull(attempts.submittedAt)))
+      .for("update")
+    if (!open) return { closed: false, graded: false, score: null }
+    if (!qs.length) {
+      // A set emptied after the attempt started: just close it.
+      await tx.update(attempts).set({ submittedAt, durationSeconds: input.durationSeconds }).where(eq(attempts.id, attemptId))
+      return { closed: true, graded: false, score: null }
+    }
+    const responses = input.responses === "saved" ? await savedResponses(tx, attemptId) : input.responses
+    const grade = gradeAttempt(qs, responses)
+    await tx
       .update(attempts)
       .set({
         submittedAt,
         durationSeconds: input.durationSeconds,
         ...(grade.needsReview ? {} : { gradedAt: submittedAt, gradedBy: "auto" as const, score: grade.score, feedback: autoFeedback(grade.score ?? 0) }),
       })
-      .where(and(eq(attempts.id, attemptId), isNull(attempts.submittedAt)))
-      .returning({ id: attempts.id })
-    if (!row) return false
+      .where(eq(attempts.id, attemptId))
     await tx.delete(answers).where(eq(answers.attemptId, attemptId))
     await tx.insert(answers).values(
-      answerRows(attemptId, input.questions, input.responses, false).map((r, i) => ({
+      answerRows(attemptId, qs, responses, false).map((r, i) => ({
         ...r,
         isCorrect: grade.grades[i].isCorrect,
         pointsAwarded: grade.grades[i].pointsAwarded,
       })),
     )
-    return true
+    return { closed: true, graded: !grade.needsReview, score: grade.score }
   })
-  return { closed, graded: !grade.needsReview, score: grade.score }
 }
 
 /** Hands in a timed attempt as saved, at its deadline, with the full limit as its duration. */
 export async function settleAttempt(a: { id: string; setId: string; startedAt: Date; timeLimitMinutes: number }): Promise<void> {
-  const [questionRows, saved] = await Promise.all([
-    db.select().from(questions).where(eq(questions.setId, a.setId)).orderBy(asc(questions.position)),
-    db
-      .select({ questionId: answers.questionId, response: answers.response })
-      .from(answers)
-      .where(and(eq(answers.attemptId, a.id), isNotNull(answers.response))),
-  ])
-  if (!questionRows.length) return
+  const questionRows = await db.select().from(questions).where(eq(questions.setId, a.setId)).orderBy(asc(questions.position))
   await closeAttempt({
     attemptId: a.id,
     questions: questionRows.map((r) => ({ ...r.content, id: r.id }) as Question),
-    responses: Object.fromEntries(saved.map((r) => [r.questionId, r.response as Response])),
+    responses: "saved",
     submittedAt: deadlineOf(a.startedAt, a.timeLimitMinutes),
     durationSeconds: a.timeLimitMinutes * 60,
   })
@@ -94,5 +107,12 @@ export const settleExpiredAttempts = cache(async (): Promise<void> => {
         sql`${attempts.startedAt} + ${assignments.timeLimitMinutes} * interval '1 minute' + ${SUBMIT_GRACE_SECONDS} * interval '1 second' < now()`,
       ),
     )
-  for (const a of expired) await settleAttempt({ ...a, timeLimitMinutes: a.timeLimitMinutes! })
+  for (const a of expired) {
+    // One broken attempt must not take every page down with it; the next request retries it.
+    try {
+      await settleAttempt({ ...a, timeLimitMinutes: a.timeLimitMinutes! })
+    } catch (e) {
+      console.error(`Could not hand in expired attempt ${a.id}`, e)
+    }
+  }
 })

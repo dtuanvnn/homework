@@ -34,6 +34,8 @@ export default function TakeRoute({
   const router = useRouter()
   const next = useRef<Route>(TAB_PATHS.today)
   const [timer, setTimer] = useState(initialTimer)
+  // A countdown from the page props may come from the router cache (back/forward), so its clock offset is stale.
+  const [fromProps] = useState(initialTimer?.kind === "countdown")
   const leaving = useRef(false)
 
   // The layout (stars, badges) is shared across routes, so refresh it after leaving.
@@ -42,10 +44,10 @@ export default function TakeRoute({
     router.push(path)
     router.refresh()
   }
-  // The server handed the attempt in because time ran out.
-  const timeIsUp = () => {
+  // The server already has the attempt handed in (time ran out, or an earlier submit got through).
+  const timeIsUp = (message = "Đã hết giờ làm bài. Bài của em đã được nộp.") => {
     if (leaving.current) return
-    toast("Đã hết giờ làm bài. Bài của em đã được nộp.", { icon: "⏰" })
+    toast(message, { icon: "⏰" })
     leave(TAB_PATHS.today)
   }
 
@@ -60,7 +62,7 @@ export default function TakeRoute({
         onStart={async () => {
           const res = await startAttempt(assignmentId).catch(() => null)
           if (!res?.ok) {
-            if (res?.expired) return timeIsUp()
+            if (res?.expired) return timeIsUp(res.error)
             toast.error(res?.error ?? "Chưa bắt đầu được. Em kiểm tra mạng rồi thử lại nhé!")
             return
           }
@@ -78,23 +80,32 @@ export default function TakeRoute({
       questions={questions}
       initialAnswers={initialAnswers}
       timer={timer}
+      onResync={
+        fromProps
+          ? async () => {
+              const res = await startAttempt(assignmentId).catch(() => null)
+              if (res && !res.ok && res.expired) timeIsUp(res.error)
+              return res?.ok ? { deadline: res.deadline, serverNow: res.serverNow } : null
+            }
+          : undefined
+      }
       onSave={async (answers, seconds) => {
         const res = await saveDraft(assignmentId, answers, seconds).catch(() => null)
-        if (res && !res.ok && res.expired) timeIsUp()
+        if (res && !res.ok && res.expired) timeIsUp(res.error)
         return Boolean(res?.ok)
       }}
       onExit={() => {
         leave(TAB_PATHS.today)
         toast(timer.kind === "countdown" ? "Đã lưu bài làm. Đồng hồ vẫn chạy, em quay lại sớm nhé!" : "Đã lưu bài làm. Em làm tiếp sau nhé!")
       }}
-      onSubmit={async (answers, seconds) => {
+      onSubmit={async (answers, seconds, quiet) => {
         const res = await submitAttempt(assignmentId, answers, seconds).catch(() => null)
         if (!res?.ok) {
           if (res?.expired) {
-            timeIsUp()
+            timeIsUp(res.error)
             return null
           }
-          toast.error(res?.error ?? "Chưa nộp được bài. Em kiểm tra mạng rồi thử lại nhé!")
+          if (!quiet) toast.error(res?.error ?? "Chưa nộp được bài. Em kiểm tra mạng rồi thử lại nhé!")
           return null
         }
         next.current = res.graded ? studentPaths.result(res.attemptId) : TAB_PATHS.today
@@ -103,11 +114,6 @@ export default function TakeRoute({
       onSubmitted={() => {
         if (next.current === TAB_PATHS.today) toast.success("Em đã nộp bài, giỏi quá! 🎉")
         leave(next.current)
-      }}
-      onGiveUp={() => {
-        // Time ran out and the hand-in never got through; the server hands it in on the next visit.
-        toast("Hết giờ rồi! Bài sẽ được nộp với những câu em đã lưu.", { icon: "⏰" })
-        leave(TAB_PATHS.today)
       }}
     />
   )

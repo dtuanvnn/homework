@@ -24,7 +24,7 @@ import type { NewFile } from "./library"
 
 const { attempts, answers, attachments } = schema
 
-/** `expired`: a timed attempt ran out of time and was handed in as saved. */
+/** `expired`: the timed attempt is already handed in (time ran out, or an earlier submit got through); leave the page. */
 type Result<T> = ({ ok: true } & T) | { ok: false; error: string; expired?: boolean }
 
 const MAX_RESPONSE_CHARS = 2_000_000
@@ -46,6 +46,7 @@ const responsesSchema = z
 
 const ERR_CLOSED = "Bài này không làm tiếp được nữa."
 const ERR_TIME_UP = "Đã hết giờ làm bài. Bài của em đã được nộp."
+const ERR_HANDED_IN = "Bài của em đã được nộp."
 
 function parseResponses(input: unknown): Record<string, Response> | null {
   const parsed = responsesSchema.safeParse(input)
@@ -101,7 +102,9 @@ async function writableAttempt(record: AssignmentRecord): Promise<{ attempt: Att
   const attempt = await openAttempt(record, { create: limit === null })
   if (!attempt) {
     // getAssignment already handed in the expired attempt: tell the page time is up.
-    if (limit !== null && timedOut(record.attempts.at(-1), limit)) return { error: ERR_TIME_UP, expired: true }
+    // A timed attempt is already handed in (by the timer, or a submit whose reply was lost): leave the take page.
+    const latest = record.attempts.at(-1)
+    if (limit !== null && latest?.submittedAt) return { error: timedOut(latest, limit) ? ERR_TIME_UP : ERR_HANDED_IN, expired: true }
     return { error: ERR_CLOSED }
   }
   if (limit !== null && isExpired(attempt.startedAt, limit, new Date())) {
@@ -182,7 +185,8 @@ export async function submitAttempt(
   // Timed: measured on the server. Untimed: the visible-page seconds the browser counted.
   const duration = limit !== null ? timedDuration(attempt.startedAt, limit, now) : mergeActiveSeconds(attempt.durationSeconds, durationSeconds)
   const result = await closeAttempt({ attemptId: attempt.id, questions, responses: parsed, submittedAt: now, durationSeconds: duration })
-  if (!result.closed) return { ok: false, error: "Bài này đã được nộp rồi." }
+  // Lost a race with the expiry sweep (timed) or a double tap.
+  if (!result.closed) return limit !== null ? { ok: false, error: ERR_HANDED_IN, expired: true } : { ok: false, error: "Bài này đã được nộp rồi." }
   return { ok: true, attemptId: attempt.id, graded: result.graded, score: result.score }
 }
 
