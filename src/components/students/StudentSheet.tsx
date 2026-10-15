@@ -80,12 +80,12 @@ export default function StudentSheet({ open, onOpenChange, editing, now }: {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="mx-auto max-w-lg">
+      <SheetContent>
         <SheetHeader>
           <SheetTitle>{editing ? `Sửa ${editing.name}` : "Thêm học sinh"}</SheetTitle>
           <SheetDescription>{editing ? "Đổi tên, ảnh đại diện hoặc mã PIN." : "Mỗi bé dùng thiết bị riêng và có thể có mã PIN riêng."}</SheetDescription>
         </SheetHeader>
-        <div className="flex flex-col gap-4 px-4">
+        <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 pb-6 md:px-6">
           <div>
             <Label>Ảnh đại diện</Label>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -171,7 +171,7 @@ export default function StudentSheet({ open, onOpenChange, editing, now }: {
             )}
           </div>
         </div>
-        <SheetFooter className="flex-row justify-between">
+        <SheetFooter className="justify-between">
           {editing ? (
             <Button variant="ghost" className="text-red-600" onClick={archive}>
               Lưu trữ học sinh
