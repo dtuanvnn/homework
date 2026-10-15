@@ -8,7 +8,7 @@ One parent (or tutor) manages several children, each on their own device, and ea
 
 Today: one student is assumed everywhere. `getStudent()` (`server/queries.ts`) returns the first `students` row; `students.grade` / `className` are overwritten on promotion; `rewards`, `reward_redemptions`, `star_adjustments`, `badge_seen` have no owner; the PIN gate (`lib/pin.ts`, `proxy.ts`) compares the `hh_pin` cookie with hashes of `APP_PIN` / `PARENT_PIN` from env. A large mode toggle (`ModeToggle`) sits in the sidebar and phone app bar in both modes.
 
-Success: the tutor adds a second child with an avatar and PIN; on the child's iPad the child taps their avatar, enters their PIN and from then on sees only their own work, stars and badges. The parent switches the "viewing" child from the header, assigns one set to two children at once, grades each child's queue. In September the parent presses "Lên lớp": the child is now in grade 4, Reports and Calendar default to 2026–2027, and the 2025–2026 year is still viewable. A child can't reach the parent screens by tapping around.
+Success: the tutor adds a second child with an avatar and PIN; on the child's iPad the child taps their avatar, enters their PIN and from then on sees only their own work, stars and badges. The parent switches the "viewing" child from the header, assigns one set to two children at once, grades each child's queue. In September the parent presses "Lên lớp": the child is now in grade 4, the header and library show the new grade, and Reports can still show the 2025–2026 year with one tap. A child can't reach the parent screens by tapping around.
 
 ### Decisions made with the user
 
@@ -47,7 +47,7 @@ yearRange(enrollments: Enrollment[], schoolYear: number): { from: string; to: st
   // from = its startsOn, to = next enrollment's startsOn (exclusive), null for the latest
 yearOf(enrollments: Enrollment[], dueAt: Date): number | null   // which year a due date falls into
 suggestPromotion(current: Enrollment, today: string): Enrollment
-  // grade + 1, schoolYear + 1, startsOn = 5 Sep of that year (or today if later), className: null
+  // grade + 1 (max 12), schoolYear + 1, startsOn = 5 Sep of that year, className: null
 schoolYearLabel(schoolYear: number): string                     // "2026–2027"
 ```
 
@@ -57,7 +57,9 @@ schoolYearLabel(schoolYear: number): string                     // "2026–2027"
 
 - The `hh_pin` cookie holds `base64url(json).base64url(hmac)`, HMAC-SHA256 with env `SESSION_SECRET` (required in production; dev falls back to a fixed value with a warning). Payload `{ v: 1, role, householdId, studentId?, iat }`.
 - `signToken(payload, secret)`, `verifyToken(value, secret): Payload | null`. Lifetime: student 180 days, parent 30 days (`iat`-based).
-- When no PIN is configured for a mode (parent: `PARENT_PIN` empty; student: the chosen child has no `pinHash`), entering that mode still issues a token so the server knows the household and child.
+- Student mode always needs a token (it names the child), even when the child has no `pinHash`: tapping the avatar issues it. Parent mode needs a token only when `PARENT_PIN` (or its `APP_PIN` fallback) is set; without one, the server uses the oldest household.
+- `APP_PIN` no longer gates student mode (each child has their own PIN) and only remains the parent fallback. Old `hh_pin` cookies fail verification, so every device enters its PIN once after deploy. Deploy step: set each child's PIN on the Students page right after the release.
+- The proxy sets request header `x-hh-mode` (`parent` / `student`, from the path; any incoming value is dropped) so the shared `(app)` layout and queries know which mode they render.
 
 ### PIN flow (`server/actions/pin.ts`, `app/pin/*`)
 
@@ -200,9 +202,10 @@ The lock screen shows the avatar, the parent's message, and "Mở lại lúc …
 - `AssignSheet`: a "Giao cho" row of child avatar chips (multi-select, default = viewing child; hidden with one child). `createAssignments` inserts one assignment per selected child; all other fields (dates, mode, time limit, chain) are copied. `quickAssign` targets the viewing child.
 - Library grade filter defaults to the viewing child's current grade (still changeable). New sets default to that grade and the household.
 
-### Reports and Calendar
+### Reports
 
-- A school-year picker (chips of the child's enrollments, default current) on Reports and the parent Calendar/Schedule. Analytics and lists filter assignments whose `dueAt` falls in `yearRange`. Rewards pages are not filtered by year (stars carry over).
+- Reports gets a "Năm học" row of chips (one per enrollment of the viewing child). Choosing one switches the existing range to "custom" with `from` = the year's `startsOn` and `to` = the day before the next year's start (or today for the current year), so the charts, KPIs and the AI summary all follow it with no new filter code. The default range stays "4 tuần" (always inside the current year).
+- The parent Schedule (week/day calendar) gets no year picker: navigating by date already separates years. Rewards pages are not filtered by year (stars carry over).
 
 ## 4. Seed and tests
 
@@ -213,7 +216,7 @@ The lock screen shows the avatar, the parent's message, and "Mở lại lúc …
   - Hold-to-open: short tap on the avatar does nothing; 2 s hold reaches the parent PIN page. No mode toggle visible in student mode.
   - Lock: parent locks An "Đến khi mở" with a message → An's device shows the lock screen and an autosave/submit action is refused; parent still sees An and can assign; unlock → An's device opens the app on reload without the PIN.
   - Parent: switch viewing child changes Today/Grading; assign a set to both children → each sees it.
-  - Students page: add a child with PIN, archive, restore; "Lên lớp" → Reports shows 2026–2027 by default and 2025–2026 still selectable; stars unchanged after promotion.
+  - Students page: add a child with PIN, archive, restore; "Lên lớp" → the child card shows the new grade and year; Reports offers chips for both years and choosing the old one fills the custom range with its dates; stars unchanged after promotion.
 - Existing E2E keep passing with the seed's An as the default child.
 
 ## 5. Later: multi-tenant
