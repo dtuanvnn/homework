@@ -116,7 +116,7 @@ export default function Reports({ input, years, now: nowIso }: { input: ReportIn
   const [aiBusy, setAiBusy] = useState(false)
 
   const today = dateInput(now)
-  const yearChips = [...years].reverse().map((y) => ({ year: y.schoolYear, range: yearCustomRange(years, y.schoolYear, today)! }))
+  const yearChips = [...years].reverse().map((y) => ({ year: y.schoolYear, range: yearCustomRange(years, y.schoolYear, today) })).filter((c) => c.range !== null) as { year: number; range: { from: string; to: string } }[]
   const pickYear = (r: { from: string; to: string }) => {
     setRange("custom")
     setFrom(r.from)
@@ -208,7 +208,7 @@ export default function Reports({ input, years, now: nowIso }: { input: ReportIn
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        {years.length > 1 && (
+        {yearChips.length >= 2 && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-slate-500">Năm học</span>
             {yearChips.map(({ year, range: r }) => {

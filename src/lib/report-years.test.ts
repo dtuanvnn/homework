@@ -16,4 +16,8 @@ describe("report year ranges", () => {
   it("returns null for an unknown year", () => {
     expect(yearCustomRange(years, 2020, "2026-10-15")).toBeNull()
   })
+  it("returns null for a future year that hasn't started", () => {
+    const withFuture = [...years, { schoolYear: 2027, grade: 4, className: null, startsOn: "2027-09-05" }]
+    expect(yearCustomRange(withFuture, 2027, "2026-10-15")).toBeNull()
+  })
 })

@@ -10,6 +10,7 @@ function dayBefore(day: string): string {
 export function yearCustomRange(list: Enrollment[], schoolYear: number, today: string): { from: string; to: string } | null {
   const range = yearRange(list, schoolYear)
   if (!range) return null
+  if (range.from > today) return null
   const end = range.to ? dayBefore(range.to) : today
   return { from: range.from, to: end < today ? end : today }
 }
