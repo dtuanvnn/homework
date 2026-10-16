@@ -106,7 +106,7 @@ test("a timed attempt left mid-way is handed in once its time has passed", async
   const setId = await createSet(title)
   const [{ id: assignmentId }] = await sql<{ id: string }>(
     `insert into assignments (student_id, set_id, available_from, due_at, mode, max_attempts, time_limit_minutes)
-     select id, $1, now() - interval '1 hour', now() + interval '1 day', 'web', 2, 10 from students limit 1 returning id`,
+     select id, $1, now() - interval '1 hour', now() + interval '1 day', 'web', 2, 10 from students order by created_at limit 1 returning id`,
     [setId],
   )
 
@@ -153,7 +153,7 @@ test("time runs out while offline: the child waits on the overlay until it is ha
   const setId = await createSet(title)
   const [{ id: assignmentId }] = await sql<{ id: string }>(
     `insert into assignments (student_id, set_id, available_from, due_at, mode, max_attempts, time_limit_minutes)
-     select id, $1, now() - interval '1 hour', now() + interval '1 day', 'web', 2, 1 from students limit 1 returning id`,
+     select id, $1, now() - interval '1 hour', now() + interval '1 day', 'web', 2, 1 from students order by created_at limit 1 returning id`,
     [setId],
   )
 

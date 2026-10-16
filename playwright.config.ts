@@ -13,6 +13,8 @@ export default defineConfig({
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
+  // Late in a full run the dev server can take over 5 s to re-render after an action.
+  expect: { timeout: 10_000 },
   globalSetup: "./e2e/global-setup.ts",
   use: {
     baseURL: `http://localhost:${PORT}`,

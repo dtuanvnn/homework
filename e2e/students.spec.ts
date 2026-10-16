@@ -95,6 +95,7 @@ test("a locked child sees the lock screen until unlocked", async ({ browser }, t
   const childCtx = await browser.newContext(testInfo.project.use)
   const p = await parentCtx.newPage()
   const c = await childCtx.newPage()
+  let unlocked = false
   try {
     await open(c, "/student")
     await open(p, "/parent/students")
@@ -112,15 +113,13 @@ test("a locked child sees the lock screen until unlocked", async ({ browser }, t
 
     await p.getByRole("button", { name: "Mở khoá" }).click()
     await expect(p.getByRole("button", { name: "Khoá tài khoản" })).toBeVisible()
+    unlocked = true
     await c.reload()
     await expect(c.locator("html")).toHaveAttribute("data-mode", "student")
     await expect(c.getByText("Tài khoản đang tạm khoá")).toHaveCount(0)
   } finally {
-    // Ensure Minh An is unlocked for subsequent tests.
-    const unlockBtn = p.getByRole("button", { name: "Mở khoá" })
-    if (await unlockBtn.isVisible().catch(() => false)) {
-      await unlockBtn.click()
-    }
+    // Ensure Minh An is unlocked for subsequent tests; the button may still be on its way after a slow refresh.
+    if (!unlocked) await p.getByRole("button", { name: "Mở khoá" }).click({ timeout: 15_000 }).catch(() => {})
     await parentCtx.close()
     await childCtx.close()
   }
