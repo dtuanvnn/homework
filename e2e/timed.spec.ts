@@ -147,7 +147,7 @@ test("a timed attempt left mid-way is handed in once its time has passed", async
   expect(errors).toEqual([])
 })
 
-test("time runs out while offline: the child waits on the overlay until it is handed in", async ({ page, context }, testInfo) => {
+test("time runs out while offline: the work is handed in on the device and sent later", async ({ page, context }, testInfo) => {
   test.setTimeout(90_000)
   const title = `Thi mất mạng ${testInfo.project.name} ${Date.now()}`
   const setId = await createSet(title)
@@ -165,11 +165,7 @@ test("time runs out while offline: the child waits on the overlay until it is ha
   await context.setOffline(true)
   await page.clock.fastForward("01:00")
   await expect(page.getByText("Hết giờ!")).toBeVisible()
-  // A long outage: the overlay keeps waiting instead of giving up.
-  await page.clock.runFor(90_000)
-  await expect(page.getByText("Đang nộp bài, em chờ chút nhé…")).toBeVisible()
+  // No network: the hand-in waits in the device's queue.
+  await expect(page.getByText("Đã nộp — sẽ gửi khi có mạng")).toBeVisible()
   await expect(page).toHaveURL(/\/do$/)
-
-  await context.setOffline(false)
-  await expect(page).toHaveURL(/\/student\/results\//, { timeout: 20_000 })
 })

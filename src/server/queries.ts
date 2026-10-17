@@ -115,6 +115,12 @@ export async function getQuestionsWithImages(setId: string): Promise<Question[]>
   return withImageUrls(await getQuestions(setId))
 }
 
+/** The set's last edit (ISO): offline hand-ins carry it, so a set edited after the download goes to the parent. */
+export async function getSetVersion(setId: string): Promise<string | null> {
+  const [row] = await db.select({ updatedAt: exerciseSets.updatedAt }).from(exerciseSets).where(eq(exerciseSets.id, setId))
+  return row ? row.updatedAt.toISOString() : null
+}
+
 export async function getExerciseSetDetail(id: string) {
   if (!isUuid(id)) return null
   const { householdId } = await getContext()

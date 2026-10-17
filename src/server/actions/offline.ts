@@ -1,6 +1,5 @@
 "use server"
 
-import { eq } from "drizzle-orm"
 import { db, schema } from "@/db"
 import { outboxPayloadSchema, type OutboxPayload } from "@/lib/offline/outbox"
 import { decideSync, resolveOfflineTimes } from "@/lib/offline/sync-rules"
@@ -8,7 +7,7 @@ import { canTake, stateOf } from "@/lib/views/student"
 import { closeAttempt } from "../attempt-finalize"
 import { loadWebAssignment, parseResponses, studentGate } from "../attempt-input"
 import { assertAssignmentInScope } from "../ownership"
-import { getQuestions } from "../queries"
+import { getQuestions, getSetVersion } from "../queries"
 
 /*
  * Work done on the child's device without network (see
@@ -17,7 +16,7 @@ import { getQuestions } from "../queries"
  * device refreshes the router once its queue is sent.
  */
 
-const { attempts, exerciseSets } = schema
+const { attempts } = schema
 
 /** `refused`: the server will never take this hand-in; the device keeps it as "Không gửi được". */
 export type SyncResult = { ok: true; attemptId: string; graded: boolean; score: number | null } | { ok: false; error: string; refused?: true }
@@ -86,8 +85,7 @@ export async function syncOfflineAttempt(payload: OutboxPayload): Promise<SyncRe
   }
 
   const questions = await getQuestions(record.setId)
-  const [set] = await db.select({ updatedAt: exerciseSets.updatedAt }).from(exerciseSets).where(eq(exerciseSets.id, record.setId))
-  const setChanged = !set || set.updatedAt.toISOString() !== item.setVersion
+  const setChanged = (await getSetVersion(record.setId)) !== item.setVersion
   // Answers to questions deleted since the download have nothing to be graded against.
   const kept = setChanged ? Object.fromEntries(Object.entries(responses).filter(([id]) => questions.some((q) => q.id === id))) : responses
 

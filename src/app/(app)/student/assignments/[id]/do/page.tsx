@@ -4,7 +4,8 @@ import TakeRoute from "@/components/take/TakeRoute"
 import type { TakeTimer } from "@/components/take/TakeAssignment"
 import { deadlineOf } from "@/lib/timer"
 import { canTake, stateOf, toTakeQuestion } from "@/lib/views/student"
-import { getAssignment, getQuestionsWithImages } from "@/server/queries"
+import { getContext } from "@/server/access"
+import { getAssignment, getQuestionsWithImages, getSetVersion } from "@/server/queries"
 import { getDraftResponses } from "@/server/student-data"
 
 export default async function TakeAssignmentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,9 +17,11 @@ export default async function TakeAssignmentPage({ params }: { params: Promise<{
 
   const latest = record.attempts.at(-1)
   const draft = latest && !latest.submittedAt ? latest : null
-  const [questions, initialAnswers] = await Promise.all([
+  const [questions, initialAnswers, setVersion, { studentId }] = await Promise.all([
     getQuestionsWithImages(record.setId),
     draft ? getDraftResponses(draft.id) : {},
+    getSetVersion(record.setId),
+    getContext(),
   ])
   if (!questions.length) redirect(TAB_PATHS.today)
 
@@ -33,7 +36,11 @@ export default async function TakeAssignmentPage({ params }: { params: Promise<{
 
   return (
     <TakeRoute
+      studentId={studentId ?? ""}
       assignmentId={record.id}
+      attemptNo={draft?.attemptNo ?? (latest?.attemptNo ?? 0) + 1}
+      setVersion={setVersion ?? ""}
+      serverDraft={Boolean(draft)}
       title={record.set.title}
       subject={record.set.subject}
       questions={questions.map(toTakeQuestion)}

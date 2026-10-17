@@ -78,13 +78,13 @@ export default function TakeAssignment({
   questions: TakeQuestion[]
   initialAnswers?: Answers
   timer: TakeTimer
-  /** Persists the answers (and the untimed work seconds); resolves false when saving failed. */
-  onSave: (answers: Answers, elapsedSeconds: number) => Promise<boolean>
+  /** Persists the answers (and the untimed work seconds): "local" = only on this device (offline); false = failed. */
+  onSave: (answers: Answers, elapsedSeconds: number) => Promise<"server" | "local" | false>
   /** Called after the answers were saved on "Lưu và thoát". */
   onExit: () => void
-  /** Hands the work in; resolves null when it failed (the caller shows the error). */
-  onSubmit: (answers: Answers, elapsedSeconds: number, quiet?: boolean) => Promise<{ graded: boolean } | null>
-  /** Called once the "sent" animation finished. */
+  /** Hands the work in; `queued` = kept on the device until there is network; null = failed (the caller shows the error). */
+  onSubmit: (answers: Answers, elapsedSeconds: number, quiet?: boolean) => Promise<{ graded: boolean } | { queued: true } | null>
+  /** Called once the "sent" animation finished (queued work: when the child taps the button). */
   onSubmitted: () => void
   /** Countdown only: fetches a fresh deadline and server time (the props may be stale). */
   onResync?: () => Promise<{ deadline: string; serverNow: string } | null>
@@ -110,6 +110,8 @@ export default function TakeAssignment({
   const [saveFailed, setSaveFailed] = useState(false)
   const [exiting, setExiting] = useState(false)
   const [graded, setGraded] = useState(false)
+  const [queued, setQueued] = useState(false)
+  const [savedLocal, setSavedLocal] = useState(false)
   const [showTimer, setShowTimer] = useState(true)
   const countdown = timer.kind === "countdown" ? timer : null
   // Untimed: seconds the page was visible, continuing from what the draft saved.
@@ -147,7 +149,9 @@ export default function TakeAssignment({
     const seconds = elapsedRef.current
     setSaving(true)
     const mine = queue.current.then(async () => {
-      const ok = await onSaveRef.current(snapshot, seconds).catch(() => false)
+      const where = await onSaveRef.current(snapshot, seconds).catch(() => false as const)
+      const ok = where !== false
+      if (ok) setSavedLocal(where === "local")
       if (ok) {
         hasDraft.current = true
         savedSeconds.current = Math.max(savedSeconds.current, seconds)
@@ -265,8 +269,13 @@ export default function TakeAssignment({
       return false
     }
     handedIn.current = true
-    setGraded(result.graded)
     setFlight("done")
+    // Kept on the device: the child reads the message and leaves with the button.
+    if ("queued" in result) {
+      setQueued(true)
+      return true
+    }
+    setGraded(result.graded)
     await wait(reduced ? 800 : 1150)
     onSubmitted()
     return true
@@ -287,6 +296,8 @@ export default function TakeAssignment({
     await wait(reduced ? 600 : 1600)
     while (submitting.current && mounted.current) await wait(200) // a manual submit was already on its way
     setTimeUp("sending")
+    // Offline, the hand-in goes to the device's queue and is sent later.
+    if (!navigator.onLine && (await handIn(true))) return
     for (let delay = 2000; mounted.current && !handedIn.current; delay = Math.min(delay * 2, 15_000)) {
       await online()
       if (await handIn(true)) return
@@ -331,7 +342,7 @@ export default function TakeAssignment({
                   <motion.span initial={reduced ? false : { scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, damping: 14 }}>
                     <CloudCheck className="size-4" />
                   </motion.span>
-                  Đã lưu
+                  {savedLocal ? <span className="hidden sm:inline">Đã lưu trên máy</span> : "Đã lưu"}
                 </motion.span>
               ) : saveFailed ? (
                 <motion.span key="failed" className="inline-flex items-center gap-1.5 text-amber-600" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -541,8 +552,20 @@ export default function TakeAssignment({
             ) : (
               <motion.div className="flex flex-col items-center gap-3 text-center" variants={pop} initial="initial" animate="animate">
                 <span className="text-7xl" aria-hidden>📬</span>
-                <p className="text-4xl font-extrabold text-emerald-700">Đã nộp!</p>
-                <p className="text-lg text-slate-500">{graded ? "Cùng xem điểm của em nào!" : "Bố mẹ sẽ chấm sớm nhé."}</p>
+                {queued ? (
+                  <>
+                    <p className="px-6 text-3xl font-extrabold text-emerald-700">Đã nộp — sẽ gửi khi có mạng</p>
+                    <p className="text-lg text-slate-500">Bài làm đã lưu trên máy. Có mạng là bài tự gửi đi.</p>
+                    <Button className="mt-2 h-14 rounded-2xl px-8 text-lg font-extrabold" onClick={onSubmitted}>
+                      Về danh sách bài
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-4xl font-extrabold text-emerald-700">Đã nộp!</p>
+                    <p className="text-lg text-slate-500">{graded ? "Cùng xem điểm của em nào!" : "Bố mẹ sẽ chấm sớm nhé."}</p>
+                  </>
+                )}
               </motion.div>
             )}
           </motion.div>
