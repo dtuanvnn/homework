@@ -80,7 +80,7 @@ export default function StudentAssignments({ items, week }: AssignmentsView) {
       return <Button disabled className={cn(big, "bg-violet-100 text-violet-700 disabled:opacity-100")}><Hourglass />Đang chờ bố mẹ chấm</Button>
     if (a.status === "graded")
       return a.canRetry ? (
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-2">
           <Button className={big} onClick={(e) => go(e, () => startRetry(a))}><RotateCcw />Làm lại lần 2</Button>
           <Button variant="outline" className={cn(big, "border-2 bg-white")} onClick={(e) => go(e, () => viewResult(a))}><Trophy />Xem kết quả</Button>
         </div>

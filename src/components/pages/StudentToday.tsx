@@ -67,7 +67,7 @@ export default function StudentToday({
       )
     if (item.status === "graded")
       return (
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-2">
           <Button className={cn(big, "bg-emerald-600 hover:bg-emerald-700")} onClick={() => item.resultId && navigate(studentPaths.result(item.resultId))}>
             <Trophy />
             Xem kết quả
