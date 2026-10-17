@@ -3,18 +3,17 @@
 import { and, eq, isNull } from "drizzle-orm"
 import { z } from "zod"
 import { db, schema } from "@/db"
-import type { Response } from "@/lib/grading"
-import { inkSchema } from "@/lib/ink"
 import { deadlineOf, isExpired, mergeActiveSeconds, timedDuration } from "@/lib/timer"
 import { canTake, stateOf } from "@/lib/views/student"
+import { clampDate } from "@/lib/offline/sync-rules"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { assertAccess } from "../access"
+import { loadWebAssignment, parseResponses, studentGate } from "../attempt-input"
 import { answerRows, closeAttempt, settleAttempt } from "../attempt-finalize"
 import { assertAssignmentInScope } from "../ownership"
 import { getAssignment, getQuestions, isUuid, type AssignmentRecord, type AttemptRecord } from "../queries"
 import { createUploadTargets, isUploaded, type UploadTarget } from "../storage"
 import type { NewFile } from "./library"
-import type { Context } from "../access"
 
 /*
  * The student's side of an assignment: autosaving a draft, submitting web
@@ -29,52 +28,9 @@ const { attempts, answers, attachments } = schema
 /** `expired`: the timed attempt is already handed in (time ran out, or an earlier submit got through); leave the page. */
 type Result<T> = ({ ok: true } & T) | { ok: false; error: string; expired?: boolean }
 
-const MAX_RESPONSE_CHARS = 2_000_000
-
-/** Loose shapes of what the question components store (see lib/grading.ts). */
-const responseSchema = z.union([
-  z.number(),
-  z.boolean(),
-  z.string().max(5000),
-  z.array(z.union([z.string().max(500), z.number()])).max(100),
-  z.record(z.string().max(4), z.number()),
-  z.object({ text: z.string().max(20_000), drawing: z.string().startsWith("data:image/").optional(), ink: inkSchema.optional() }),
-])
-
-const responsesSchema = z
-  .record(z.string(), responseSchema.nullable())
-  .refine((r) => Object.keys(r).length <= 300, "Quá nhiều câu trả lời")
-  .refine((r) => JSON.stringify(r).length <= MAX_RESPONSE_CHARS, "Bài làm quá lớn")
-
 const ERR_CLOSED = "Bài này không làm tiếp được nữa."
 const ERR_TIME_UP = "Đã hết giờ làm bài. Bài của em đã được nộp."
 const ERR_HANDED_IN = "Bài của em đã được nộp."
-
-/** Access check for the Result-returning actions: a refusal (PIN, lock) becomes an error result. */
-async function studentGate(): Promise<{ ctx: Context } | { denied: { ok: false; error: string } }> {
-  try {
-    const ctx = await assertAccess("student")
-    return { ctx }
-  } catch (e) {
-    // Next uses thrown values for redirect()/notFound(); let those through (e.g. archived child → PIN page).
-    if (e && typeof e === "object" && "digest" in e && String((e as { digest: unknown }).digest).startsWith("NEXT_")) throw e
-    return { denied: { ok: false, error: e instanceof Error ? e.message : "Cần mã PIN để tiếp tục." } }
-  }
-}
-
-function parseResponses(input: unknown): Record<string, Response> | null {
-  const parsed = responsesSchema.safeParse(input)
-  if (!parsed.success) return null
-  return Object.fromEntries(Object.entries(parsed.data).filter(([, v]) => v !== null)) as Record<string, Response>
-}
-
-async function loadWebAssignment(assignmentId: string): Promise<{ record: AssignmentRecord } | { error: string }> {
-  if (!isUuid(assignmentId)) return { error: "Không tìm thấy bài." }
-  const record = await getAssignment(assignmentId)
-  if (!record) return { error: "Không tìm thấy bài." }
-  if (record.mode !== "web") return { error: "Bài này làm trên giấy." }
-  return { record }
-}
 
 /**
  * The attempt the student is working on: the open draft, or a new attempt
@@ -82,7 +38,7 @@ async function loadWebAssignment(assignmentId: string): Promise<{ record: Assign
  * Timed assignments only get a new attempt from startAttempt ("Bắt đầu"), so a
  * late autosave can never open the retry after time ran out.
  */
-async function openAttempt(record: AssignmentRecord, { create }: { create: boolean }): Promise<AttemptRecord | null> {
+async function openAttempt(record: AssignmentRecord, { create, startedAt }: { create: boolean; startedAt?: Date }): Promise<AttemptRecord | null> {
   const latest = record.attempts.at(-1)
   if (latest && !latest.submittedAt) return latest
   if (!create) return null
@@ -92,7 +48,7 @@ async function openAttempt(record: AssignmentRecord, { create }: { create: boole
   if (attemptNo > record.maxAttempts) return null
   const [created] = await db
     .insert(attempts)
-    .values({ assignmentId: record.id, attemptNo, mode: record.mode })
+    .values({ assignmentId: record.id, attemptNo, mode: record.mode, ...(startedAt ? { startedAt } : {}) })
     .onConflictDoNothing({ target: [attempts.assignmentId, attempts.attemptNo] })
     .returning()
   if (created) return created
@@ -111,9 +67,9 @@ const timedOut = (attempt: AttemptRecord | undefined, limit: number) =>
  * The attempt a save or submit writes to. A timed attempt past its deadline
  * (plus grace) is handed in as saved instead, and the caller is told so.
  */
-async function writableAttempt(record: AssignmentRecord): Promise<{ attempt: AttemptRecord } | { error: string; expired?: true }> {
+async function writableAttempt(record: AssignmentRecord, startedAt?: Date): Promise<{ attempt: AttemptRecord } | { error: string; expired?: true }> {
   const limit = record.timeLimitMinutes
-  const attempt = await openAttempt(record, { create: limit === null })
+  const attempt = await openAttempt(record, { create: limit === null, startedAt })
   if (!attempt) {
     // getAssignment already handed in the expired attempt: tell the page time is up.
     // A timed attempt is already handed in (by the timer, or a submit whose reply was lost): leave the take page.
@@ -154,8 +110,15 @@ export async function startAttempt(assignmentId: string): Promise<Result<{ deadl
 /**
  * Autosave: replaces the draft's answers. Creates an untimed attempt on first
  * save; `activeSeconds` is the untimed work time so far (ignored when timed).
+ * `startedAt` (ISO): when work began on the device while offline; only used
+ * when this save creates the attempt, clamped to [availableFrom, now].
  */
-export async function saveDraft(assignmentId: string, responses: Record<string, unknown>, activeSeconds?: number): Promise<Result<{ attemptId: string }>> {
+export async function saveDraft(
+  assignmentId: string,
+  responses: Record<string, unknown>,
+  activeSeconds?: number,
+  startedAt?: string,
+): Promise<Result<{ attemptId: string }>> {
   const gated = await studentGate()
   if ("denied" in gated) return gated.denied
   try {
@@ -167,7 +130,11 @@ export async function saveDraft(assignmentId: string, responses: Record<string, 
   if (!parsed) return { ok: false, error: "Bài làm không hợp lệ." }
   const loaded = await loadWebAssignment(assignmentId)
   if ("error" in loaded) return { ok: false, error: loaded.error }
-  const open = await writableAttempt(loaded.record)
+  const begun = startedAt ? Date.parse(startedAt) : Number.NaN
+  const open = await writableAttempt(
+    loaded.record,
+    Number.isFinite(begun) ? clampDate(begun, loaded.record.availableFrom, new Date()) : undefined,
+  )
   if ("error" in open) return { ok: false, error: open.error, expired: open.expired }
   const attemptId = open.attempt.id
   const timed = loaded.record.timeLimitMinutes !== null
