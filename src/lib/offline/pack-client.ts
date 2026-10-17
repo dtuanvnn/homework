@@ -1,0 +1,77 @@
+import { getOfflinePack } from "@/server/actions/offline"
+import { offsetFrom } from "./drafts"
+import { planPackUpdate, type PackEntry } from "./pack"
+import {
+  clearPack, deletePackEntry, getImage, listDrafts, listOutbox, listPack, notifyOfflineChanged, putImage, putPackEntry, setMeta,
+} from "./store"
+
+/*
+ * Downloads the child's open assignments to the device (browser only): pack
+ * data into IndexedDB, figures as blobs keyed by their storage path (signed
+ * URLs expire after an hour), and the MathLive chunk so the service worker
+ * caches it.
+ */
+
+let running: Promise<void> | null = null
+
+/** One download at a time; a second call while one runs waits for it. */
+export function refreshPack(studentId: string): Promise<void> {
+  running ??= download(studentId).finally(() => {
+    running = null
+  })
+  return running
+}
+
+async function download(studentId: string): Promise<void> {
+  const sentAt = Date.now()
+  const res = await getOfflinePack().catch(() => null)
+  if (!res) return // no network
+  if (!res.ok) {
+    if (res.locked) await clearPack(studentId)
+    return
+  }
+  const { pack } = res
+  if (pack.studentId !== studentId) return
+  await Promise.all([
+    setMeta("clockOffsetMs", offsetFrom(pack.serverNow, sentAt, Date.now())),
+    setMeta("lastStudentId", pack.studentId),
+    setMeta("lastStudentName", pack.studentName),
+  ])
+
+  const [stored, drafts, outbox] = await Promise.all([listPack(studentId), listDrafts(studentId), listOutbox(studentId)])
+  const busy = new Set([...drafts.map((d) => d.assignmentId), ...outbox.map((o) => o.assignmentId)])
+  const { put, remove } = planPackUpdate(stored, pack.entries, busy)
+  await Promise.all(remove.map((id) => deletePackEntry(studentId, id)))
+
+  let math = false
+  for (const entry of put) {
+    if (entry.subject === "toan") math = true
+    let complete = true
+    const questions = await Promise.all(
+      entry.questions.map(async (q) => {
+        if ("math" in q && q.math) math = true
+        const { imageUrl, ...rest } = q as typeof q & { imageUrl?: string }
+        if (q.image && !(await saveImage(q.image.path, imageUrl))) complete = false
+        return rest as typeof q
+      }),
+    )
+    const saved: PackEntry = { ...entry, questions, studentId, complete }
+    await putPackEntry(saved)
+  }
+  // The same chunk MathAnswerInput loads, so the service worker has it for offline math answers.
+  if (math) void import("@/components/take/MathField").catch(() => {})
+  if (put.length || remove.length) notifyOfflineChanged()
+}
+
+async function saveImage(path: string, url: string | undefined): Promise<boolean> {
+  if (await getImage(path)) return true
+  if (!url) return false
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return false
+    await putImage(path, await res.blob())
+    return true
+  } catch {
+    return false
+  }
+}

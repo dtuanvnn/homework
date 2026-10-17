@@ -2,12 +2,70 @@
 
 import { db, schema } from "@/db"
 import { outboxPayloadSchema, type OutboxPayload } from "@/lib/offline/outbox"
+import type { PackResponse } from "@/lib/offline/pack"
 import { decideSync, resolveOfflineTimes } from "@/lib/offline/sync-rules"
-import { canTake, stateOf } from "@/lib/views/student"
+import { deadlineOf } from "@/lib/timer"
+import { canTake, stateOf, toTakeQuestion } from "@/lib/views/student"
 import { closeAttempt } from "../attempt-finalize"
 import { loadWebAssignment, parseResponses, studentGate } from "../attempt-input"
 import { assertAssignmentInScope } from "../ownership"
-import { getQuestions, getSetVersion } from "../queries"
+import { getQuestions, getQuestionsWithImages, getSetVersion, getViewingStudent, listAssignments } from "../queries"
+import { getDraftResponses } from "../student-data"
+
+/** Assignments opening within this window are downloaded too ("Mở lúc …"). */
+const UPCOMING_MS = 24 * 3600_000
+
+/**
+ * Everything the child's device needs to take their open web assignments
+ * offline: questions without answer keys, figure URLs to download, open drafts.
+ */
+export async function getOfflinePack(): Promise<{ ok: true; pack: PackResponse } | { ok: false; error: string; locked?: true }> {
+  const gated = await studentGate()
+  if ("denied" in gated) return { ...gated.denied, ...(gated.denied.error === "Tài khoản đang tạm khoá." ? { locked: true as const } : {}) }
+  const [student, records] = await Promise.all([getViewingStudent(), listAssignments()])
+  if (!student) return { ok: false, error: "Không tìm thấy học sinh." }
+  const now = new Date()
+  const open = records.filter((r) => {
+    if (r.mode !== "web") return false
+    const opensIn = r.availableFrom.getTime() - now.getTime()
+    return canTake(stateOf(r, now)) || (opensIn > 0 && opensIn <= UPCOMING_MS)
+  })
+  const entries = await Promise.all(
+    open.map(async (r) => {
+      const latest = r.attempts.at(-1)
+      const draft = latest && !latest.submittedAt ? latest : null
+      const [questions, responses, setVersion] = await Promise.all([
+        getQuestionsWithImages(r.setId),
+        draft ? getDraftResponses(draft.id) : {},
+        getSetVersion(r.setId),
+      ])
+      const version = [setVersion, latest?.id, latest?.submittedAt?.toISOString(), Object.keys(responses).length].join("|")
+      return {
+        assignmentId: r.id,
+        version,
+        setVersion: setVersion ?? "",
+        title: r.set.title,
+        subject: r.set.subject,
+        dueAt: r.dueAt.toISOString(),
+        availableFrom: r.availableFrom.toISOString(),
+        timeLimitMinutes: r.timeLimitMinutes,
+        attemptNo: draft ? draft.attemptNo : (latest?.attemptNo ?? 0) + 1,
+        questions: questions.map(toTakeQuestion),
+        draft: draft
+          ? {
+              attemptNo: draft.attemptNo,
+              startedAt: draft.startedAt.toISOString(),
+              responses,
+              durationSeconds: draft.durationSeconds,
+              deadline: r.timeLimitMinutes !== null ? deadlineOf(draft.startedAt, r.timeLimitMinutes).toISOString() : null,
+            }
+          : null,
+      }
+    }),
+  )
+  const pack = { studentId: student.id, studentName: student.name, serverNow: now.toISOString(), entries: entries.filter((e) => e.questions.length) }
+  return { ok: true, pack }
+}
 
 /*
  * Work done on the child's device without network (see
