@@ -4,14 +4,14 @@ import { applySolution, solveRequestText, type SolveResponse } from "./solve"
 
 const base = { prompt: "Chọn đáp án đúng", points: 1, skills: [] }
 const empty: SolveResponse = {
-  correctIndex: null, trueFalseAnswer: null, answers: null, answer: null, pairs: null, tokens: null, rubric: null, solution: "", confidence: 0.9,
+  correctIndexes: null, trueFalseAnswer: null, answers: null, answer: null, pairs: null, tokens: null, rubric: null, solution: "", confidence: 0.9,
 }
 const res = (patch: Partial<SolveResponse>): SolveResponse => ({ ...empty, ...patch })
 
 describe("applySolution", () => {
   it("fills the key and solution and marks it solved by AI", () => {
     const q: Question = { ...base, id: "q", type: "trac-nghiem", options: ["3", "4"], correctIndex: 0, answerStatus: "missing" }
-    expect(applySolution(q, res({ correctIndex: 1, solution: " 2 + 2 = 4 " }))).toEqual({ ...q, correctIndex: 1, answerStatus: "ai", solution: "2 + 2 = 4" })
+    expect(applySolution(q, res({ correctIndexes: [1], solution: " 2 + 2 = 4 " }))).toEqual({ ...q, correctIndex: 1, answerStatus: "ai", solution: "2 + 2 = 4" })
   })
 
   it("flags answers the AI wasn't sure about", () => {
@@ -21,7 +21,8 @@ describe("applySolution", () => {
 
   it("returns null when the answer doesn't fit the question", () => {
     const mc: Question = { ...base, id: "q", type: "trac-nghiem", options: ["3", "4"], correctIndex: 0, answerStatus: "missing" }
-    expect(applySolution(mc, res({ correctIndex: 4 }))).toBeNull()
+    expect(applySolution(mc, res({ correctIndexes: [4] }))).toBeNull()
+    expect(applySolution(mc, res({ correctIndexes: [1, 0] }))).toMatchObject({ correctIndex: 0, correctIndexes: [0, 1] })
     const fill: Question = { ...base, id: "f", type: "dien-cho-trong", prompt: "___ + ___", answers: ["", ""], answerStatus: "missing" }
     expect(applySolution(fill, res({ answers: ["1"] }))).toBeNull()
     const short: Question = { ...base, id: "s", type: "tra-loi-ngan", answer: "", answerStatus: "missing" }
@@ -62,7 +63,7 @@ describe("solveRequestText", () => {
     expect(text).toContain("Grade 3")
     expect(text).toContain("A. 3")
     expect(text).toContain("B. 4")
-    expect(text).toContain("correctIndex")
+    expect(text).toContain("correctIndexes")
     const order = solveRequestText({ ...base, id: "o", type: "sap-xep", tokens: ["em", "học"], shuffled: [1, 0] }, { subject: "tieng-viet", grade: 3 })
     expect(order).toContain("học / em")
   })

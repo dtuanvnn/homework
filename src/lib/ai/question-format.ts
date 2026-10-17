@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { choiceKey, correctOptions } from "@/lib/choice"
 import { questionContentSchema } from "@/lib/question-schema"
 import { BLANK, shuffleIndexes } from "@/lib/questions"
 import type { Question, QuestionContent, QuestionType } from "@/lib/types"
@@ -26,7 +27,10 @@ export const aiQuestionSchema = z.object({
   points: z.number().describe("Points for the question; 1 if the document doesn't say"),
   skills: z.array(z.string()).describe("1-2 short Vietnamese skill tags, e.g. \"Bảng nhân 7\", \"Toán có lời văn\", \"Dấu hỏi/ngã\""),
   options: z.array(z.string()).nullable().describe("trac-nghiem: the options without their A/B/C letters"),
-  correctIndex: z.number().int().nullable().describe("trac-nghiem: 0-based index of the correct option"),
+  correctIndexes: z
+    .array(z.number().int())
+    .nullable()
+    .describe("trac-nghiem: 0-based indexes of the correct options; one index, or several only when more than one option is correct (\"chọn tất cả đáp án đúng\")"),
   trueFalseAnswer: z.boolean().nullable().describe("dung-sai: true if the statement is true"),
   answers: z.array(z.string()).nullable().describe("dien-cho-trong: one answer per ___ in order"),
   answer: z.string().nullable().describe("tra-loi-ngan: the expected answer, with its unit when there is one (e.g. \"24 kg\")"),
@@ -90,11 +94,16 @@ const stripDollars = (s: string) => s.trim().replace(/^\$+|\$+$/g, "").trim()
  */
 export type AnswerSource = "solve" | "none" | "document"
 
+/** The valid, distinct option indexes among the model's (out-of-range ones dropped). */
+export function optionIndexes(indexes: number[] | null | undefined, optionCount: number): number[] {
+  return [...new Set((indexes ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < optionCount))].sort((a, b) => a - b)
+}
+
 /** Whether the model gave this question an answer key. */
 function hasKey(ai: AiQuestion): boolean {
   switch (ai.type) {
     case "trac-nghiem":
-      return ai.correctIndex !== null && ai.correctIndex >= 0 && ai.correctIndex < (ai.options?.length ?? 0)
+      return optionIndexes(ai.correctIndexes, ai.options?.length ?? 0).length > 0
     case "dung-sai":
       return ai.trueFalseAnswer !== null
     case "dien-cho-trong":
@@ -165,9 +174,10 @@ function draft(ai: AiQuestion, issues: string[]): QuestionContent {
   switch (ai.type) {
     case "trac-nghiem": {
       const options = (ai.options ?? []).map((o) => o.trim()).filter(Boolean)
-      const ok = ai.correctIndex !== null && ai.correctIndex >= 0 && ai.correctIndex < options.length
-      if (!ok) issues.push("Chưa xác định được đáp án đúng")
-      return { ...base, type: "trac-nghiem", options, correctIndex: ok ? ai.correctIndex! : 0 }
+      const correct = optionIndexes(ai.correctIndexes, options.length)
+      if (!correct.length) issues.push("Chưa xác định được đáp án đúng")
+      const { correctIndexes, ...key } = choiceKey(correct)
+      return { ...base, type: "trac-nghiem", options, ...key, ...(correctIndexes ? { correctIndexes } : {}) }
     }
     case "dung-sai":
       if (ai.trueFalseAnswer === null) issues.push("Chưa xác định được Đúng hay Sai")
@@ -239,7 +249,7 @@ export function answerKey(q: Question): string {
   if (q.answerStatus === "missing" && q.type !== "tu-luan") return "(chưa có đáp án)"
   switch (q.type) {
     case "trac-nghiem":
-      return q.options[q.correctIndex] ?? ""
+      return correctOptions(q).map((i) => q.options[i] ?? "").join(" ; ")
     case "dung-sai":
       return q.answer ? "Đúng" : "Sai"
     case "dien-cho-trong":

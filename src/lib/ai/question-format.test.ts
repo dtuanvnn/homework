@@ -7,7 +7,7 @@ const blank: AiQuestion = {
   points: 1,
   skills: [],
   options: null,
-  correctIndex: null,
+  correctIndexes: null,
   trueFalseAnswer: null,
   answers: null,
   answer: null,
@@ -26,14 +26,17 @@ const ai = (patch: Partial<AiQuestion>): AiQuestion => ({ ...blank, ...patch })
 
 describe("toQuestion", () => {
   it("converts a complete multiple-choice question and keeps its confidence", () => {
-    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndex: 1, skills: ["Bảng nhân 7"] }), "q1")
+    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndexes: [1], skills: ["Bảng nhân 7"] }), "q1")
     expect(r.question).toEqual({ id: "q1", type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndex: 1, points: 1, skills: ["Bảng nhân 7"] })
+    const multi = toQuestion(ai({ type: "trac-nghiem", prompt: "Số chẵn?", options: ["2", "3", "4"], correctIndexes: [2, 0, 2, 7] }), "q2")
+    expect(multi.question).toMatchObject({ correctIndex: 0, correctIndexes: [0, 2] })
+    expect(answerKey(multi.question)).toBe("2 ; 4")
     expect(r.confidence).toBe(0.9)
     expect(r.notes).toEqual([])
   })
 
   it("flags a multiple-choice question without a valid answer", () => {
-    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "?", options: ["a", "b"], correctIndex: 5 }), "q")
+    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "?", options: ["a", "b"], correctIndexes: [5] }), "q")
     expect(r.confidence).toBe(REPAIRED_CONFIDENCE)
     expect(r.notes).toContain("Chưa xác định được đáp án đúng")
   })
@@ -101,12 +104,12 @@ describe("math and figures", () => {
   })
 
   it("returns a repaired figure box on the question's page", () => {
-    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "Hình nào là hình vuông?", options: ["A", "B"], correctIndex: 0, page: 2, figure: { box: [500, 600, 100, 200] } }), "id-1")
+    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "Hình nào là hình vuông?", options: ["A", "B"], correctIndexes: [0], page: 2, figure: { box: [500, 600, 100, 200] } }), "id-1")
     expect(r.figure).toEqual({ page: 2, box: [100, 200, 500, 600] })
   })
 
   it("drops a broken figure box with a note", () => {
-    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "Hình nào?", options: ["A", "B"], correctIndex: 0, figure: { box: [0, 0, 1000, 1000] } }), "id-1")
+    const r = toQuestion(ai({ type: "trac-nghiem", prompt: "Hình nào?", options: ["A", "B"], correctIndexes: [0], figure: { box: [0, 0, 1000, 1000] } }), "id-1")
     expect(r.figure).toBeUndefined()
     expect(r.notes).toContain("Chưa xác định được vị trí hình – hãy thêm hình bằng tay")
   })
@@ -114,7 +117,7 @@ describe("math and figures", () => {
 
 describe("scans without solving", () => {
   it("transcribes only: ignores any answers, marks the key missing and doesn't flag it", () => {
-    const mc = toQuestion(ai({ type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndex: 1 }), "q", { answers: "none" })
+    const mc = toQuestion(ai({ type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndexes: [1] }), "q", { answers: "none" })
     expect(mc.question).toEqual({ id: "q", type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndex: 0, points: 1, skills: [], answerStatus: "missing" })
     expect(mc.confidence).toBe(0.9)
     expect(mc.notes).toEqual([])
@@ -132,7 +135,7 @@ describe("scans without solving", () => {
   })
 
   it("reads a document's answers and solution, and marks only questions it has no answer for", () => {
-    const keyed = toQuestion(ai({ type: "trac-nghiem", prompt: "?", options: ["a", "b"], correctIndex: 1, solution: " Vì b đúng. " }), "q", { answers: "document" })
+    const keyed = toQuestion(ai({ type: "trac-nghiem", prompt: "?", options: ["a", "b"], correctIndexes: [1], solution: " Vì b đúng. " }), "q", { answers: "document" })
     expect(keyed.question).toMatchObject({ correctIndex: 1, solution: "Vì b đúng." })
     expect(keyed.question).not.toHaveProperty("answerStatus")
     const unkeyed = toQuestion(ai({ type: "tra-loi-ngan", prompt: "6 × 7 = ?" }), "q", { answers: "document" })

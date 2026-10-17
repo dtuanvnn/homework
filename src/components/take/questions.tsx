@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
-import { Keyboard, PenLine } from "lucide-react"
+import { Check, Keyboard, ListChecks, PenLine } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { InkEditor } from "@/components/ink/InkEditor"
 import { useRequiredStudent } from "@/components/layout/AppFrame"
@@ -37,32 +37,53 @@ function useChoiceMotion() {
         }
 }
 
-export function MultipleChoice({ q, value, onChange, tone }: Props<Q<"trac-nghiem">, number>) {
+export function MultipleChoice({ q, value, onChange, tone }: Props<Q<"trac-nghiem">, number | number[]>) {
   const choice = useChoiceMotion()
+  const picked = Array.isArray(value) ? value : typeof value === "number" ? [value] : []
+  const toggle = (i: number) => onChange(q.multi ? (picked.includes(i) ? picked.filter((x) => x !== i) : [...picked, i].sort((a, b) => a - b)) : i)
   return (
-    <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
-      {q.options.map((o, i) => {
-        const on = value === i
-        return (
-          <motion.button
-            key={i}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(i)}
-            {...choice(on)}
-            className={cn(
-              "flex min-h-20 items-center gap-4 rounded-3xl border-2 p-4 text-left text-2xl font-bold transition-colors duration-200",
-              on ? cn(tone.bg, "border-transparent text-white shadow-lg") : "border-slate-200 bg-white text-slate-800 hover:border-slate-300",
-            )}
-          >
-            <span className={cn("flex size-12 shrink-0 items-center justify-center rounded-2xl text-xl font-extrabold", on ? "bg-white/25" : cn(tone.softBg, tone.text))}>
-              {LETTERS[i]}
-            </span>
-            <RichText text={o} />
-          </motion.button>
-        )
-      })}
+    <div className="space-y-3">
+      {q.multi && (
+        <p className={cn("flex items-center gap-2 text-lg font-bold", tone.text)}>
+          <ListChecks className="size-5 shrink-0" aria-hidden />
+          Chọn tất cả đáp án đúng
+        </p>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2" role={q.multi ? "group" : "radiogroup"}>
+        {q.options.map((o, i) => {
+          const on = picked.includes(i)
+          return (
+            <motion.button
+              key={i}
+              type="button"
+              role={q.multi ? "checkbox" : "radio"}
+              aria-checked={on}
+              onClick={() => toggle(i)}
+              {...choice(on)}
+              className={cn(
+                "flex min-h-20 items-center gap-4 rounded-3xl border-2 p-4 text-left text-2xl font-bold transition-colors duration-200",
+                on ? cn(tone.bg, "border-transparent text-white shadow-lg") : "border-slate-200 bg-white text-slate-800 hover:border-slate-300",
+              )}
+            >
+              <span className={cn("flex size-12 shrink-0 items-center justify-center rounded-2xl text-xl font-extrabold", on ? "bg-white/25" : cn(tone.softBg, tone.text))}>
+                {LETTERS[i]}
+              </span>
+              <RichText text={o} className="flex-1" />
+              {q.multi && (
+                <span
+                  className={cn(
+                    "flex size-8 shrink-0 items-center justify-center rounded-lg border-2",
+                    on ? "border-white bg-white/25" : "border-slate-300",
+                  )}
+                  aria-hidden
+                >
+                  {on && <Check className="size-5" strokeWidth={3} />}
+                </span>
+              )}
+            </motion.button>
+          )
+        })}
+      </div>
     </div>
   )
 }

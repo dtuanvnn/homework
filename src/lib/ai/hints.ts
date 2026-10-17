@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { correctOptions } from "@/lib/choice"
 import { answerKey, QUESTION_TYPE_NAMES } from "@/lib/ai/question-format"
 import { normalizeText, type Response } from "@/lib/grading"
 import { equalRational, evaluateMath, latexToPlain, mathValuesIn } from "@/lib/math-answer"
@@ -58,7 +59,7 @@ export function hintsPrompt(items: HintItem[], subject: SubjectId, grade: number
 function secrets(q: Question): string[] {
   switch (q.type) {
     case "trac-nghiem":
-      return [q.options[q.correctIndex] ?? ""]
+      return correctOptions(q).map((i) => q.options[i] ?? "")
     // Numbers of 2+ digits on their own too ("605" of "605 kg"); single digits are too common in guidance.
     case "dien-cho-trong":
       return [...q.answers, ...q.answers.flatMap((a) => a.match(/\d{2,}/g) ?? [])]

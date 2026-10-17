@@ -81,7 +81,7 @@ Rules:
 - Language: Toán and Tiếng Việt questions are entirely in Vietnamese. Tiếng Anh questions use English items with short Vietnamese instructions, as in Vietnamese grade-3+ English textbooks (e.g. "Chọn từ khác loại: cat / dog / pen").
 - Keep wording short, clear and age-appropriate. Use familiar Vietnamese names and everyday contexts.
 - Produce exactly the requested number of questions with the requested type mix. Fill only the fields of each question's type; set the others to null.
-- Every answer must be correct and unambiguous. Double-check arithmetic, units, spelling and diacritics before answering; multiple-choice questions have exactly one correct option and plausible distractors.
+- Every answer must be correct and unambiguous. Double-check arithmetic, units, spelling and diacritics before answering; multiple-choice questions have plausible distractors and exactly one correct option, unless the request asks for questions with several correct answers (then list every correct index).
 - Tag each question with 1-2 skills, reusing the given topic names where they fit.
 - Points: 1 per question, 2 for tu-luan, unless the parent asks otherwise.
 - Reference questions, when given, show the expected style and level. Match them but never copy them verbatim; change numbers, words and contexts.

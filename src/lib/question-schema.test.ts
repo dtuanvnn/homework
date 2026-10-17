@@ -4,6 +4,15 @@ import { editedQuestionSchema, questionContentSchema } from "./question-schema"
 const FIG = "sets/11111111-2222-3333-4444-555555555555/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee-figure.jpg"
 
 describe("question schema", () => {
+  it("accepts several distinct, in-range correct options", () => {
+    const mc = (correctIndexes: number[]) =>
+      questionContentSchema.safeParse({ type: "trac-nghiem", prompt: "?", points: 1, skills: [], options: ["a", "b", "c"], correctIndex: 0, correctIndexes }).success
+    expect(mc([0, 2])).toBe(true)
+    expect(mc([0, 3])).toBe(false)
+    expect(mc([1, 1])).toBe(false)
+    expect(mc([1])).toBe(false)
+  })
+
   it("keeps a figure and math flags", () => {
     const parsed = questionContentSchema.parse({
       type: "tra-loi-ngan", prompt: "$\\frac{1}{2}+\\frac{1}{4}=?$", points: 1, skills: [],

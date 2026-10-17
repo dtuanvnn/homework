@@ -1,4 +1,5 @@
 import { ArrowRight, Check, X } from 'lucide-react'
+import { correctOptions, isMultiAnswer } from '@/lib/choice'
 import { BLANK, OPTION_LETTERS } from '@/lib/questions'
 import { cn } from '@/lib/utils'
 import type { Question, QuestionImage } from '@/lib/types'
@@ -36,9 +37,10 @@ function QuestionBody({ question: q }: { question: Question }) {
       return (
         <div className="flex flex-col gap-3">
           <Prompt text={q.prompt} />
+          {isMultiAnswer(q) && <p className="text-xs font-semibold text-slate-500">Nhiều đáp án đúng · chọn tất cả</p>}
           <ul className="grid grid-cols-2 gap-2">
             {q.options.map((opt, i) => {
-              const correct = !keyless && i === q.correctIndex
+              const correct = !keyless && correctOptions(q).includes(i)
               return (
                 <li
                   key={i}

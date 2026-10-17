@@ -1,5 +1,6 @@
 import { z } from "zod"
-import { MATH_NOTATION_RULES } from "@/lib/ai/question-format"
+import { MATH_NOTATION_RULES, optionIndexes } from "@/lib/ai/question-format"
+import { choiceKey } from "@/lib/choice"
 import { evaluateMath } from "@/lib/math-answer"
 import { OPTION_LETTERS } from "@/lib/questions"
 import type { Question, SubjectId } from "@/lib/types"
@@ -14,7 +15,10 @@ import type { Question, SubjectId } from "@/lib/types"
 export const SOLVE_SURE = 0.7
 
 export const solveResponseSchema = z.object({
-  correctIndex: z.number().int().nullable().describe("trac-nghiem: 0-based index of the correct option"),
+  correctIndexes: z
+    .array(z.number().int())
+    .nullable()
+    .describe("trac-nghiem: 0-based indexes of the correct options; one index, or several only when more than one option is correct"),
   trueFalseAnswer: z.boolean().nullable().describe("dung-sai: true if the statement is true"),
   answers: z.array(z.string()).nullable().describe("dien-cho-trong: one answer per ___ in order"),
   answer: z.string().nullable().describe("tra-loi-ngan: the expected answer, with its unit when there is one"),
@@ -51,7 +55,7 @@ export function solveRequestText(q: Question, meta: { subject: SubjectId; grade:
   const lines = [`Subject: ${SUBJECT_NAMES[meta.subject]}. Grade ${meta.grade} (Vietnamese primary school).`, "", `Question: ${q.prompt}`]
   switch (q.type) {
     case "trac-nghiem":
-      lines.push(...q.options.map((o, i) => `${OPTION_LETTERS[i]}. ${o}`), "", "Type trac-nghiem (multiple choice): fill correctIndex.")
+      lines.push(...q.options.map((o, i) => `${OPTION_LETTERS[i]}. ${o}`), "", "Type trac-nghiem (multiple choice): fill correctIndexes with every correct option (usually one).")
       break
     case "dung-sai":
       lines.push("", "Type dung-sai (true/false statement): fill trueFalseAnswer.")
@@ -89,7 +93,10 @@ export function applySolution(q: Question, res: SolveResponse): Question | null 
   const key = ((): Question | null => {
     switch (q.type) {
       case "trac-nghiem":
-        return res.correctIndex !== null && res.correctIndex >= 0 && res.correctIndex < q.options.length ? { ...q, correctIndex: res.correctIndex } : null
+      {
+        const correct = optionIndexes(res.correctIndexes, q.options.length)
+        return correct.length ? { ...q, ...choiceKey(correct) } : null
+      }
       case "dung-sai":
         return res.trueFalseAnswer === null ? null : { ...q, answer: res.trueFalseAnswer }
       case "dien-cho-trong": {

@@ -1,3 +1,4 @@
+import { choiceKey, correctOptions } from "./choice"
 import type { Question } from "./types"
 
 /**
@@ -19,7 +20,7 @@ export function withLaterAnswerKey(snapshot: Question, current: Question | undef
   switch (snapshot.type) {
     case "trac-nghiem": {
       const c = current as typeof snapshot
-      return c.options.join("\n") === snapshot.options.join("\n") ? { ...snapshot, ...extra, correctIndex: c.correctIndex } : snapshot
+      return c.options.join("\n") === snapshot.options.join("\n") ? { ...snapshot, ...extra, ...choiceKey(correctOptions(c)) } : snapshot
     }
     case "dung-sai":
       return { ...snapshot, ...extra, answer: (current as typeof snapshot).answer }

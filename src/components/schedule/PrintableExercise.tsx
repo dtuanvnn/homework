@@ -3,6 +3,7 @@ import { useEffect } from "react"
 import { CardTitle } from "@/components/ui/card"
 import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { OPTION_LETTERS } from "@/lib/questions"
+import { isMultiAnswer } from "@/lib/choice"
 import type { ExerciseSet, Question } from "@/lib/types"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
@@ -39,6 +40,9 @@ export default function PrintableExercise({
               Câu {i + 1}. <RichText text={q.prompt} />
             </p>
             <QuestionPicture question={q} className="max-h-64" />
+            {q.type === "trac-nghiem" && isMultiAnswer(q) && (
+              <p className="mt-1 text-sm italic">(Chọn tất cả đáp án đúng)</p>
+            )}
             {q.type === "trac-nghiem" && (
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {q.options.map((opt, index) => (

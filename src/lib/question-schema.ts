@@ -26,7 +26,18 @@ const base = {
 const mathFlags = { math: z.boolean().optional(), simplest: z.boolean().optional() }
 
 export const questionContentSchema = z.discriminatedUnion("type", [
-  z.object({ ...base, type: z.literal("trac-nghiem"), options: z.array(z.string()).min(2).max(6), correctIndex: z.number().int().min(0) }),
+  z
+    .object({
+      ...base,
+      type: z.literal("trac-nghiem"),
+      options: z.array(z.string()).min(2).max(6),
+      correctIndex: z.number().int().min(0),
+      correctIndexes: z.array(z.number().int().min(0)).min(2).optional(),
+    })
+    .refine((q) => !q.correctIndexes || (new Set(q.correctIndexes).size === q.correctIndexes.length && q.correctIndexes.every((i) => i < q.options.length)), {
+      path: ["correctIndexes"],
+      message: "Đáp án đúng không hợp lệ",
+    }),
   z.object({ ...base, type: z.literal("dung-sai"), answer: z.boolean() }),
   z.object({ ...base, ...mathFlags, type: z.literal("dien-cho-trong"), answers: z.array(z.string()).min(1) }),
   // Without an answer key yet ("missing") the answer is an empty placeholder.

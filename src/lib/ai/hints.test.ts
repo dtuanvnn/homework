@@ -19,6 +19,12 @@ describe("leaksAnswer", () => {
     expect(leaksAnswer("Câu đang nói việc đang xảy ra, em dùng thì hiện tại tiếp diễn: am/is/are + V-ing.", fill)).toBe(false)
     expect(leaksAnswer("Em viết are having là đúng.", fill)).toBe(true)
   })
+
+  it("catches any of several correct options", () => {
+    const multi: Question = { ...mc, prompt: "Số nào chia hết cho 7?", options: ["49", "50", "63"], correctIndex: 0, correctIndexes: [0, 2] }
+    expect(leaksAnswer("Số 63 chia hết cho 7 đó em.", multi)).toBe(true)
+    expect(leaksAnswer("Em nhớ lại bảng nhân 7 nhé.", multi)).toBe(false)
+  })
 })
 
 describe("validateHints", () => {

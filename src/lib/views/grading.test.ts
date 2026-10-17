@@ -114,6 +114,8 @@ describe("readable answers", () => {
 
   it("formats the correct answer per type", () => {
     expect(correctAnswerText(mc)).toBe("B. 4")
+    expect(correctAnswerText({ ...mc, correctIndexes: [2, 0] })).toBe("A. 3 · C. 5")
+    expect(responseText({ ...mc, correctIndexes: [0, 2] }, [2, 0])).toBe("A. 3 · C. 5")
     expect(correctAnswerText({ ...base, type: "dung-sai", answer: false })).toBe("Sai")
     expect(correctAnswerText(fill)).toBe("a · b")
     expect(correctAnswerText(match)).toBe("1 → một · 2 → hai")

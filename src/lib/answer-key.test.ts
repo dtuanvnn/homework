@@ -11,6 +11,7 @@ describe("withLaterAnswerKey", () => {
     expect(withLaterAnswerKey(snapshot, current)).toEqual({ ...snapshot, correctIndex: 1, answerStatus: "ai", solution: "Vì 2 + 2 = 4" })
     const picture = { path: "sets/x/y-figure.jpg", width: 10, height: 10 }
     expect(withLaterAnswerKey(snapshot, { ...current, solutionImage: picture })).toMatchObject({ solutionImage: picture })
+    expect(withLaterAnswerKey(snapshot, { ...current, correctIndex: 0, correctIndexes: [0, 1] })).toMatchObject({ correctIndex: 0, correctIndexes: [0, 1] })
   })
 
   it("keeps the snapshot when it had a key, or the set's question can't supply one", () => {

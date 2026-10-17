@@ -32,7 +32,7 @@ const blank: AiQuestion = {
   points: 1,
   skills: ["Bảng nhân 7"],
   options: null,
-  correctIndex: null,
+  correctIndexes: null,
   trueFalseAnswer: null,
   answers: null,
   answer: "56",
@@ -152,7 +152,7 @@ describe("buildGeneratePrompt", () => {
 
 describe("mapGeneratedSet", () => {
   it("maps questions with fresh ids and trims the set meta", () => {
-    const r = mapGeneratedSet(output([ai(), ai({ type: "trac-nghiem", options: ["1", "2"], correctIndex: 1, answer: null })]), input({ count: 2 }), ids())
+    const r = mapGeneratedSet(output([ai(), ai({ type: "trac-nghiem", options: ["1", "2"], correctIndexes: [1], answer: null })]), input({ count: 2 }), ids())
     expect(r.title).toBe("Luyện tập Bảng nhân 7")
     expect(r.estimatedMinutes).toBe(15)
     expect(r.items.map((i) => i.question.id)).toEqual(["q1", "q2"])

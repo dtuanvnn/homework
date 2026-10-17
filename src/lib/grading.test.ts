@@ -34,6 +34,18 @@ describe("gradeQuestion", () => {
     expect(gradeQuestion(mc, 0)).toEqual({ isCorrect: false, pointsAwarded: 0 })
   })
 
+  it("grades a question with several correct options all or nothing, in any order", () => {
+    const multi: Question = { ...mc, points: 2, correctIndex: 0, correctIndexes: [0, 2] }
+    expect(gradeQuestion(multi, [0, 2])).toEqual({ isCorrect: true, pointsAwarded: 2 })
+    expect(gradeQuestion(multi, [2, 0])).toEqual({ isCorrect: true, pointsAwarded: 2 })
+    expect(gradeQuestion(multi, [0])).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    expect(gradeQuestion(multi, [0, 1, 2])).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    expect(gradeQuestion(multi, 0)).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    expect(gradeQuestion(multi, [])).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    // A single-answer question still accepts the index, or a one-item list.
+    expect(gradeQuestion(mc, [1])).toEqual({ isCorrect: true, pointsAwarded: 1 })
+  })
+
   it("grades true/false", () => {
     expect(gradeQuestion(tf, false)).toEqual({ isCorrect: true, pointsAwarded: 1 })
     expect(gradeQuestion(tf, true)).toEqual({ isCorrect: false, pointsAwarded: 0 })

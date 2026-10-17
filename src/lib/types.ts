@@ -174,7 +174,10 @@ interface MathAnswer {
 export interface MultipleChoiceQuestion extends QuestionBase {
   type: "trac-nghiem"
   options: string[]
+  /** The (first) correct option. */
   correctIndex: number
+  /** Present only with two or more correct options; the child must pick exactly these (lib/choice.ts). */
+  correctIndexes?: number[]
 }
 
 export interface TrueFalseQuestion extends QuestionBase {

@@ -1,3 +1,4 @@
+import { choiceKey, correctOptions } from '@/lib/choice'
 import { evaluateMath } from '@/lib/math-answer'
 import { editedQuestionSchema } from '@/lib/question-schema'
 import { BLANK, countBlanks, shuffleIndexes } from '@/lib/questions'
@@ -12,7 +13,8 @@ export interface QuestionDraft {
   points: number
   skills: string[]
   options: string[]
-  correctIndex: number
+  /** Correct options; two or more make a pick-all question. Empty while there is no key. */
+  correctIndexes: number[]
   tfAnswer: boolean
   blanks: string[]
   shortAnswer: string
@@ -32,7 +34,7 @@ export interface QuestionDraft {
 }
 
 /** Fields that make up the answer key: changing one makes it the parent's own. */
-const KEY_FIELDS = ['correctIndex', 'tfAnswer', 'blanks', 'shortAnswer', 'pairs', 'orderingText', 'rubric'] as const
+const KEY_FIELDS = ['correctIndexes', 'tfAnswer', 'blanks', 'shortAnswer', 'pairs', 'orderingText', 'rubric'] as const
 
 export function patchDraft(d: QuestionDraft, p: Partial<QuestionDraft>): QuestionDraft {
   const next = { ...d, ...p }
@@ -53,7 +55,7 @@ export function emptyDraft(type: QuestionType): QuestionDraft {
     points: type === 'tu-luan' ? 2 : 1,
     skills: [],
     options: ['', '', '', ''],
-    correctIndex: 0,
+    correctIndexes: [],
     tfAnswer: true,
     blanks: [],
     shortAnswer: '',
@@ -86,7 +88,7 @@ export function toDraft(q: Question): QuestionDraft {
   switch (q.type) {
     case 'trac-nghiem':
       // No option chosen while the question has no key (correctIndex is a placeholder then).
-      return { ...base, options: [...q.options], correctIndex: q.answerStatus === 'missing' ? -1 : q.correctIndex }
+      return { ...base, options: [...q.options], correctIndexes: q.answerStatus === 'missing' ? [] : correctOptions(q) }
     case 'dung-sai':
       return { ...base, tfAnswer: q.answer }
     case 'dien-cho-trong':
@@ -140,7 +142,7 @@ export function validateDraft(d: QuestionDraft): string[] {
     case 'trac-nghiem': {
       const filled = d.options.filter((o) => o.trim())
       if (filled.length < 2) issues.push('Cần ít nhất 2 phương án')
-      if (!keyless && !d.options[d.correctIndex]?.trim()) issues.push('Chọn đáp án đúng có nội dung')
+      if (!keyless && (!d.correctIndexes.length || d.correctIndexes.some((i) => !d.options[i]?.trim()))) issues.push('Chọn đáp án đúng có nội dung')
       break
     }
     case 'dien-cho-trong': {
@@ -181,13 +183,16 @@ export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Qu
   const math = d.math ? { math: true as const, ...(d.simplest ? { simplest: true as const } : {}) } : {}
   switch (d.type) {
     case 'trac-nghiem': {
-      // Drop empty options while keeping the correct answer pointing at the same text.
+      // Drop empty options while keeping the correct answers pointing at the same text.
       const kept = d.options.map((o, i) => ({ o: o.trim(), i })).filter((x) => x.o)
+      const correct = kept.flatMap((x, at) => (d.correctIndexes.includes(x.i) ? [at] : []))
+      const { correctIndexes, ...key } = choiceKey(correct)
       return {
         ...base,
         type: 'trac-nghiem',
         options: kept.map((x) => x.o),
-        correctIndex: Math.max(0, kept.findIndex((x) => x.i === d.correctIndex)),
+        ...key,
+        ...(correctIndexes ? { correctIndexes } : {}),
       }
     }
     case 'dung-sai':

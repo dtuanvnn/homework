@@ -4,6 +4,7 @@
  * label is computed here so server and client render the same text.
  */
 import { deriveAssignmentState, type DerivedState } from "@/lib/assignment-status"
+import { chosenOptions, correctOptions, isMultiAnswer } from "@/lib/choice"
 import { addDays, startOfDay, startOfWeek } from "@/lib/dates"
 import { formatDayMonth, formatShortDate, formatTime, formatVietnameseDate, formatWeekday } from "@/lib/format"
 import type { EssayValue, Response } from "@/lib/grading"
@@ -300,7 +301,10 @@ export function answerText(q: Question, response: Response | null | undefined, m
   if (response === null || response === undefined) return mode === "paper" ? "Bài làm trên giấy" : NO_ANSWER
   switch (q.type) {
     case "trac-nghiem":
-      return typeof response === "number" && q.options[response] !== undefined ? q.options[response] : NO_ANSWER
+    {
+      const picked = chosenOptions(response).filter((i) => q.options[i] !== undefined)
+      return picked.length ? picked.map((i) => q.options[i]).join(" ; ") : NO_ANSWER
+    }
     case "dung-sai":
       return typeof response === "boolean" ? yesNo(response) : NO_ANSWER
     case "dien-cho-trong": {
@@ -335,7 +339,7 @@ export function correctAnswerText(q: Question): string | undefined {
   if (q.answerStatus === "missing") return undefined
   switch (q.type) {
     case "trac-nghiem":
-      return q.options[q.correctIndex]
+      return correctOptions(q).map((i) => q.options[i]).join(" ; ")
     case "dung-sai":
       return yesNo(q.answer)
     case "dien-cho-trong":
@@ -415,7 +419,7 @@ type KeyInfo = "solution" | "solutionImage" | "solutionImageUrl" | "answerStatus
 
 /** A question as sent to the browser while taking: answer keys and solutions removed. */
 export type TakeQuestion =
-  | Omit<MultipleChoiceQuestion, "correctIndex" | KeyInfo>
+  | (Omit<MultipleChoiceQuestion, "correctIndex" | "correctIndexes" | KeyInfo> & { multi?: true })
   | Omit<TrueFalseQuestion, "answer" | KeyInfo>
   | (Omit<FillBlankQuestion, "answers" | KeyInfo> & { blanks: number })
   | Omit<ShortAnswerQuestion, "answer" | KeyInfo>
@@ -431,8 +435,11 @@ export function toTakeQuestion(question: Question): TakeQuestion {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Dropping the solution and answer status
   const { solution: _solution, solutionImage: _image, solutionImageUrl: _imageUrl, answerStatus: _status, ...q } = question
   switch (q.type) {
-    case "trac-nghiem":
-      return without(q, "correctIndex")
+    case "trac-nghiem": {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Dropping the answer key
+      const { correctIndex: _index, correctIndexes: _indexes, ...rest } = q
+      return isMultiAnswer(q) ? { ...rest, multi: true } : rest
+    }
     case "dung-sai":
       return without(q, "answer")
     case "tra-loi-ngan":

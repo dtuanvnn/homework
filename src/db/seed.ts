@@ -17,6 +17,7 @@ import postgres from "postgres"
 import { eq } from "drizzle-orm"
 import { createClient } from "@supabase/supabase-js"
 import { gradeAttempt, scoreOutOf10, type Response } from "@/lib/grading"
+import { correctOptions, isMultiAnswer } from "@/lib/choice"
 import { addDays, localDay, startOfDay } from "@/lib/dates"
 import { schoolYearOf, schoolYearStart } from "@/lib/school-year"
 import { computeRewards } from "@/lib/views/rewards"
@@ -55,7 +56,7 @@ const WEAK_SKILLS = new Set(["Toán có lời văn", "Dấu hỏi/ngã", "Số �
 
 function correctResponse(q: Question): Response {
   switch (q.type) {
-    case "trac-nghiem": return q.correctIndex
+    case "trac-nghiem": return isMultiAnswer(q) ? correctOptions(q) : q.correctIndex
     case "dung-sai": return q.answer
     case "dien-cho-trong": return q.answers
     case "tra-loi-ngan": return q.answer
@@ -67,7 +68,7 @@ function correctResponse(q: Question): Response {
 
 function wrongResponse(q: Question): Response {
   switch (q.type) {
-    case "trac-nghiem": return (q.correctIndex + 1) % q.options.length
+    case "trac-nghiem": return isMultiAnswer(q) ? [q.correctIndex] : (q.correctIndex + 1) % q.options.length
     case "dung-sai": return !q.answer
     case "dien-cho-trong": return q.answers.map((a, i) => (i === q.answers.length - 1 ? `${a}?` : a))
     case "tra-loi-ngan": return "0"

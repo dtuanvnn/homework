@@ -24,7 +24,7 @@ const blank: AiQuestion = {
   points: 1,
   skills: [],
   options: null,
-  correctIndex: null,
+  correctIndexes: null,
   trueFalseAnswer: null,
   answers: null,
   answer: null,
@@ -98,7 +98,7 @@ describe("toScanResult", () => {
     const r = toScanResult(
       response({
         questions: [
-          q({ type: "trac-nghiem", prompt: "8 × 6 = ?", options: ["42", "48"], correctIndex: 1, confidence: 0.95, page: 1 }),
+          q({ type: "trac-nghiem", prompt: "8 × 6 = ?", options: ["42", "48"], correctIndexes: [1], confidence: 0.95, page: 1 }),
           q({ prompt: "Tính: 456 + 237 = ?", answer: "693", confidence: 0.8, page: 2 }),
         ],
       }),
@@ -121,7 +121,7 @@ describe("toScanResult", () => {
   })
 
   it("joins Claude's note with repair notes and lowers confidence for incomplete questions", () => {
-    const r = toScanResult(response({ questions: [q({ type: "trac-nghiem", prompt: "Chọn đáp án", options: ["a"], correctIndex: 0, note: "Chữ mờ", confidence: 0.9 })] }), keyed, 1, ids())
+    const r = toScanResult(response({ questions: [q({ type: "trac-nghiem", prompt: "Chọn đáp án", options: ["a"], correctIndexes: [0], note: "Chữ mờ", confidence: 0.9 })] }), keyed, 1, ids())
     expect(r.items[0].note).toBe("Chữ mờ · Câu hỏi chưa đủ thông tin")
     expect(r.items[0].confidence).toBe(REPAIRED_CONFIDENCE)
   })
@@ -187,7 +187,7 @@ describe("mergeScanResults", () => {
 
   it("carries figure boxes to the review items", () => {
     const r = toScanResult(
-      response({ questions: [q({ type: "trac-nghiem", prompt: "Hình nào?", options: ["A", "B"], correctIndex: 0, page: 2, figure: { box: [100, 100, 400, 400] } })] }),
+      response({ questions: [q({ type: "trac-nghiem", prompt: "Hình nào?", options: ["A", "B"], correctIndexes: [0], page: 2, figure: { box: [100, 100, 400, 400] } })] }),
       meta,
       3,
       ids(),

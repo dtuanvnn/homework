@@ -2,6 +2,7 @@
  * View models of the grading screens ("Chấm bài"). Pure functions: the server
  * pages feed them database rows, tests feed them plain objects.
  */
+import { chosenOptions, correctOptions } from "../choice"
 import { OPTION_LETTERS } from "../questions"
 import type { EssayValue, Response } from "../grading"
 import { inkSchema, isInkEmpty, type Ink } from "../ink"
@@ -174,7 +175,7 @@ export function correctAnswerText(q: Question): string {
   if (q.answerStatus === "missing" && q.type !== "tu-luan") return "Chưa có đáp án – phụ huynh tự đối chiếu"
   switch (q.type) {
     case "trac-nghiem":
-      return optionLabel(q, q.correctIndex)
+      return correctOptions(q).map((i) => optionLabel(q, i)).join(" · ")
     case "dung-sai":
       return q.answer ? "Đúng" : "Sai"
     case "dien-cho-trong":
@@ -199,7 +200,10 @@ export function responseText(q: Question, response: Response | null | undefined)
   if (response === null || response === undefined) return NO_ANSWER
   switch (q.type) {
     case "trac-nghiem":
-      return typeof response === "number" ? optionLabel(q, response) : NO_ANSWER
+    {
+      const picked = chosenOptions(response)
+      return picked.length ? picked.map((i) => optionLabel(q, i)).join(" · ") : NO_ANSWER
+    }
     case "dung-sai":
       return typeof response === "boolean" ? (response ? "Đúng" : "Sai") : NO_ANSWER
     case "dien-cho-trong":

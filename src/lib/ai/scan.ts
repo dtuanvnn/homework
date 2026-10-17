@@ -83,13 +83,13 @@ ${MATH_NOTATION_RULES}
 - page is the number N of the "Tệp N" label above the file the question comes from.`
 
 const TRANSCRIBE_ONLY = `Answers:
-- Do not solve anything and do not look for answers: the parent adds answer keys later. Leave correctIndex, trueFalseAnswer, answers, answer, rubric and solution null, even when the document shows answers.
+- Do not solve anything and do not look for answers: the parent adds answer keys later. Leave correctIndexes, trueFalseAnswer, answers, answer, rubric and solution null, even when the document shows answers.
 - noi: give the pairs as printed, row by row (the left item and the right item on the same row). sap-xep: give the tokens in the printed order.
 - Still set math (and simplest) from what the child is asked to write.`
 
 const READ_SOLUTIONS = `Answers:
 - The document includes its answers and worked solutions (an answer key, "Đáp án", "Lời giải", "Hướng dẫn giải", often after the questions or on later pages). Read them; do not solve anything yourself. Do not turn the answer key or the solutions into questions.
-- Fill each question's answer fields from the document: correctIndex, trueFalseAnswer, answers, answer; noi with the correctly matched pairs; sap-xep with the tokens in the correct order; tu-luan rubric with what the document expects (e.g. "Đáp số: …").
+- Fill each question's answer fields from the document: correctIndexes (every correct option), trueFalseAnswer, answers, answer; noi with the correctly matched pairs; sap-xep with the tokens in the correct order; tu-luan rubric with what the document expects (e.g. "Đáp số: …").
 - Copy the document's worked solution for the question into solution, keeping its wording and lines (\\n) and writing formulas in LaTeX between dollar signs. Use null when it gives only the answer.
 - When the document has no answer for a question, leave its answer fields null and say so in the note. Handwritten or circled marks may be a child's work, not the key: use only printed or clearly marked answers.`
 

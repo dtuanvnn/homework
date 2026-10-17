@@ -40,7 +40,7 @@ describe("question drafts with math and figures", () => {
 
   it("drops math flags for types without math answers and keeps the figure", () => {
     const d = changeDraftType({ ...toDraft({ id: "q", type: "tra-loi-ngan", prompt: "Hình?", points: 1, skills: [], answer: "\\frac{1}{2}", math: true, image: FIG }) }, "trac-nghiem")
-    const q = fromDraft({ ...d, options: ["A", "B"], correctIndex: 0 }, "q")
+    const q = fromDraft({ ...d, options: ["A", "B"], correctIndexes: [0] }, "q")
     expect(q).not.toHaveProperty("math")
     expect(q.image).toEqual(FIG)
   })
@@ -56,7 +56,7 @@ describe("answer status and solution", () => {
 
   it("opens a question without a key with no option chosen, and saves it still without a key", () => {
     const d = toDraft(keyless)
-    expect(d.correctIndex).toBe(-1)
+    expect(d.correctIndexes).toEqual([])
     expect(validateDraft(d)).toEqual([])
     expect(fromDraft(d, "q")).toMatchObject({ correctIndex: 0, answerStatus: "missing" })
     const short = toDraft({ id: "s", type: "tra-loi-ngan", prompt: "6 × 7 = ?", points: 1, skills: [], answer: "", answerStatus: "missing" })
@@ -67,15 +67,15 @@ describe("answer status and solution", () => {
   })
 
   it("becomes the parent's own key once they set an answer", () => {
-    const d = patchDraft(toDraft(keyless), { correctIndex: 1 })
+    const d = patchDraft(toDraft(keyless), { correctIndexes: [1] })
     expect(d.answerStatus).toBeUndefined()
     expect(fromDraft(d, "q")).toMatchObject({ correctIndex: 1 })
     expect(fromDraft(d, "q")).not.toHaveProperty("answerStatus")
     const ai = toDraft({ ...keyless, correctIndex: 1, answerStatus: "ai-check" })
     expect(patchDraft(ai, { prompt: "7 × 8 bằng mấy?" }).answerStatus).toBe("ai-check")
-    expect(patchDraft(ai, { correctIndex: 0 }).answerStatus).toBeUndefined()
-    // Removing an option resends the unchanged correctIndex: still no key.
-    expect(patchDraft(toDraft(keyless), { options: ["54"], correctIndex: -1 }).answerStatus).toBe("missing")
+    expect(patchDraft(ai, { correctIndexes: [0] }).answerStatus).toBeUndefined()
+    // Removing an option resends the unchanged correctIndexes: still no key.
+    expect(patchDraft(toDraft(keyless), { options: ["54"], correctIndexes: [] }).answerStatus).toBe("missing")
   })
 
   it("keeps the solution, dropping an empty one", () => {
@@ -83,6 +83,28 @@ describe("answer status and solution", () => {
     expect(d.solution).toBe("7 × 8 = 56")
     expect(fromDraft(d, "q")).toMatchObject({ solution: "7 × 8 = 56" })
     expect(fromDraft({ ...d, solution: "  " }, "q")).not.toHaveProperty("solution")
+  })
+})
+
+describe("multiple correct options", () => {
+  const mc: Question = { id: "q", type: "trac-nghiem", prompt: "Số nào chia hết cho 2?", points: 1, skills: [], options: ["3", "4", "", "8"], correctIndex: 1, correctIndexes: [1, 3] }
+
+  it("round-trips several correct options, keeping them on the same text when empty options are dropped", () => {
+    const d = toDraft(mc)
+    expect(d.correctIndexes).toEqual([1, 3])
+    expect(fromDraft(d, "q")).toMatchObject({ options: ["3", "4", "8"], correctIndex: 1, correctIndexes: [1, 2] })
+  })
+
+  it("saves a single correct option without correctIndexes", () => {
+    const q = fromDraft({ ...toDraft(mc), correctIndexes: [3] }, "q")
+    expect(q).toMatchObject({ correctIndex: 2 })
+    expect(q).not.toHaveProperty("correctIndexes")
+  })
+
+  it("needs at least one correct option, each with text", () => {
+    expect(validateDraft({ ...toDraft(mc), correctIndexes: [] })).toContain("Chọn đáp án đúng có nội dung")
+    expect(validateDraft({ ...toDraft(mc), correctIndexes: [1, 2] })).toContain("Chọn đáp án đúng có nội dung")
+    expect(validateDraft(toDraft(mc))).toEqual([])
   })
 })
 

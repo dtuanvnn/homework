@@ -280,6 +280,11 @@ describe("buildResultDetail", () => {
 describe("toTakeQuestion", () => {
   it("strips answer keys but keeps what the UI needs", () => {
     expect(toTakeQuestion(mc)).not.toHaveProperty("correctIndex")
+    expect(toTakeQuestion(mc)).not.toHaveProperty("multi")
+    const multi = toTakeQuestion({ ...mc, correctIndexes: [0, 1] } as Question)
+    expect(multi).toMatchObject({ multi: true })
+    expect(multi).not.toHaveProperty("correctIndex")
+    expect(multi).not.toHaveProperty("correctIndexes")
     expect(toTakeQuestion(tf)).not.toHaveProperty("answer")
     expect(toTakeQuestion(sa)).not.toHaveProperty("answer")
     expect(toTakeQuestion(essay)).not.toHaveProperty("rubric")

@@ -3,10 +3,12 @@
  * (server) and powers previews in the UI.
  *
  * Response shapes match what the take-assignment components store:
- * trac-nghiem → option index, dung-sai → boolean, dien-cho-trong → string per
+ * trac-nghiem → option index (option indexes when it has several correct
+ * options, lib/choice.ts), dung-sai → boolean, dien-cho-trong → string per
  * blank, tra-loi-ngan → string, noi → { leftIndex: rightPairIndex },
  * sap-xep → token indexes in the chosen order, tu-luan → EssayValue.
  */
+import { chosenOptions, correctOptions } from "./choice"
 import type { Ink } from "./ink"
 import { mathAnswerMatches } from "./math-answer"
 import type { Question } from "./types"
@@ -87,7 +89,11 @@ export function gradeQuestion(q: Question, response: Response | undefined | null
 
   switch (q.type) {
     case "trac-nghiem":
-      return allOrNothing(q.points, response === q.correctIndex)
+    {
+      const want = correctOptions(q)
+      const got = chosenOptions(response)
+      return allOrNothing(q.points, got.length === want.length && got.every((v, i) => v === want[i]))
+    }
     case "dung-sai":
       return allOrNothing(q.points, response === q.answer)
     case "tra-loi-ngan":

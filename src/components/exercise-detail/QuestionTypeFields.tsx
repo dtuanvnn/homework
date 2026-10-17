@@ -20,19 +20,22 @@ function MultipleChoiceFields({ draft, onChange }: Props) {
   const remove = (i: number) =>
     onChange({
       options: draft.options.filter((_, j) => j !== i),
-      correctIndex: draft.correctIndex === i ? 0 : draft.correctIndex > i ? draft.correctIndex - 1 : draft.correctIndex,
+      correctIndexes: draft.correctIndexes.filter((c) => c !== i).map((c) => (c > i ? c - 1 : c)),
     })
+  // Any number of options can be correct; two or more make the child pick them all.
+  const toggle = (i: number) =>
+    onChange({ correctIndexes: draft.correctIndexes.includes(i) ? draft.correctIndexes.filter((c) => c !== i) : [...draft.correctIndexes, i].sort((a, b) => a - b) })
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 text-sm font-semibold text-slate-700">Phương án · chạm vào chữ cái để chọn đáp án đúng</legend>
+      <legend className="mb-2 text-sm font-semibold text-slate-700">Phương án · chạm vào chữ cái để chọn đáp án đúng (có thể chọn nhiều)</legend>
       {draft.options.map((opt, i) => {
-        const correct = draft.correctIndex === i
+        const correct = draft.correctIndexes.includes(i)
         return (
           <div key={i} className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => onChange({ correctIndex: i })}
+              onClick={() => toggle(i)}
               aria-pressed={correct}
               aria-label={`Chọn ${OPTION_LETTERS[i]} là đáp án đúng`}
               className={cn(
@@ -60,6 +63,9 @@ function MultipleChoiceFields({ draft, onChange }: Props) {
           </div>
         )
       })}
+      {draft.correctIndexes.length > 1 && (
+        <p className="text-sm text-slate-500">Câu nhiều đáp án: con thấy “Chọn tất cả đáp án đúng” và phải chọn đủ {draft.correctIndexes.length} đáp án mới được điểm.</p>
+      )}
       {draft.options.length < OPTION_LETTERS.length && (
         <Button variant="ghost" className="w-fit text-indigo-700 hover:bg-indigo-50" onClick={() => onChange({ options: [...draft.options, ''] })}>
           <Plus />

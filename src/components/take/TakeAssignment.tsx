@@ -52,6 +52,7 @@ const online = () =>
 function isAnswered(q: TakeQuestion, a: unknown): boolean {
   if (a === undefined || a === null) return false
   switch (q.type) {
+    case "trac-nghiem": return typeof a === "number" || (Array.isArray(a) && a.length > 0)
     case "dien-cho-trong": return Array.isArray(a) && a.filter((s) => typeof s === "string" && s.trim()).length === q.blanks
     case "tra-loi-ngan": return typeof a === "string" && Boolean(a.trim())
     case "noi": return Object.keys(a as object).length === q.pairs.length
