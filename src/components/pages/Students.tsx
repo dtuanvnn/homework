@@ -12,6 +12,7 @@ import { restoreStudent } from "@/server/actions/students"
 import { useAppNavigation, useStudent } from "@/components/layout/AppFrame"
 import { parentPaths } from "@/components/layout/routes"
 import StudentSheet from "@/components/students/StudentSheet"
+import HomeScreenTip from "@/components/offline/HomeScreenTip"
 
 const lockLabel = (until: string | null) =>
   until ? `Khoá đến ${formatLockEnd(until)}` : "Đang khoá"
@@ -91,6 +92,7 @@ export default function Students({ cards, now }: { cards: StudentCard[]; now: st
           <Plus /> Thêm học sinh
         </Button>
       </div>
+      <HomeScreenTip />
       {active.map(card)}
       {archived.length > 0 && (
         <>

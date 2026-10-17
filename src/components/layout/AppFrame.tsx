@@ -27,11 +27,15 @@ import { LibraryProvider } from "@/state/library-store"
 
 import NoStudents from "@/components/students/NoStudents"
 
+import OfflineBanner from "@/components/offline/OfflineBanner"
+
+import OfflineSync from "@/components/offline/OfflineSync"
+
 import AppShell from "./AppShell"
 
 import { navFor, type NavCounts, type TabId } from "./nav-config"
 
-import { MODE_HOME, parentPaths, TAB_PATHS, resolveRoute } from "./routes"
+import { MODE_HOME, offlinePath, parentPaths, takeRouteId, TAB_PATHS, resolveRoute } from "./routes"
 
 import type { AppMode, Assignment, ChildOption, ExerciseSet, Student } from "@/lib/types"
 
@@ -113,13 +117,15 @@ export default function AppFrame({
 
   const navigate = useCallback(
     (path: Route) => {
-      const go = () => router.push(path)
+      // No network in student mode: the service worker serves the offline screen (downloaded work only).
+      const go = () =>
+        mode === "student" && !navigator.onLine ? window.location.assign(offlinePath(takeRouteId(path) ?? undefined)) : router.push(path)
 
       if (leaveGuard.current) leaveGuard.current(go)
       else go()
     },
 
-    [router],
+    [router, mode],
   )
 
   useEffect(() => {
@@ -180,7 +186,16 @@ export default function AppFrame({
                 route.parentPath ? () => navigate(route.parentPath!) : undefined
               }
             >
-              {showEmptyState ? <NoStudents now={now} /> : children}
+              {showEmptyState ? (
+                <NoStudents now={now} />
+              ) : mode === "student" ? (
+                <OfflineSync studentId={student?.id ?? null} refreshKey={now}>
+                  <OfflineBanner />
+                  {children}
+                </OfflineSync>
+              ) : (
+                children
+              )}
             </AppShell>
             {/* Phone: keep toasts below the app bar so they never cover the header buttons. */}
             <Toaster position="top-center" mobileOffset={{ top: "calc(env(safe-area-inset-top) + 72px)" }} />

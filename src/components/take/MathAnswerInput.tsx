@@ -23,6 +23,9 @@ const InlineMathField = dynamic(() => import('./MathField').catch(() => import('
   loading: () => <span className={`mx-1 inline-block h-14 w-28 align-middle ${placeholder}`} />,
 })
 
+/** Loads the MathLive chunk without showing anything, so the service worker has it for offline work. */
+export const MathFieldPreload = dynamic(() => import('./MathField').then(() => () => null), { ssr: false })
+
 export default function MathAnswerInput(props: MathAnswerInputProps) {
   return props.size === 'inline' ? <InlineMathField {...props} /> : <LargeMathField {...props} />
 }

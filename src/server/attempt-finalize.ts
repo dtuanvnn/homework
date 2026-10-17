@@ -43,39 +43,53 @@ export async function closeAttempt(input: {
   responses: Record<string, Response> | "saved"
   submittedAt: Date
   durationSeconds: number | null
+  /** Handed in offline and synced now; a changed set leaves every answer for the parent. */
+  offline?: { offlineId: string; setChanged: boolean }
+  /** Replaces the answers of an attempt the expiry sweep already handed in (offline copy arrived late). */
+  reopen?: boolean
+  /** Handed in by the expiry sweep. */
+  autoSettled?: boolean
 }): Promise<{ closed: boolean; graded: boolean; score: number | null }> {
-  const { attemptId, submittedAt, questions: qs } = input
+  const { attemptId, submittedAt, questions: qs, offline } = input
   return db.transaction(async (tx) => {
     const [open] = await tx
       .select({ id: attempts.id })
       .from(attempts)
-      .where(and(eq(attempts.id, attemptId), isNull(attempts.submittedAt)))
+      .where(and(eq(attempts.id, attemptId), input.reopen ? undefined : isNull(attempts.submittedAt)))
       .for("update")
     if (!open) return { closed: false, graded: false, score: null }
+    const marks = {
+      ...(input.reopen ? { gradedAt: null, gradedBy: null, score: null, feedback: null, autoSettled: false } : {}),
+      ...(input.autoSettled ? { autoSettled: true } : {}),
+      ...(offline ? { offlineId: offline.offlineId, submittedOffline: true, offlineSetChanged: offline.setChanged } : {}),
+    }
     if (!qs.length) {
       // A set emptied after the attempt started: just close it.
-      await tx.update(attempts).set({ submittedAt, durationSeconds: input.durationSeconds }).where(eq(attempts.id, attemptId))
+      await tx.update(attempts).set({ ...marks, submittedAt, durationSeconds: input.durationSeconds }).where(eq(attempts.id, attemptId))
       return { closed: true, graded: false, score: null }
     }
     const responses = input.responses === "saved" ? await savedResponses(tx, attemptId) : input.responses
     const grade = gradeAttempt(qs, responses)
+    // The child answered an older version of the set: the parent grades it by hand.
+    const auto = !grade.needsReview && !offline?.setChanged
     await tx
       .update(attempts)
       .set({
+        ...marks,
         submittedAt,
         durationSeconds: input.durationSeconds,
-        ...(grade.needsReview ? {} : { gradedAt: submittedAt, gradedBy: "auto" as const, score: grade.score, feedback: autoFeedback(grade.score ?? 0) }),
+        ...(auto ? { gradedAt: submittedAt, gradedBy: "auto" as const, score: grade.score, feedback: autoFeedback(grade.score ?? 0) } : {}),
       })
       .where(eq(attempts.id, attemptId))
     await tx.delete(answers).where(eq(answers.attemptId, attemptId))
     await tx.insert(answers).values(
       answerRows(attemptId, qs, responses, false).map((r, i) => ({
         ...r,
-        isCorrect: grade.grades[i].isCorrect,
-        pointsAwarded: grade.grades[i].pointsAwarded,
+        isCorrect: offline?.setChanged ? null : grade.grades[i].isCorrect,
+        pointsAwarded: offline?.setChanged ? null : grade.grades[i].pointsAwarded,
       })),
     )
-    return { closed: true, graded: !grade.needsReview, score: grade.score }
+    return { closed: true, graded: auto, score: auto ? grade.score : null }
   })
 }
 
@@ -88,6 +102,8 @@ export async function settleAttempt(a: { id: string; setId: string; startedAt: D
     responses: "saved",
     submittedAt: deadlineOf(a.startedAt, a.timeLimitMinutes),
     durationSeconds: a.timeLimitMinutes * 60,
+    // An offline copy of this attempt may still arrive and replace these answers (see syncOfflineAttempt).
+    autoSettled: true,
   })
 }
 

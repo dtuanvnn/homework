@@ -351,6 +351,11 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
               Đã chấm · đang sửa
             </Badge>
           )}
+          {d.submittedOffline && (
+            <Badge variant="outline" className="border-sky-200 bg-sky-50 text-xs text-sky-700">
+              Nộp offline
+            </Badge>
+          )}
         </div>
         <h1 className="text-xl font-bold leading-snug text-slate-900 md:text-2xl">{d.title}</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
@@ -373,6 +378,9 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
           <span>{d.answers.length} câu</span>
         </div>
         {paper && <p className="text-sm text-amber-700">Bài làm trên giấy: đối chiếu ảnh scan và chấm từng câu.</p>}
+        {d.offlineSetChanged && (
+          <p className="text-sm text-amber-700">Đề đã sửa sau khi con tải bài: con làm theo đề cũ, bố mẹ chấm từng câu nhé.</p>
+        )}
       </Card>
 
       {paper && (

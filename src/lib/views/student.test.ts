@@ -30,7 +30,8 @@ function attempt(over: Partial<AttemptRecord> = {}): AttemptRecord {
   seq++
   return {
     id: `att-${seq}`, attemptNo: 1, mode: "web", startedAt: at(0, 9), submittedAt: null, gradedAt: null, gradedBy: null,
-    durationSeconds: null, score: null, feedback: null, retryAllowed: true, ...over,
+    durationSeconds: null, score: null, feedback: null, retryAllowed: true,
+    offlineId: null, submittedOffline: false, autoSettled: false, offlineSetChanged: false, ...over,
   }
 }
 const graded = (score: number, over: Partial<AttemptRecord> = {}) =>

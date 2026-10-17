@@ -39,6 +39,14 @@ async function setSession(role: PinRole, householdId: string, studentId?: string
   })
 }
 
+/** Confirms a parent on the child's device (e.g. to discard a refused offline hand-in) without changing the session. */
+export async function checkParentPin(entered: string): Promise<boolean> {
+  const pin = parentPin()
+  if (!pin || safeEqual(String(entered).trim(), pin)) return true
+  await sleep(800) // slow down guessing
+  return false
+}
+
 export async function verifyParentPin(_prev: PinState, formData: FormData): Promise<PinState> {
   const pin = parentPin()
   const entered = String(formData.get("pin") ?? "").trim()

@@ -8,6 +8,8 @@ import { play } from "@/hooks/useSound"
 import { Camera, Hourglass, Play, RotateCcw, Trophy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAppNavigation } from "@/components/layout/AppFrame"
+import { OfflineChip } from "@/components/offline/OfflineBanner"
+import { useOffline } from "@/components/offline/OfflineSync"
 import { studentPaths } from "@/components/layout/routes"
 import { fmtScore } from "@/components/results/ResultDetail"
 import { scoreBadge } from "@/components/pages/StudentResults"
@@ -38,6 +40,7 @@ const EMPTY: Record<TabId, { emoji: string; title: string; text: string }> = {
 export default function StudentAssignments({ items, week }: AssignmentsView) {
   const reduced = useReducedMotion()
   const { navigate } = useAppNavigation()
+  const { pending } = useOffline()
   const [tab, setTab] = useState<TabId>("todo")
   const [subject, setSubject] = useState<SubjectId | "all">("all")
 
@@ -67,7 +70,7 @@ export default function StudentAssignments({ items, week }: AssignmentsView) {
   const startRetry = (a: MyAssignment) => navigate(a.mode === "paper" ? studentPaths.paper(a.id) : studentPaths.take(a.id))
   const viewResult = (a: MyAssignment) => { if (a.resultId) navigate(studentPaths.result(a.resultId)) }
   const open = (a: MyAssignment) => {
-    if (a.status === "submitted") return
+    if (a.status === "submitted" || pending.has(a.id)) return
     if (a.status === "graded") return viewResult(a)
     navigate(a.mode === "paper" ? studentPaths.paper(a.id) : studentPaths.take(a.id))
   }
@@ -76,6 +79,8 @@ export default function StudentAssignments({ items, week }: AssignmentsView) {
   const actionButton = (a: MyAssignment) => {
     const big = "h-14 w-full rounded-2xl text-lg font-bold [&_svg]:size-6"
     const go = (e: React.MouseEvent, fn: () => void) => { e.stopPropagation(); fn() }
+    if (pending.has(a.id))
+      return <Button disabled className={cn(big, "bg-violet-100 text-violet-700 disabled:opacity-100")}><Hourglass />Đã nộp – chờ gửi khi có mạng</Button>
     if (a.status === "submitted")
       return <Button disabled className={cn(big, "bg-violet-100 text-violet-700 disabled:opacity-100")}><Hourglass />Đang chờ bố mẹ chấm</Button>
     if (a.status === "graded")
@@ -182,6 +187,7 @@ export default function StudentAssignments({ items, week }: AssignmentsView) {
                           <span className={cn("rounded-full px-2.5 py-0.5", a.attempt === 2 ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600")}>Lần {a.attempt}</span>
                           <span className="text-slate-500">{a.mode === "web" ? "💻 Làm trên web" : "📄 Làm trên giấy"}</span>
                           {a.timeLimit && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-amber-800">⏱ {a.timeLimit} phút</span>}
+                          <OfflineChip assignmentId={a.id} mode={a.mode} />
                         </div>
                         <h3 className="text-xl leading-snug font-extrabold text-slate-900">{a.title}</h3>
                         <p className="text-base text-slate-600">{a.questions} câu · {a.timeLimit ? `làm trong ${a.timeLimit} phút` : `khoảng ${a.minutes} phút`}</p>

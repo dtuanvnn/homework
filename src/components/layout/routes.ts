@@ -27,6 +27,16 @@ export const studentPaths = {
   result: (attemptId: string) => `/student/results/${encodeURIComponent(attemptId)}` as Route,
 }
 
+/** The offline screen (served by the service worker without network); `a` opens that downloaded assignment. */
+export const offlinePath = (assignmentId?: string) =>
+  (assignmentId ? `/offline?a=${encodeURIComponent(assignmentId)}` : "/offline") as Route
+
+/** The assignment id of a take route, e.g. for opening it on the offline screen. */
+export function takeRouteId(path: string): string | null {
+  const m = /^\/student\/assignments\/([^/]+)\/do$/.exec(path)
+  return m ? decodeURIComponent(m[1]) : null
+}
+
 export const gradingPaths = {
   attempt: (attemptId: string) => `/parent/grading/${encodeURIComponent(attemptId)}` as Route,
 }

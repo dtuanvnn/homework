@@ -43,6 +43,13 @@
       "when": 1792086269789,
       "tag": "0005_households_enrollments",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792231355040,
+      "tag": "0006_busy_famine",
+      "breakpoints": true
     }
   ]
 }

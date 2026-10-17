@@ -81,6 +81,13 @@ describe("buildGradingQueue", () => {
     expect(noRetry.retryPending).toBe(false)
     expect(single.retryPending).toBe(false)
   })
+
+  it("marks attempts handed in offline", () => {
+    const [offline] = buildGradingQueue([{ id: "a3", maxAttempts: 1, set, attempts: [attempt({ id: "t9", submittedOffline: true })] }], [])
+    const [online] = buildGradingQueue([assignments[0]], [])
+    expect(offline.submittedOffline).toBe(true)
+    expect(online.submittedOffline).toBe(false)
+  })
 })
 
 describe("points", () => {
