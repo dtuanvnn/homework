@@ -33,5 +33,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sounds/).*)"],
+  // The service worker, the offline screen and the math keyboard fonts load without a PIN (the offline screen holds no data).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sounds/|sw.js|offline|mathlive/).*)"],
 }

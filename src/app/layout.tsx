@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Be_Vietnam_Pro } from "next/font/google"
 import "./globals.css"
 import 'katex/dist/katex.min.css'
+import RegisterServiceWorker from "@/components/offline/RegisterServiceWorker"
 
 const beVietnam = Be_Vietnam_Pro({
   subsets: ["latin", "vietnamese"],
@@ -26,7 +27,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className={beVietnam.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <RegisterServiceWorker />
+      </body>
     </html>
   )
 }

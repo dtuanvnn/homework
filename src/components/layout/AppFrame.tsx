@@ -35,7 +35,7 @@ import AppShell from "./AppShell"
 
 import { navFor, type NavCounts, type TabId } from "./nav-config"
 
-import { MODE_HOME, parentPaths, TAB_PATHS, resolveRoute } from "./routes"
+import { MODE_HOME, offlinePath, parentPaths, takeRouteId, TAB_PATHS, resolveRoute } from "./routes"
 
 import type { AppMode, Assignment, ChildOption, ExerciseSet, Student } from "@/lib/types"
 
@@ -117,13 +117,15 @@ export default function AppFrame({
 
   const navigate = useCallback(
     (path: Route) => {
-      const go = () => router.push(path)
+      // No network in student mode: the service worker serves the offline screen (downloaded work only).
+      const go = () =>
+        mode === "student" && !navigator.onLine ? window.location.assign(offlinePath(takeRouteId(path) ?? undefined)) : router.push(path)
 
       if (leaveGuard.current) leaveGuard.current(go)
       else go()
     },
 
-    [router],
+    [router, mode],
   )
 
   useEffect(() => {

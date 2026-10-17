@@ -1,6 +1,6 @@
 import { syncOfflineAttempt } from "@/server/actions/offline"
 import { toPayload } from "./outbox"
-import { deleteDraft, deleteOutbox, listOutbox, notifyOfflineChanged, putOutbox } from "./store"
+import { deleteDraft, deleteOutbox, deletePackEntry, listOutbox, notifyOfflineChanged, putOutbox } from "./store"
 
 /** Refusals that a new PIN or an unlock fixes: keep the item and ask for the PIN. */
 const AUTH_ERRORS = new Set(["Cần mã PIN để tiếp tục.", "Tài khoản đang tạm khoá."])
@@ -25,6 +25,8 @@ async function flush(studentId: string) {
     if (res.ok) {
       await deleteOutbox(item.clientId)
       await deleteDraft(studentId, item.assignmentId)
+      // Handed in: the next download brings it back only if a retry is allowed.
+      await deletePackEntry(studentId, item.assignmentId)
       sent++
       continue
     }
