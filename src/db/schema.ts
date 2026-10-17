@@ -175,9 +175,18 @@ export const attempts = pgTable(
     feedback: text(),
     /** Parent allowed a second attempt after grading this one. */
     retryAllowed: boolean("retry_allowed").notNull().default(true),
+    /** The device's id for an offline hand-in, so a repeated sync finds this attempt. */
+    offlineId: uuid("offline_id"),
+    /** Handed in on the device without network and synced later. */
+    submittedOffline: boolean("submitted_offline").notNull().default(false),
+    /** Handed in by the expiry sweep (time ran out); an offline copy may still replace its answers. */
+    autoSettled: boolean("auto_settled").notNull().default(false),
+    /** The set was edited between download and the offline hand-in, so the parent grades it. */
+    offlineSetChanged: boolean("offline_set_changed").notNull().default(false),
   },
   (t) => [
     uniqueIndex("attempts_assignment_no_idx").on(t.assignmentId, t.attemptNo),
+    uniqueIndex("attempts_offline_id_idx").on(t.offlineId),
     check("attempt_no_range", sql`${t.attemptNo} between 1 and 2`),
   ],
 ).enableRLS()
