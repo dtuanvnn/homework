@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { planPackUpdate, type PackEntry, type PackResponse } from "./pack"
+import type { LocalDraft } from "./drafts"
+import { planPackUpdate, staleDrafts, type PackEntry, type PackResponse } from "./pack"
 
 type Incoming = PackResponse["entries"][number]
 
@@ -34,5 +35,22 @@ describe("planPackUpdate", () => {
     const plan = planPackUpdate([stored("a"), stored("old")], [incoming("a", "v2"), incoming("new")], new Set())
     expect(plan.put.map((e) => e.assignmentId)).toEqual(["a", "new"])
     expect(plan.remove).toEqual(["old"])
+  })
+})
+
+const draft = (assignmentId: string, attemptNo: number, origin: "server" | "device" = "server"): LocalDraft => ({
+  studentId: "st", assignmentId, attemptNo, origin, responses: {}, activeSeconds: 0, startedAtClient: null, timed: null, setVersion: "s1", updatedAt: 1,
+})
+
+describe("staleDrafts", () => {
+  it("drops drafts of an attempt the server has moved past", () => {
+    expect(staleDrafts([draft("a", 1)], [{ ...incoming("a"), attemptNo: 2 }], new Set())).toEqual(["a"])
+    expect(staleDrafts([draft("a", 1)], [incoming("a")], new Set())).toEqual([])
+  })
+
+  it("drops server-owned drafts of work no longer open, keeps device work and queued hand-ins", () => {
+    expect(staleDrafts([draft("gone", 1)], [], new Set())).toEqual(["gone"])
+    expect(staleDrafts([draft("mine", 1, "device")], [], new Set())).toEqual([])
+    expect(staleDrafts([draft("queued", 1)], [], new Set(["queued"]))).toEqual([])
   })
 })

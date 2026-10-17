@@ -106,7 +106,11 @@ export function useWorkAdapter(p: {
         s.serverDraft = true
         return "server"
       }
-      if (out.kind === "server" && out.expired) props.current.onExpired(out.error)
+      if (out.kind === "server" && out.expired) {
+        // Handed in on the server already: the device copy is finished.
+        await deleteDraft(props.current.studentId, assignmentId).catch(() => {})
+        props.current.onExpired(out.error)
+      }
       if (out.kind === "network") return local ? "local" : false
       return false
     },
@@ -121,7 +125,10 @@ export function useWorkAdapter(p: {
           await deleteDraft(studentId, assignmentId).catch(() => {})
           return { graded: out.value.graded, attemptId: out.value.attemptId }
         }
-        if (out.kind === "server") return { error: out.error, expired: out.expired }
+        if (out.kind === "server") {
+          if (out.expired) await deleteDraft(studentId, assignmentId).catch(() => {})
+          return { error: out.error, expired: out.expired }
+        }
       }
       const now = correctedNow(s.offset)
       try {

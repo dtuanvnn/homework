@@ -1,8 +1,8 @@
 import { getOfflinePack } from "@/server/actions/offline"
 import { offsetFrom } from "./drafts"
-import { planPackUpdate, type PackEntry } from "./pack"
+import { planPackUpdate, staleDrafts, type PackEntry } from "./pack"
 import {
-  clearPack, deletePackEntry, getImage, listDrafts, listOutbox, listPack, notifyOfflineChanged, putImage, putPackEntry, setMeta,
+  clearPack, deleteDraft, deletePackEntry, getImage, listDrafts, listOutbox, listPack, notifyOfflineChanged, putImage, putPackEntry, setMeta,
 } from "./store"
 
 /*
@@ -38,8 +38,12 @@ async function download(studentId: string): Promise<void> {
     setMeta("lastStudentName", pack.studentName),
   ])
 
-  const [stored, drafts, outbox] = await Promise.all([listPack(studentId), listDrafts(studentId), listOutbox(studentId)])
-  const busy = new Set([...drafts.map((d) => d.assignmentId), ...outbox.map((o) => o.assignmentId)])
+  const [stored, allDrafts, outbox] = await Promise.all([listPack(studentId), listDrafts(studentId), listOutbox(studentId)])
+  const queued = new Set(outbox.map((o) => o.assignmentId))
+  const stale = new Set(staleDrafts(allDrafts, pack.entries, queued))
+  await Promise.all([...stale].map((id) => deleteDraft(studentId, id)))
+  const drafts = allDrafts.filter((d) => !stale.has(d.assignmentId))
+  const busy = new Set([...drafts.map((d) => d.assignmentId), ...queued])
   const { put, remove } = planPackUpdate(stored, pack.entries, busy)
   await Promise.all(remove.map((id) => deletePackEntry(studentId, id)))
 
@@ -55,7 +59,7 @@ async function download(studentId: string): Promise<void> {
     const saved: PackEntry = { ...entry, questions, studentId, complete }
     await putPackEntry(saved)
   }
-  if (put.length || remove.length) notifyOfflineChanged()
+  if (put.length || remove.length || stale.size) notifyOfflineChanged()
 }
 
 async function saveImage(path: string, url: string | undefined): Promise<boolean> {

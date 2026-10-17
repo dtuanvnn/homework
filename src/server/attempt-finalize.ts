@@ -102,6 +102,8 @@ export async function settleAttempt(a: { id: string; setId: string; startedAt: D
     responses: "saved",
     submittedAt: deadlineOf(a.startedAt, a.timeLimitMinutes),
     durationSeconds: a.timeLimitMinutes * 60,
+    // An offline copy of this attempt may still arrive and replace these answers (see syncOfflineAttempt).
+    autoSettled: true,
   })
 }
 

@@ -52,6 +52,13 @@ describe("resolveOfflineTimes", () => {
     expect(late.late).toBe(true)
   })
 
+  it("ignores a deadline from the device when the server knows the attempt", () => {
+    const tampered = { ...base, timeLimitMinutes: 20, existingStartedAt: at("10:00:00"), timed: { deadlineMs: ms("10:50:00"), source: "server" as const } }
+    const r = resolveOfflineTimes({ ...tampered, submittedAtClient: ms("10:30:00") })
+    expect(r.submittedAt).toEqual(at("10:20:00"))
+    expect(r.durationSeconds).toBe(1200)
+  })
+
   it("untimed merges active seconds", () => {
     expect(resolveOfflineTimes({ ...base, existingDurationSeconds: 100, activeSeconds: 90 }).durationSeconds).toBe(100)
     expect(resolveOfflineTimes({ ...base, existingDurationSeconds: 100, activeSeconds: 400 }).durationSeconds).toBe(400)
@@ -103,7 +110,21 @@ describe("decideSync", () => {
   it("refuses closed otherwise", () => {
     expect(decideSync({ ...input, canTakeNow: false })).toEqual({ kind: "refuse", reason: "closed" })
     const used = [attempt({ submittedAt: at("10:20:00"), gradedBy: "auto" })]
-    expect(decideSync({ ...input, maxAttempts: 1, attempts: used })).toEqual({ kind: "refuse", reason: "closed" })
-    expect(decideSync({ ...input, attempts: used, canTakeNow: false })).toEqual({ kind: "refuse", reason: "closed" })
+    expect(decideSync({ ...input, attemptNo: 2, maxAttempts: 1, attempts: used })).toEqual({ kind: "refuse", reason: "closed" })
+  })
+
+  it("treats a resend of an attempt handed in online (reply lost) as already handed in", () => {
+    for (const gradedBy of [null, "auto"] as const) {
+      const done = [attempt({ submittedAt: at("10:20:00"), gradedBy })]
+      expect(decideSync({ ...input, attempts: done })).toEqual({ kind: "already-synced", attemptId: "a1" })
+    }
+  })
+
+  it("never turns an old hand-in into a new attempt", () => {
+    const two = [attempt({ submittedAt: at("10:20:00"), gradedBy: "parent" }), attempt({ id: "a2", attemptNo: 2 })]
+    // An attempt-1 copy must not land in the open attempt-2 draft.
+    expect(decideSync({ ...input, attemptNo: 1, attempts: two })).toEqual({ kind: "already-synced", attemptId: "a1" })
+    // An attempt number that skips ahead is refused.
+    expect(decideSync({ ...input, attemptNo: 2 })).toEqual({ kind: "refuse", reason: "closed" })
   })
 })

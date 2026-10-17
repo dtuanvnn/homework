@@ -43,7 +43,8 @@ export function resolveOfflineTimes(i: OfflineTimesInput): OfflineTimes {
   if (limit === null) {
     return { startedAt, submittedAt: clamped, durationSeconds: mergeActiveSeconds(i.existingDurationSeconds, i.activeSeconds), late: false }
   }
-  const deadline = i.timed?.source === "server" ? i.timed.deadlineMs : deadlineOf(startedAt, limit).getTime()
+  // The server's own deadline whenever it knows the attempt; the device's only for a clock it started itself.
+  const deadline = i.existingStartedAt || i.timed?.source !== "server" ? deadlineOf(startedAt, limit).getTime() : i.timed.deadlineMs
   const late = clamped.getTime() > deadline + SUBMIT_GRACE_SECONDS * 1000
   const submittedAt = new Date(Math.max(Math.min(clamped.getTime(), deadline), startedAt.getTime()))
   const durationSeconds = Math.min(Math.floor((submittedAt.getTime() - startedAt.getTime()) / 1000), limit * 60)
@@ -78,15 +79,18 @@ export function decideSync(i: {
 }): SyncTarget {
   const synced = i.attempts.find((a) => a.offlineId === i.clientId)
   if (synced) return { kind: "already-synced", attemptId: synced.id }
-  const latest = i.attempts.at(-1)
-  if (latest && !latest.submittedAt) return { kind: "use-draft", attemptId: latest.id }
-  // The timer handed this attempt in with the answers the server had while the iPad was offline.
-  if (latest && latest.autoSettled && latest.attemptNo === i.attemptNo) {
-    return latest.gradedBy === null || latest.gradedBy === "auto"
-      ? { kind: "replace-auto-settled", attemptId: latest.id }
+  // Always the attempt the device worked on, never a later or earlier one.
+  const own = i.attempts.find((a) => a.attemptNo === i.attemptNo)
+  if (own && !own.submittedAt) return { kind: "use-draft", attemptId: own.id }
+  if (own?.autoSettled) {
+    // The timer handed it in with the answers the server had while the iPad was offline.
+    return own.gradedBy === null || own.gradedBy === "auto"
+      ? { kind: "replace-auto-settled", attemptId: own.id }
       : { kind: "refuse", reason: "graded-by-parent" }
   }
-  const attemptNo = (latest?.attemptNo ?? 0) + 1
-  if (i.canTakeNow && attemptNo <= i.maxAttempts) return { kind: "create", attemptNo }
+  // Handed in online already (the reply was lost before the device queued it).
+  if (own) return { kind: "already-synced", attemptId: own.id }
+  const next = (i.attempts.at(-1)?.attemptNo ?? 0) + 1
+  if (i.attemptNo === next && i.canTakeNow && next <= i.maxAttempts) return { kind: "create", attemptNo: next }
   return { kind: "refuse", reason: "closed" }
 }

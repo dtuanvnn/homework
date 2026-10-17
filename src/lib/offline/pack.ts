@@ -1,4 +1,5 @@
 import type { SubjectId } from "@/lib/types"
+import type { LocalDraft } from "./drafts"
 import type { TakeQuestion } from "@/lib/views/student"
 
 /** One downloaded assignment: everything the take screen needs without network (no answer keys). */
@@ -34,6 +35,22 @@ export interface PackResponse {
   studentName: string
   serverNow: string
   entries: Omit<PackEntry, "studentId" | "complete">[]
+}
+
+/**
+ * Device drafts a fresh pack shows to be finished (assignment ids): the server
+ * has moved past their attempt, or work it owned is no longer open. Drafts with
+ * a queued hand-in and work started on the device (not on the server yet) stay.
+ */
+export function staleDrafts(drafts: LocalDraft[], incoming: PackResponse["entries"], queued: Set<string>): string[] {
+  const byId = new Map(incoming.map((e) => [e.assignmentId, e]))
+  return drafts
+    .filter((d) => {
+      if (queued.has(d.assignmentId)) return false
+      const entry = byId.get(d.assignmentId)
+      return entry ? entry.attemptNo > d.attemptNo : d.origin === "server"
+    })
+    .map((d) => d.assignmentId)
 }
 
 /**

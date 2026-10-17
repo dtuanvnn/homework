@@ -126,3 +126,29 @@ test("retry of a lost sync reply is idempotent", async ({ page, context }, testI
   await expect.poll(() => readOutbox(page), { timeout: 20_000 }).toEqual([])
   expect(await attemptsOf(assignmentId)).toEqual([{ attempt_no: 1, submitted: true, submitted_offline: true, score: 10, answered: 2 }])
 })
+
+test("time runs out on the server while offline: the offline answers replace the timer's hand-in", async ({ page, context }, testInfo) => {
+  const title = `Offline hết giờ ${testInfo.project.name} ${Date.now()}`
+  const assignmentId = await assign(await createSet(title), 5)
+
+  await open(page, `/student/assignments/${assignmentId}/do`)
+  await page.getByRole("dialog", { name: `Bắt đầu: ${title}` }).getByRole("button", { name: "Bắt đầu" }).click()
+  const take = takeScreen(page, title)
+  await take.getByRole("radio", { name: /56/ }).click()
+  await expect(take.getByText("Đã lưu")).toBeVisible()
+
+  await context.setOffline(true)
+  await take.getByRole("button", { name: "Câu tiếp", exact: true }).click()
+  await take.getByRole("radio", { name: /54/ }).click()
+  await take.getByRole("button", { name: "Xem lại", exact: true }).click()
+  await take.getByRole("button", { name: "Nộp bài" }).first().click()
+  await page.getByRole("dialog", { name: "Nộp bài nhé?" }).getByRole("button", { name: "Nộp bài" }).click()
+  await expect(page.getByText("Đã nộp — sẽ gửi khi có mạng")).toBeVisible()
+
+  // Meanwhile the server's clock ran out: its sweep hands the attempt in with the one answer it had.
+  await sql(`update attempts set started_at = now() - interval '10 minutes' where assignment_id = $1`, [assignmentId])
+
+  await context.setOffline(false)
+  await expect(page.getByText("Đã gửi 1 bài")).toBeVisible({ timeout: 20_000 })
+  expect(await attemptsOf(assignmentId)).toEqual([{ attempt_no: 1, submitted: true, submitted_offline: true, score: 10, answered: 2 }])
+})
