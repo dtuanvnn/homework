@@ -19,6 +19,8 @@ export interface QueueAttempt {
   score: number | null
   feedback: string | null
   retryAllowed: boolean
+  /** Handed in on the child's device without network, synced later. */
+  submittedOffline?: boolean
 }
 
 export interface QueueAssignment {
@@ -61,6 +63,8 @@ export interface GradingQueueItem {
   feedback: string | null
   /** Graded latest attempt whose second try is allowed but not started yet. */
   retryPending: boolean
+  /** "Nộp offline": handed in without network and synced later. */
+  submittedOffline: boolean
 }
 
 /** Submitted attempts, newest submission first. */
@@ -98,6 +102,7 @@ export function buildGradingQueue(
         score: graded ? t.score : null,
         feedback: t.feedback,
         retryPending: graded && t.attemptNo === latestNo && t.retryAllowed && t.attemptNo < assignment.maxAttempts,
+        submittedOffline: t.submittedOffline ?? false,
       })
     }
   }
@@ -136,6 +141,10 @@ export interface GradingDetail {
   retryUsed: boolean
   answers: GradingAnswer[]
   scans: Attachment[]
+  /** "Nộp offline": handed in without network and synced later. */
+  submittedOffline: boolean
+  /** The set was edited after the child downloaded it, so nothing was auto-graded. */
+  offlineSetChanged: boolean
 }
 
 /** Points the parent can pick for a question: 0 … max in quarter (≤ 2 points) or half steps. */

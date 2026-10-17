@@ -47,6 +47,11 @@ export default function Grading({ items, now }: { items: GradingQueueItem[]; now
               <Badge variant="outline" className={cn("text-xs", s.attemptNo === 2 ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-slate-50 text-slate-600")}>
                 Lần {s.attemptNo}
               </Badge>
+              {s.submittedOffline && (
+                <Badge variant="outline" className="border-sky-200 bg-sky-50 text-xs text-sky-700">
+                  Nộp offline
+                </Badge>
+              )}
             </div>
             <h3 className="font-semibold leading-snug text-slate-900 md:text-lg">{s.title}</h3>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">

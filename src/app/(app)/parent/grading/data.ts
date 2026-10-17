@@ -64,5 +64,7 @@ export async function loadGradingDetail(attemptId: string): Promise<GradingDetai
       comment: a.comment,
     })),
     scans,
+    submittedOffline: attempt.submittedOffline,
+    offlineSetChanged: attempt.offlineSetChanged,
   }
 }
