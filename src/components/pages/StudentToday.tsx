@@ -19,6 +19,8 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAppNavigation } from "@/components/layout/AppFrame"
+import { OfflineChip } from "@/components/offline/OfflineBanner"
+import { useOffline } from "@/components/offline/OfflineSync"
 import { studentPaths } from "@/components/layout/routes"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
@@ -45,6 +47,7 @@ export default function StudentToday({
 }: TodayView & { studentName: string; stars: number; celebrations: Celebration[] }) {
   const reduced = useReducedMotion()
   const { navigate } = useAppNavigation()
+  const { pending } = useOffline()
   const remaining = items.filter((i) => !isDone(i))
   const allDone = remaining.length === 0
   const celebrateDone = allDone && items.length > 0
@@ -58,6 +61,13 @@ export default function StudentToday({
   const action = (item: TodayItem) => <Press>{actionButton(item)}</Press>
   const actionButton = (item: TodayItem) => {
     const big = "h-14 w-full rounded-2xl text-lg font-bold [&_svg]:size-6"
+    if (pending.has(item.id))
+      return (
+        <Button disabled className={cn(big, "bg-violet-100 text-violet-700 opacity-100 disabled:opacity-100")}>
+          <Hourglass />
+          Đã nộp – chờ gửi khi có mạng
+        </Button>
+      )
     if (item.status === "submitted")
       return (
         <Button disabled className={cn(big, "bg-violet-100 text-violet-700 opacity-100 disabled:opacity-100")}>
@@ -194,6 +204,7 @@ export default function StudentToday({
                       {item.overdue && <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-sm font-bold text-red-700">Trễ hạn</span>}
                       {item.attempt === 2 && <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-sm font-bold text-indigo-700">Lần 2</span>}
                       {item.timeLimit && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-sm font-bold text-amber-800">⏱ {item.timeLimit} phút</span>}
+                      <OfflineChip assignmentId={item.id} mode={item.mode} />
                     </div>
                     <h3 className="mt-1 text-xl font-extrabold leading-snug text-slate-900 md:text-2xl">{item.title}</h3>
                     <p className="mt-1 flex flex-wrap items-center gap-x-3 text-base text-slate-600">

@@ -168,4 +168,15 @@ test("time runs out while offline: the work is handed in on the device and sent 
   // No network: the hand-in waits in the device's queue.
   await expect(page.getByText("Đã nộp — sẽ gửi khi có mạng")).toBeVisible()
   await expect(page).toHaveURL(/\/do$/)
+
+  // Back online: the queued hand-in is sent and graded on the server, answers kept.
+  await context.setOffline(false)
+  await expect(page.getByText("Đã gửi 1 bài")).toBeVisible({ timeout: 20_000 })
+  const [attempt] = await sql<{ submitted_offline: boolean; submitted: boolean; answered: number }>(
+    `select a.submitted_offline, a.submitted_at is not null as submitted,
+            (select count(*)::int from answers w where w.attempt_id = a.id and w.response is not null) as answered
+       from attempts a where a.assignment_id = $1`,
+    [assignmentId],
+  )
+  expect(attempt).toEqual({ submitted_offline: true, submitted: true, answered: 1 })
 })

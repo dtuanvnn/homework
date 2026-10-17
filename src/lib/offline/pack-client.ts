@@ -43,13 +43,10 @@ async function download(studentId: string): Promise<void> {
   const { put, remove } = planPackUpdate(stored, pack.entries, busy)
   await Promise.all(remove.map((id) => deletePackEntry(studentId, id)))
 
-  let math = false
   for (const entry of put) {
-    if (entry.subject === "toan") math = true
     let complete = true
     const questions = await Promise.all(
       entry.questions.map(async (q) => {
-        if ("math" in q && q.math) math = true
         const { imageUrl, ...rest } = q as typeof q & { imageUrl?: string }
         if (q.image && !(await saveImage(q.image.path, imageUrl))) complete = false
         return rest as typeof q
@@ -58,8 +55,6 @@ async function download(studentId: string): Promise<void> {
     const saved: PackEntry = { ...entry, questions, studentId, complete }
     await putPackEntry(saved)
   }
-  // The same chunk MathAnswerInput loads, so the service worker has it for offline math answers.
-  if (math) void import("@/components/take/MathField").catch(() => {})
   if (put.length || remove.length) notifyOfflineChanged()
 }
 

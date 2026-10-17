@@ -27,6 +27,10 @@ import { LibraryProvider } from "@/state/library-store"
 
 import NoStudents from "@/components/students/NoStudents"
 
+import OfflineBanner from "@/components/offline/OfflineBanner"
+
+import OfflineSync from "@/components/offline/OfflineSync"
+
 import AppShell from "./AppShell"
 
 import { navFor, type NavCounts, type TabId } from "./nav-config"
@@ -180,7 +184,16 @@ export default function AppFrame({
                 route.parentPath ? () => navigate(route.parentPath!) : undefined
               }
             >
-              {showEmptyState ? <NoStudents now={now} /> : children}
+              {showEmptyState ? (
+                <NoStudents now={now} />
+              ) : mode === "student" ? (
+                <OfflineSync studentId={student?.id ?? null} refreshKey={now}>
+                  <OfflineBanner />
+                  {children}
+                </OfflineSync>
+              ) : (
+                children
+              )}
             </AppShell>
             {/* Phone: keep toasts below the app bar so they never cover the header buttons. */}
             <Toaster position="top-center" mobileOffset={{ top: "calc(env(safe-area-inset-top) + 72px)" }} />
