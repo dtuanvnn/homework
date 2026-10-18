@@ -322,6 +322,63 @@ SOUND:
 
 ---
 
+## Prompt 16 — Phụ huynh: Tạo bộ từ vựng (Flashcard)
+
+> Prompt 16–18 viết sau khi app đã chuyển sang Next.js. Bản export nằm ở `design/figma-flashcard/`, thiết kế ở `docs/superpowers/specs/2026-10-19-vocab-flashcard-design.md`. Khi code, bước "Viết từ" **ẩn hẳn từ** (khác bản export).
+
+```
+Add a NEW exercise format "Từ vựng (Flashcard)" for English vocabulary, separate from the normal question-based exercise sets. It is used for the word lists of each unit in the textbook "Oxford Discovery 2". Subject is always Tiếng Anh (green-500, icon "Languages"); add a second icon "Layers" to mark flashcard sets.
+
+1) In the Library "+ Thêm bài tập" menu add a 4th option "Từ vựng (Flashcard)" with the Layers icon. In the library grid, flashcard sets show a "Flashcard" badge and "12 từ" instead of "12 câu", e.g. "Unit 3: Where Do Animals Live? – Từ mới".
+
+2) Build the "Tạo bộ từ vựng" page:
+- Fields: Tên bộ (e.g. "Unit 3 – Từ mới"), Sách (default "Oxford Discovery 2"), Unit (number), Chủ đề (text, e.g. "Where Do Animals Live?"), Lớp.
+- A large Textarea "Dán danh sách từ (mỗi dòng một từ)" with placeholder lines: "habitat / desert / rainforest / burrow / nest / ocean". Under it a live counter "Đã nhận 12 từ" and a note that duplicates and blank lines are removed.
+- Primary button with sparkle icon "AI viết giải thích".
+
+3) Review step (same page, below or as step 2): a list of word cards, one per word:
+- The word in large text (English), a small speaker button to preview pronunciation.
+- An editable field "Giải thích (tiếng Anh)" with a short, child-friendly English definition written by AI, e.g. habitat — "The natural home of an animal or plant.", burrow — "A hole in the ground that an animal digs to live in."
+- Buttons per card: "Viết lại" (regenerate with AI, sparkle), delete, drag handle to reorder.
+- A loading skeleton state while AI is writing ("AI đang viết giải thích… 5/12").
+- NO Vietnamese translation anywhere, NO pictures.
+- Sticky footer: "Lưu nháp", "Lưu & sẵn sàng", secondary "Giao bài này" (opens the existing Assign sheet).
+```
+
+## Prompt 17 — Học sinh: Học & viết từ (Flashcard)
+
+```
+Build the Student screens for a "Từ vựng (Flashcard)" assignment. Full-screen focus mode like the "Làm bài" screen, playful student style, large text, big touch targets (iPad + Apple Pencil first, phone also works). Top bar: close (X) with "Lưu và thoát?", title "Unit 3 – Từ mới", and a segmented switch between two phases: "1. Học từ" and "2. Viết từ".
+
+PHASE 1 — "Học từ" (study):
+- One big flashcard in the center (green accent). Front: the English word huge (e.g. "rainforest"). Tap the card to flip (3D flip animation) → back: the English definition "A thick forest with tall trees where it rains a lot."
+- Under the card, 3 pronunciation buttons that read the word aloud with the device's voice at different speeds: "🐇 Nhanh", "🐢 Chậm", "🐌 Rất chậm". The active button pulses while speaking.
+- Swipe left/right or "Từ trước" / "Từ tiếp" buttons, counter "Từ 4/12", a progress dot row.
+- At the end: "Con đã xem hết 12 từ! Sẵn sàng viết chưa?" with big button "Bắt đầu viết từ".
+
+PHASE 2 — "Viết từ" (handwriting test):
+- The word is HIDDEN. Show the English definition in a speech bubble, plus the same 3 speaker buttons (🐇 / 🐢 / 🐌) so the child can listen to the word.
+- Below: a wide handwriting area on lined paper (like a school notebook line, 2–3 lines high) for the child to write the word with Apple Pencil or finger. Small toolbar: pen, eraser, undo, "Xóa hết".
+- "Câu trước" / "Câu tiếp", counter "Từ 4/12", and a word-number grid in a Sheet showing written/not-written.
+- No right/wrong feedback while writing (the parent grades later).
+- Last screen: summary "Đã viết 11/12 từ – còn 1 từ chưa viết" and big "Nộp bài" button with confirm dialog → success "Đã nộp! Bố mẹ sẽ chấm sớm nhé 📮".
+- Must also look fine with no internet (show the small existing offline banner).
+```
+
+## Prompt 18 — Phụ huynh: Chấm bài viết từ
+
+```
+Build the Parent grading screen for a submitted "Từ vựng (Flashcard)" attempt (opened from the "Chấm bài" queue, where it shows "Unit 3 – Từ mới · 12 từ viết tay · chờ chấm").
+
+- A grid of rows (1 column on phone, 2 on iPad): each row shows the correct word in green ("rainforest"), its definition in small grey text, and next to it the child's HANDWRITING image (lined paper snippet, tap to zoom). Two big toggle buttons per row: "✓ Đúng" / "✗ Sai". Optional quick comment chips: "Sai chính tả", "Thiếu chữ", "Viết chưa rõ".
+- Rows the child left blank are marked "Chưa viết" and default to Sai.
+- Top: a button "Đánh dấu tất cả đúng" and a filter "Tất cả / Chưa chấm / Sai".
+- Footer: live score "Đúng 10/12 từ · 8,3/10", "Nhận xét chung" textarea, toggle "Cho phép làm lại lần 2", primary "Hoàn tất chấm bài".
+- On the Student "Kết quả" screen for this assignment, list the wrong words with the correct spelling and a speaker button so the child can practise them again.
+```
+
+---
+
 ## Đưa lên GitHub
 
 1. Trong Figma Make, nếu có tính năng kết nối **GitHub** (tùy gói Figma): kết nối tài khoản → tạo repo mới, ví dụ `homework-hub` → push.
