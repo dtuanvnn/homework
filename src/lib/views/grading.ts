@@ -3,6 +3,7 @@
  * pages feed them database rows, tests feed them plain objects.
  */
 import { chosenOptions, correctOptions } from "../choice"
+import { isFlashcardSet } from "../flashcard"
 import { OPTION_LETTERS } from "../questions"
 import type { EssayValue, Response } from "../grading"
 import { inkSchema, isInkEmpty, type Ink } from "../ink"
@@ -66,6 +67,8 @@ export interface GradingQueueItem {
   retryPending: boolean
   /** "Nộp offline": handed in without network and synced later. */
   submittedOffline: boolean
+  /** A vocabulary word list written by hand (every answer is tu-vung). */
+  flashcard: boolean
 }
 
 /** Submitted attempts, newest submission first. */
@@ -104,6 +107,7 @@ export function buildGradingQueue(
         feedback: t.feedback,
         retryPending: graded && t.attemptNo === latestNo && t.retryAllowed && t.attemptNo < assignment.maxAttempts,
         submittedOffline: t.submittedOffline ?? false,
+        flashcard: isFlashcardSet(rows),
       })
     }
   }

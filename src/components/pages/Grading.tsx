@@ -88,7 +88,9 @@ export default function Grading({ items, now }: { items: GradingQueueItem[]; now
           <div className="flex flex-col gap-3 border-t bg-amber-50/40 px-4 py-3 sm:flex-row sm:items-center md:px-5">
             <div className="flex-1 space-y-1.5">
               <p className="text-sm text-slate-700">
-                {s.mode === "paper" && s.autoCorrect + s.autoWrong === 0 ? (
+                {s.flashcard ? (
+                  <span className="font-semibold">{s.totalQuestions} từ viết tay · chờ chấm</span>
+                ) : s.mode === "paper" && s.autoCorrect + s.autoWrong === 0 ? (
                   <span className="font-semibold">Chấm từ ảnh scan: {s.ungraded} câu</span>
                 ) : (
                   <>
