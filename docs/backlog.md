@@ -31,6 +31,52 @@ Phụ thuộc: bài viết tay lưu dạng nét bút (`EssayValue.ink`, `lib/ink
 - Chỉ giao diện gom theo bài: take, review/editor, grading, result, Reports (điểm theo bài khi cần).
 - Không áp dụng cho bộ flashcard.
 
+**Edge case (rà code 2026-10-19).** Mỗi dòng: tình huống → cách xử lý đề xuất.
+
+*Lưu và dữ liệu*
+- `question-schema.ts` dùng zod object thường, **tự bỏ key lạ** → `group` bị xoá khi `saveExerciseSet` và khi "Giải đáp án" (`ai-solve.ts:33` trả câu đã parse, client thay cả câu). Phải thêm `group` vào schema trước tiên, và client giải đáp án chỉ ghép trường đáp án/lời giải, giữ nguyên `group`.
+- Hình của đề chung (`group.image`): kiểm tra đã upload, dọn hình mồ côi (`library.ts`, `figures.ts` chỉ xem `image`/`solutionImage`), ký URL (`question-images.ts`), gói offline (chỉ tải blob theo đường dẫn hình câu) đều bỏ sót → hình bị **xoá nhầm** khi lưu. Gom việc liệt kê đường dẫn hình vào một hàm dùng chung.
+- Nhóm không liền nhau / mồ côi: xoá, kéo, "Gộp với câu trên" trong editor/review có thể tách bài làm hai khúc, hoặc để bài chỉ còn một câu con. Kiểm tra khi lưu: câu cùng `group.id` phải liền nhau; bài còn 1 câu con vẫn hợp lệ; bài 0 câu con chỉ hợp lệ khi là bài đọc.
+- Đề chung lặp lại trên mọi câu con (nếu lưu `group` trong từng câu): sửa đề chung ở một câu phải ghi cho cả bài; snapshot từng câu chép đề chung (dữ liệu to hơn, chấp nhận được). Nếu chọn cột `groups` trên `exercise_sets` thì snapshot cần chép riêng.
+- Sửa bộ đề sau khi đã giao: `withLaterAnswerKey` khớp theo id câu nên vẫn đúng; nhưng chia/gộp lại bài sau khi con đã làm thì kết quả cũ hiển thị theo nhóm lúc nộp (từ snapshot), không theo nhóm mới.
+- Offline: đổi nhóm/đề chung cũng phải bump `exercise_sets.updatedAt` (hiện chỉ `saveExerciseSet` làm) để `offline_set_changed` đúng.
+
+*Điểm*
+- Chia 1/3: `proportional()` và chấm tay (`actions/grading.ts:73`) làm tròn 0,01 → 3 câu đúng = 0,99/1; bước điểm chấm tay 0,25/0,5 (`views/grading.ts:156`) không bấm được 1/3. Câu con dùng điểm chính xác: đúng hết = đúng `points`, chấm tay chọn theo phần của câu (0, ½, đủ) hoặc nhập số; thanh tổng làm tròn 0,25 như hiện tại.
+- Huy hiệu 10 điểm (`badges.ts:36`, `score === 10`) và `starsFor`: sai số làm tròn không được làm mất điểm 10 → tính tổng bằng phân số hoặc làm tròn trước khi so.
+- Điểm bài không chia đều được kiểu thập phân (2 điểm / 3 câu) → hiển thị "≈0,67", tooltip/ghi chú ở editor.
+- Đề chỉ có bài đọc: tổng điểm 0 → `scoreOutOf10` trả 0 (con bị 0/10, không sao, không tính chuỗi ngày đúng hạn?). Cần trạng thái "Đã hoàn thành, không chấm điểm": không hiện điểm, không có sao điểm, vẫn tính chuỗi ngày, không cần phụ huynh chấm. `question-schema` đang bắt `points > 0`.
+- Đề có cả bài đọc lẫn câu hỏi: bài đọc 0 điểm không ảnh hưởng tổng; "Đã đọc" chưa bấm có chặn nộp không? Đề xuất: không chặn, chỉ nhắc như câu chưa trả lời.
+- Thêm/bớt câu con sau khi nhập điểm bài → chia lại tự động; câu con đã chỉnh điểm tay (nếu cho phép) thì giữ?
+
+*Làm bài*
+- Màn làm bài một câu mỗi trang ("Câu i/N", lưới 5 cột): đề chung phải hiện lại trên từng câu con của bài (khung cuộn), vị trí cuộn đoạn văn nên giữ khi chuyển câu trong cùng bài.
+- Điền chỗ trống: màn hiện ẩn prompt và hiện tiêu đề cố định cho `dien-cho-trong`; khi mỗi chỗ trống là một câu con, đoạn văn (đề chung) phải hiện với chỗ trống đang làm được tô sáng, các chỗ đã điền hiện giá trị.
+- Lưới tiến độ và "câu chưa làm" đếm theo câu con; bài đọc chưa bấm "Đã đọc" hiện là chưa xong. `isAnswered` coi dạng lạ là đã trả lời → phải thêm dạng `doc`.
+- Làm lại (lượt 2) làm lại toàn bộ câu, không chỉ câu sai → với bài đọc, có bắt bấm "Đã đọc" lại không? Đề xuất: giữ như lượt 1.
+- Đáp án chỉ lộ khi hết lượt (`answersRevealed`): đề chung không chứa đáp án nên luôn hiện; nhưng đoạn văn điền chỗ trống trong kết quả phải hiện đáp án đúng vào chỗ trống chỉ khi đã lộ.
+- Nút loa: đọc đề chung tiếng Việt nhưng thiết bị không có giọng `vi-VN` → ẩn nút, hiện thông báo; đang đọc thì chuyển câu/rời trang phải `stopSpeaking()`; offline vẫn chạy (Web Speech nội bộ).
+- Bài có giờ: không ảnh hưởng (nộp theo câu như cũ).
+
+*Chấm, kết quả, báo cáo*
+- Chấm tay, chấm AI và `mapPaperGrades` đánh số "Câu n" theo vị trí → phải dùng cùng cách đánh số liên tục với màn làm bài, kèm nhãn bài, để phụ huynh và AI không lệch số.
+- Bài làm giấy: AI chấm giấy cần biết bài nào gồm câu nào và đề chung; trang ảnh bài làm có thể chỉ ghi "Bài 3: a… b…" chứ không ghi số câu liên tục → prompt gửi cả nhãn bài + chữ cái gốc.
+- "Sai x/y câu" trong Reports (`analytics.ts:212`) và số câu trên thẻ bài tập (`ExerciseCard.tsx:112`, `OfflineApp.tsx:169`) đếm theo câu con → con số tăng so với đề giấy (10 bài thành 25 câu). Hiện "5 bài · 25 câu"?
+- Bài đọc không có kỹ năng/điểm: loại khỏi analytics độ chính xác.
+
+*AI*
+- Giải đáp án (`lib/ai/solve.ts:55`), chấm tự luận/giấy (`lib/ai/grading.ts:120,131`), gợi ý câu sai (`hints.ts:47`) chỉ gửi `q.prompt` + hình câu → **mất đoạn văn** nếu nó chỉ nằm trong `group`. Mọi prompt phải ghép đề chung (+ hình đề chung) trước câu con.
+- `leaksAnswer` chỉ so với `q.prompt`: đáp án có sẵn trong đoạn văn (câu hỏi đọc hiểu) sẽ bị coi là lộ và gợi ý bị lọc → nên so cả đề chung (từ có trong đoạn văn thì không tính là lộ).
+- Sinh đề (`ai-generate`) có thể sinh bài đọc + câu con: cần cùng schema nhóm, hoặc tạm thời chỉ sinh câu lẻ.
+
+*Quét đề*
+- Ghép bài qua trang: `mergeScanResults` chỉ nối theo thứ tự file, metadata lấy từ batch đầu; trang 2 có thể bắt đầu bằng câu con không có đề (`continues`), hoặc bằng phần cuối đoạn văn chưa có câu hỏi, hoặc AI không nhận ra là tiếp → review phải có "Gộp vào bài trên" / "Tách thành bài riêng".
+- Trang tiếp theo lặp lại nhãn bài ("Bài 3 (tiếp)") hoặc đề đánh số lại từ 1 (đề nhiều phần): ghép theo nhãn phải xét thứ tự, không ghép bài ở trang xa.
+- Batch quét lỗi một trang ở giữa → không ghép xuyên qua trang thiếu.
+- "Gộp với câu trên" hiện ghép prompt và giữ dạng của một câu → khác với "đưa vào bài"; cần cả hai.
+- Cắt hình đang gom theo box trùng nhau (`UploadFlow.tsx:110`); các câu con chung hình nên chuyển thành hình của đề chung thay vì lặp lại.
+- Đáp án/lời giải ở cuối tài liệu ("Tài liệu có sẵn lời giải") ghi theo "Bài 3: a) … b) …" → khớp theo nhãn bài + chữ cái, không theo số câu liên tục.
+
 ## Gợi ý tính năng khác (chưa chốt)
 
 - Ôn lại câu sai (lặp lại ngắt quãng, lấy từ `answers.question`).
