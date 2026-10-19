@@ -118,6 +118,8 @@ export interface ReviewItem {
   imageUrl?: string
   /** The child's handwritten essay pages (or a legacy drawing). */
   handwriting?: { ink?: Ink; drawing?: string }
+  /** Flashcard word (tu-vung): its spelling is shown with wrong answers even before answers are revealed. */
+  word?: string
 }
 
 export interface ResultView {
@@ -387,15 +389,18 @@ export function buildResultDetail(
     canRetry: latest?.id === attempt.id && state.canRetry,
     answersRevealed,
     hintsPending:
-      !answersRevealed && answers.some((a) => a.isCorrect === false && !a.hint && a.question.type !== "tu-luan" && a.question.answerStatus !== "missing"),
+      !answersRevealed && answers.some((a) => a.isCorrect === false && !a.hint && needsHint(a.question)),
     review: answers.map((row) => {
       const correct = row.isCorrect === true
+      // A word's spelling is no secret: the retry starts with study cards that show every word.
+      const word = row.question.type === "tu-vung" ? row.question.word : undefined
       return {
+        word,
         id: row.id,
         prompt: row.question.prompt,
         answer: answerText(row.question, row.response, attempt.mode),
         correct,
-        correctAnswer: correct || !answersRevealed ? undefined : correctAnswerText(row.question),
+        correctAnswer: correct || (!answersRevealed && !word) ? undefined : correctAnswerText(row.question),
         solution: answersRevealed ? row.question.solution : undefined,
         solutionImage: answersRevealed ? row.question.solutionImage : undefined,
         solutionImageUrl: answersRevealed ? row.question.solutionImageUrl : undefined,
@@ -407,6 +412,11 @@ export function buildResultDetail(
       }
     }),
   }
+}
+
+/** Wrong answers that get an AI hint while a retry is open: not essays, handwritten words or questions without a key. */
+export function needsHint(q: Question): boolean {
+  return q.type !== "tu-luan" && q.type !== "tu-vung" && q.answerStatus !== "missing"
 }
 
 function handwritingOf(response: Response | null): ReviewItem["handwriting"] {

@@ -25,6 +25,7 @@ import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 import HandwritingView from "@/components/ink/HandwritingView"
+import WordReview from "./WordReview"
 
 export const fmtScore = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 2 })
 
@@ -66,6 +67,7 @@ export default function ResultDetail({
   const s = SUBJECTS[r.subject]
   const wrong = r.review.filter((q) => !q.correct)
   const list = filter === "all" ? r.review : wrong
+  const flashcard = r.review.length > 0 && r.review.every((q) => q.word)
 
   // While a retry is open the answers stay hidden; wrong answers get AI hints, written once and saved.
   const [hints, setHints] = useState<Record<string, string>>({})
@@ -176,6 +178,7 @@ export default function ResultDetail({
       </div>}
 
       {/* Review */}
+      {flashcard ? <WordReview review={r.review} /> : (
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-extrabold text-slate-900">Xem lại từng câu</h2>
@@ -275,6 +278,7 @@ export default function ResultDetail({
           })}
         </motion.ol>
       </section>
+      )}
 
       {/* Bottom actions: sticky above the phone tab bar */}
       <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 rounded-3xl border bg-white/95 p-3 shadow-lg backdrop-blur md:bottom-4">
