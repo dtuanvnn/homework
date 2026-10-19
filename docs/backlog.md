@@ -19,3 +19,4 @@ Phụ thuộc: bài viết tay đã lưu dạng nét bút + ảnh PNG trên Stor
 - Tiếng Anh nghe/nói (TTS, ghi âm); Tiếng Việt chính tả nghe-viết; flashcard từ vựng.
 - Gắn bộ đề với bài học SGK; xuất PDF đề và báo cáo; hỏi AI về bài làm của con.
 - PWA + làm bài offline; nhiều học sinh; tách năm học khi lên lớp.
+- Format bài đọc (tiếng anh + tiếng việt) với scroll, trình bày đoạn văn, hoặc đoạn hội thoại. Có thể hỗ trợ đọc từng đoạn, với button loa.
