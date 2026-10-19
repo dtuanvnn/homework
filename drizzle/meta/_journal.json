@@ -50,6 +50,13 @@
       "when": 1792231355040,
       "tag": "0006_busy_famine",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792391649929,
+      "tag": "0007_exercise_set_format",
+      "breakpoints": true
     }
   ]
 }

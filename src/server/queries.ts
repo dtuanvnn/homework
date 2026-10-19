@@ -54,6 +54,7 @@ export function toExerciseSet(row: SetRow, questionCount: number, timesAssigned:
     kind: row.kind,
     source: row.source,
     status: row.status,
+    format: row.format,
     timesAssigned,
     createdAt: row.createdAt.toISOString(),
   }

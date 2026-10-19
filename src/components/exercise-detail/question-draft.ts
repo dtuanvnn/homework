@@ -101,6 +101,8 @@ export function toDraft(q: Question): QuestionDraft {
       return { ...base, orderingText: q.tokens.join(' / ') }
     case 'tu-luan':
       return { ...base, rubric: q.rubric }
+    case 'tu-vung':
+      return { ...base, shortAnswer: q.word }
   }
 }
 
@@ -217,6 +219,8 @@ export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Qu
     }
     case 'tu-luan':
       return { ...base, type: 'tu-luan', rubric: d.rubric.trim() }
+    case 'tu-vung':
+      return { ...base, type: 'tu-vung', word: d.shortAnswer.trim() }
   }
 }
 

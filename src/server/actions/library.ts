@@ -5,6 +5,7 @@ import { refresh } from "next/cache"
 import { z } from "zod"
 import { db, schema } from "@/db"
 import { figureOwner, figurePaths, unusedFigures } from "@/lib/figures"
+import { checkSetFormat } from "@/lib/flashcard"
 import { editedQuestionSchema } from "@/lib/question-schema"
 import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
 import { runAction, type ActionResult } from "@/lib/action-result"
@@ -28,6 +29,7 @@ const setMetaSchema = z.object({
   kind: z.enum(["de-thi", "chu-de", "luyen-tap"]),
   source: z.enum(["thu-cong", "tai-len", "ai"]),
   status: z.enum(["nhap", "san-sang"]),
+  format: z.enum(["cau-hoi", "flashcard"]).default("cau-hoi"),
 })
 
 const newFileSchema = z.object({
@@ -89,6 +91,8 @@ export async function saveExerciseSet(payload: SavePayload): Promise<ActionResul
   return runAction(async () => {
     const ctx = await assertAccess("parent")
     const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
+    const formatError = checkSetFormat(set, qs)
+    if (formatError) throw new Error(formatError)
     const [existing] = await db.select({ householdId: exerciseSets.householdId }).from(exerciseSets).where(eq(exerciseSets.id, set.id))
     if (existing && existing.householdId !== ctx.householdId) throw new Error(NOT_FOUND)
     for (const f of newFiles) {
@@ -228,6 +232,8 @@ const newAssignmentSchema = z.object({
 })
 export type NewAssignment = z.input<typeof newAssignmentSchema>
 
+const FLASHCARD_WEB_ONLY = "Bộ từ vựng chỉ làm trên web."
+
 /** Time limits only apply to web work. */
 const limitFor = (i: { mode: "web" | "paper"; timeLimitMinutes?: number | null }) => (i.mode === "web" ? (i.timeLimitMinutes ?? null) : null)
 
@@ -238,6 +244,10 @@ async function insertAssignments(ctx: Context, items: NewAssignment[], studentId
   if (ids.some((id) => !children.has(id))) throw new Error("Không tìm thấy học sinh.")
   for (const item of parsed) {
     await assertSetInHousehold(ctx, item.setId)
+    if (item.mode === "paper") {
+      const [row] = await db.select({ format: exerciseSets.format }).from(exerciseSets).where(eq(exerciseSets.id, item.setId))
+      if (row?.format === "flashcard") throw new Error(FLASHCARD_WEB_ONLY)
+    }
     if (new Date(item.dueAt) <= new Date(item.availableFrom)) throw new Error("Hạn nộp phải sau thời điểm giao bài")
     const n = await db.$count(questions, eq(questions.setId, item.setId))
     if (n === 0) throw new Error("Hãy chọn bộ bài có ít nhất một câu hỏi.")
@@ -317,6 +327,10 @@ export async function updateAssignment(id: string, changes: AssignmentChanges): 
     if (!current) throw new Error("Không tìm thấy bài giao")
     const started = await db.$count(attempts, eq(attempts.assignmentId, id))
     if (started > 0 && c.mode !== current.mode) throw new Error("Con đã bắt đầu làm nên không đổi được hình thức.")
+    if (c.mode === "paper") {
+      const [set] = await db.select({ format: exerciseSets.format }).from(exerciseSets).where(eq(exerciseSets.id, current.setId))
+      if (set?.format === "flashcard") throw new Error(FLASHCARD_WEB_ONLY)
+    }
     if (c.maxAttempts < started) throw new Error(`Con đã làm ${started} lần nên không giảm số lần được.`)
     if (started > 0 && limitFor(c) !== current.timeLimitMinutes) throw new Error("Con đã bắt đầu làm nên không đổi được giới hạn thời gian.")
     await db

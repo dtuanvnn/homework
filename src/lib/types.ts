@@ -13,6 +13,9 @@ export type ExerciseSource = "thu-cong" | "tai-len" | "ai"
 
 export type ExerciseSetStatus = "nhap" | "san-sang"
 
+/** "flashcard": a word list (only `tu-vung` questions) studied on flip cards and written by hand. */
+export type ExerciseFormat = "cau-hoi" | "flashcard"
+
 export interface Student {
   id: string
   householdId: string
@@ -80,6 +83,7 @@ export interface ExerciseSet {
   kind: ExerciseKind
   source: ExerciseSource
   status: ExerciseSetStatus
+  format: ExerciseFormat
   timesAssigned: number
   createdAt: string // ISO date
 }
@@ -130,7 +134,7 @@ export interface SkillInsight {
 
 /* ---------- Questions ---------- */
 
-export type QuestionType = "trac-nghiem" | "dung-sai" | "dien-cho-trong" | "tra-loi-ngan" | "noi" | "sap-xep" | "tu-luan"
+export type QuestionType = "trac-nghiem" | "dung-sai" | "dien-cho-trong" | "tra-loi-ngan" | "noi" | "sap-xep" | "tu-luan" | "tu-vung"
 
 /** A figure cut out of a scanned page (or picked in the editor); `path` is a Storage object. */
 export interface QuestionImage {
@@ -222,7 +226,16 @@ export interface EssayQuestion extends QuestionBase {
   rubric: string
 }
 
-export type Question = MultipleChoiceQuestion | TrueFalseQuestion | FillBlankQuestion | ShortAnswerQuestion | MatchingQuestion | OrderingQuestion | EssayQuestion
+/**
+ * One word of a flashcard set: `prompt` is a short English explanation. The
+ * child writes `word` by hand from the explanation and its audio; the parent grades.
+ */
+export interface VocabQuestion extends QuestionBase {
+  type: "tu-vung"
+  word: string
+}
+
+export type Question = MultipleChoiceQuestion | TrueFalseQuestion | FillBlankQuestion | ShortAnswerQuestion | MatchingQuestion | OrderingQuestion | EssayQuestion | VocabQuestion
 
 export interface Attachment {
   id: string

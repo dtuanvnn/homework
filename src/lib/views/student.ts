@@ -13,7 +13,7 @@ import { attemptStars } from "@/lib/rewards/stars"
 import { streakRuns } from "@/lib/rewards/streak"
 import { answerAsRichText } from "@/lib/rich-text"
 import { essayDrawing, essayInk } from "@/lib/views/grading"
-import type { EssayQuestion, FillBlankQuestion, MultipleChoiceQuestion, Question, ShortAnswerQuestion, SubjectId, TrueFalseQuestion } from "@/lib/types"
+import type { EssayQuestion, FillBlankQuestion, MultipleChoiceQuestion, Question, ShortAnswerQuestion, SubjectId, TrueFalseQuestion, VocabQuestion } from "@/lib/types"
 import type { AnswerRecord, AssignmentRecord, AttemptRecord } from "@/server/queries"
 
 export type StudentStatus = "not-started" | "in-progress" | "submitted" | "graded"
@@ -331,6 +331,8 @@ export function answerText(q: Question, response: Response | null | undefined, m
       if (essay.drawing) return text ? `${text} (kèm hình vẽ)` : "(bài viết tay)"
       return text || NO_ANSWER
     }
+    case "tu-vung":
+      return essayInk(response) ? "(bài viết tay)" : NO_ANSWER
   }
 }
 
@@ -352,6 +354,8 @@ export function correctAnswerText(q: Question): string | undefined {
       return q.tokens.join(" ")
     case "tu-luan":
       return undefined
+    case "tu-vung":
+      return q.word
   }
 }
 
@@ -426,6 +430,8 @@ export type TakeQuestion =
   | Omit<Extract<Question, { type: "noi" }>, KeyInfo>
   | Omit<Extract<Question, { type: "sap-xep" }>, KeyInfo>
   | Omit<EssayQuestion, "rubric" | KeyInfo>
+  /** Keeps `word`: the device reads it aloud and shows it on the study cards (never while writing). */
+  | Omit<VocabQuestion, KeyInfo>
 
 function without<T extends object, K extends keyof T>(obj: T, key: K): Omit<T, K> {
   return Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key)) as Omit<T, K>

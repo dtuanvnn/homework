@@ -262,6 +262,8 @@ export function answerKey(q: Question): string {
       return q.tokens.join(" ")
     case "tu-luan":
       return q.rubric ? `(tự luận) ${q.rubric}` : "(tự luận)"
+    case "tu-vung":
+      return q.word
   }
 }
 
@@ -273,4 +275,5 @@ export const QUESTION_TYPE_NAMES: Record<QuestionType, string> = {
   noi: "nối",
   "sap-xep": "sắp xếp",
   "tu-luan": "tự luận",
+  "tu-vung": "từ vựng (viết tay)",
 }

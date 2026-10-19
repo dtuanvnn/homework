@@ -63,6 +63,7 @@ function correctResponse(q: Question): Response {
     case "noi": return Object.fromEntries(q.pairs.map((_, i) => [String(i), i]))
     case "sap-xep": return q.tokens.map((_, i) => i)
     case "tu-luan": return { text: "Em viết bài theo yêu cầu của đề." }
+    case "tu-vung": return { text: "" }
   }
 }
 
@@ -75,6 +76,7 @@ function wrongResponse(q: Question): Response {
     case "noi": return Object.fromEntries(q.pairs.map((_, i) => [String(i), i < 2 ? 1 - i : i]))
     case "sap-xep": return q.shuffled
     case "tu-luan": return { text: "Em chưa viết xong." }
+    case "tu-vung": return { text: "" }
   }
 }
 

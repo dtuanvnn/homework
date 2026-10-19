@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { gradeAttempt, gradeQuestion, scoreOutOf10, starsFor } from "./grading"
+import { newInk } from "./ink"
 import type { Question } from "./types"
 
 const base = { prompt: "", points: 1, skills: [] }
@@ -205,5 +206,21 @@ describe("gradeAttempt", () => {
     expect(result.score).toBeNull()
     expect(result.autoPoints).toBe(1)
     expect(result.totalPoints).toBe(3)
+  })
+})
+
+describe("tu-vung (handwritten word)", () => {
+  const vocab: Question = { id: "v", type: "tu-vung", word: "nest", prompt: "A bird's home made of twigs.", points: 1, skills: [] }
+  const strip = newInk("o-li", "strip")
+
+  it("is wrong when nothing was written", () => {
+    expect(gradeQuestion(vocab, undefined)).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    expect(gradeQuestion(vocab, { text: "", ink: strip })).toEqual({ isCorrect: false, pointsAwarded: 0 })
+    expect(gradeQuestion(vocab, { text: "" })).toEqual({ isCorrect: false, pointsAwarded: 0 })
+  })
+
+  it("waits for the parent when there is handwriting", () => {
+    const ink = { ...strip, pages: [{ strokes: [[100, 100, 5, 120, 110, 5]] }] }
+    expect(gradeQuestion(vocab, { text: "", ink })).toEqual({ isCorrect: null, pointsAwarded: null })
   })
 })

@@ -6,10 +6,11 @@
  * trac-nghiem → option index (option indexes when it has several correct
  * options, lib/choice.ts), dung-sai → boolean, dien-cho-trong → string per
  * blank, tra-loi-ngan → string, noi → { leftIndex: rightPairIndex },
- * sap-xep → token indexes in the chosen order, tu-luan → EssayValue.
+ * sap-xep → token indexes in the chosen order, tu-luan → EssayValue,
+ * tu-vung → EssayValue with empty text and the handwritten word as `ink`.
  */
 import { chosenOptions, correctOptions } from "./choice"
-import type { Ink } from "./ink"
+import { isInkEmpty, type Ink } from "./ink"
 import { mathAnswerMatches } from "./math-answer"
 import type { Question } from "./types"
 
@@ -83,6 +84,11 @@ const sameText = (expected: string, given: string) => normalizeText(given) === n
 
 export function gradeQuestion(q: Question, response: Response | undefined | null): QuestionGrade {
   if (q.type === "tu-luan") return NEEDS_PARENT
+  // A handwritten word: the parent reads it; nothing written counts as wrong.
+  if (q.type === "tu-vung") {
+    const ink = response && typeof response === "object" && !Array.isArray(response) ? (response as EssayValue).ink : undefined
+    return isInkEmpty(ink) ? WRONG : NEEDS_PARENT
+  }
   if (response === undefined || response === null) return WRONG
   // No answer key yet: the parent compares by hand.
   if (q.answerStatus === "missing") return typeof response === "string" && !response.trim() ? WRONG : NEEDS_PARENT

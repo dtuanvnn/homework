@@ -81,7 +81,7 @@ export function buildGradingQueue(
     for (const t of assignment.attempts) {
       if (!t.submittedAt) continue
       const rows = byAttempt.get(t.id) ?? []
-      const objective = rows.filter((r) => r.type !== "tu-luan" && r.isCorrect !== null)
+      const objective = rows.filter((r) => r.type !== "tu-luan" && r.type !== "tu-vung" && r.isCorrect !== null)
       const graded = t.gradedAt !== null
       items.push({
         attemptId: t.id,
@@ -197,6 +197,8 @@ export function correctAnswerText(q: Question): string {
       return q.tokens.join(" ")
     case "tu-luan":
       return q.rubric.trim() || "Phụ huynh tự đánh giá"
+    case "tu-vung":
+      return q.word
   }
 }
 
@@ -239,6 +241,8 @@ export function responseText(q: Question, response: Response | null | undefined)
       // A handwriting-only essay has no text; the handwriting is shown instead.
       return response.text?.trim() || (response.drawing || essayInk(response) ? "" : NO_ANSWER)
     }
+    case "tu-vung":
+      return essayInk(response) ? "" : NO_ANSWER
   }
 }
 

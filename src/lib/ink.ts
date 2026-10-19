@@ -4,6 +4,7 @@
  * server rasterizes for AI grading, so writing looks the same everywhere.
  *
  * A page is PAGE_W × PAGE_H units whatever the screen; renderers only scale.
+ * A "strip" (one word of a flashcard set) is PAGE_W × STRIP_H.
  * A stroke is a flat [x, y, p, x, y, p, …] of integers, p = pressure 0–10.
  */
 import { getStroke } from "perfect-freehand"
@@ -11,12 +12,15 @@ import { z } from "zod"
 
 export const PAGE_W = 1000
 export const PAGE_H = 700
+/** Height of a one-line strip, e.g. a handwritten word. */
+export const STRIP_H = 300
 export const MAX_PAGES = 10
 export const MAX_PRESSURE = 10
 const MAX_STROKES_PER_PAGE = 3000
 const MAX_POINTS_PER_STROKE = 4000
 
 export type Paper = "o-li" | "ke-ngang"
+export type InkSize = "strip"
 
 export interface InkPage {
   strokes: number[][]
@@ -26,7 +30,13 @@ export interface Ink {
   v: 1
   /** Kept with the ink so old work keeps the paper it was written on. */
   paper: Paper
+  /** Absent: notebook pages (PAGE_W × PAGE_H); "strip": PAGE_W × STRIP_H. */
+  size?: InkSize
   pages: InkPage[]
+}
+
+export function pageHeight(ink: { size?: InkSize }): number {
+  return ink.size === "strip" ? STRIP_H : PAGE_H
 }
 
 export const INK_COLOR = "#1e293b"
@@ -46,17 +56,23 @@ const strokeSchema = z
     return true
   }, "Nét viết không hợp lệ")
 
-export const inkSchema = z.object({
-  v: z.literal(1),
-  paper: z.enum(["o-li", "ke-ngang"]),
-  pages: z
-    .array(z.object({ strokes: z.array(strokeSchema).max(MAX_STROKES_PER_PAGE) }))
-    .min(1)
-    .max(MAX_PAGES),
-})
+export const inkSchema = z
+  .object({
+    v: z.literal(1),
+    paper: z.enum(["o-li", "ke-ngang"]),
+    size: z.literal("strip").optional(),
+    pages: z
+      .array(z.object({ strokes: z.array(strokeSchema).max(MAX_STROKES_PER_PAGE) }))
+      .min(1)
+      .max(MAX_PAGES),
+  })
+  .refine((ink) => {
+    const h = pageHeight(ink)
+    return h === PAGE_H || ink.pages.every((p) => p.strokes.every((s) => s.every((v, i) => i % 3 !== 1 || v <= h)))
+  }, "Nét viết không hợp lệ")
 
-export function newInk(paper: Paper): Ink {
-  return { v: 1, paper, pages: [{ strokes: [] }] }
+export function newInk(paper: Paper, size?: InkSize): Ink {
+  return size ? { v: 1, paper, size, pages: [{ strokes: [] }] } : { v: 1, paper, pages: [{ strokes: [] }] }
 }
 
 /** Ô li (4-ô-ly notebook) for the early grades, ruled lines once the child writes smaller. */
@@ -65,16 +81,16 @@ export function paperFor(grade: number): Paper {
 }
 
 /** Horizontal paper lines; ô li has three minor lines between main lines. */
-export function paperLines(paper: Paper): { y: number; main: boolean }[] {
+export function paperLines(paper: Paper, height = PAGE_H): { y: number; main: boolean }[] {
   const lines: { y: number; main: boolean }[] = []
   if (paper === "o-li") {
     const gap = 64
-    for (let y = 48; y < PAGE_H; y += gap) {
+    for (let y = 48; y < height; y += gap) {
       lines.push({ y, main: true })
-      for (let k = 1; k < 4 && y + (gap / 4) * k < PAGE_H; k++) lines.push({ y: y + (gap / 4) * k, main: false })
+      for (let k = 1; k < 4 && y + (gap / 4) * k < height; k++) lines.push({ y: y + (gap / 4) * k, main: false })
     }
   } else {
-    for (let y = 56; y < PAGE_H; y += 56) lines.push({ y, main: true })
+    for (let y = 56; y < height; y += 56) lines.push({ y, main: true })
   }
   return lines
 }
@@ -165,21 +181,22 @@ export function paperLineStyle(paper: Paper, main: boolean): { color: string; wi
 
 /** Standalone SVG of one page (paper + strokes); only numbers and fixed strings go in. */
 export function inkPageSvg(ink: Ink, pageIndex: number, { width = PAGE_W }: { width?: number } = {}): string {
-  const height = Math.round((width * PAGE_H) / PAGE_W)
-  const lines = paperLines(ink.paper)
+  const pageH = pageHeight(ink)
+  const height = Math.round((width * pageH) / PAGE_W)
+  const lines = paperLines(ink.paper, pageH)
     .map((l) => {
       const { color, width: w } = paperLineStyle(ink.paper, l.main)
       return `<line x1="0" y1="${l.y}" x2="${PAGE_W}" y2="${l.y}" stroke="${color}" stroke-width="${w}"/>`
     })
     .join("")
-  const margin = `<line x1="${MARGIN_X}" y1="0" x2="${MARGIN_X}" y2="${PAGE_H}" stroke="${PAPER_COLORS.margin}" stroke-width="1.5"/>`
+  const margin = `<line x1="${MARGIN_X}" y1="0" x2="${MARGIN_X}" y2="${pageH}" stroke="${PAPER_COLORS.margin}" stroke-width="1.5"/>`
   const strokes = (ink.pages[pageIndex]?.strokes ?? [])
     .map((s) => strokePath(s))
     .filter(Boolean)
     .map((d) => `<path d="${d}" fill="${INK_COLOR}"/>`)
     .join("")
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PAGE_W} ${PAGE_H}" width="${width}" height="${height}">` +
-    `<rect width="${PAGE_W}" height="${PAGE_H}" fill="#ffffff"/>${lines}${margin}${strokes}</svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PAGE_W} ${pageH}" width="${width}" height="${height}">` +
+    `<rect width="${PAGE_W}" height="${pageH}" fill="#ffffff"/>${lines}${margin}${strokes}</svg>`
   )
 }

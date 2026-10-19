@@ -29,6 +29,7 @@ export const subject = pgEnum("subject", ["toan", "tieng-viet", "tieng-anh"])
 export const exerciseKind = pgEnum("exercise_kind", ["de-thi", "chu-de", "luyen-tap"])
 export const exerciseSource = pgEnum("exercise_source", ["thu-cong", "tai-len", "ai"])
 export const exerciseStatus = pgEnum("exercise_status", ["nhap", "san-sang"])
+export const exerciseFormat = pgEnum("exercise_format", ["cau-hoi", "flashcard"])
 export const workMode = pgEnum("work_mode", ["web", "paper"])
 export const gradedBy = pgEnum("graded_by", ["auto", "ai", "parent"])
 export const attachmentKind = pgEnum("attachment_kind", ["image", "pdf"])
@@ -103,6 +104,8 @@ export const exerciseSets = pgTable(
     kind: exerciseKind().notNull(),
     source: exerciseSource().notNull(),
     status: exerciseStatus().notNull().default("nhap"),
+    /** "flashcard": only `tu-vung` questions, studied on flip cards (lib/flashcard.ts). */
+    format: exerciseFormat().notNull().default("cau-hoi"),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

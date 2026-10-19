@@ -28,6 +28,7 @@ const TYPE_LABEL: Record<QuestionType, string> = {
   noi: "Nối cho đúng",
   "sap-xep": "Sắp xếp thành câu",
   "tu-luan": "Tự luận",
+  "tu-vung": "Từ vựng",
 }
 
 export type Answers = Record<string, unknown>

@@ -3,6 +3,7 @@ import {
   ArrowDownUp,
   CircleCheckBig,
   Link2,
+  Layers,
   ListChecks,
   MessageSquareText,
   TextCursorInput,
@@ -25,9 +26,15 @@ export const QUESTION_TYPES: Record<QuestionType, QuestionTypeInfo> = {
   noi: { type: 'noi', label: 'Nối', hint: 'Nối cột trái với cột phải', icon: Link2 },
   'sap-xep': { type: 'sap-xep', label: 'Sắp xếp', hint: 'Sắp xếp từ thành câu đúng', icon: ArrowDownUp },
   'tu-luan': { type: 'tu-luan', label: 'Tự luận', hint: 'Viết câu trả lời, phụ huynh chấm', icon: AlignLeft },
+  'tu-vung': { type: 'tu-vung', label: 'Từ vựng', hint: 'Viết tay một từ tiếng Anh', icon: Layers },
 }
 
-export const QUESTION_TYPE_LIST = Object.values(QUESTION_TYPES)
+/** Types the question editor and AI generation offer; `tu-vung` only lives in flashcard sets. */
+export type EditableQuestionType = Exclude<QuestionType, 'tu-vung'>
+
+export const QUESTION_TYPE_LIST = Object.values(QUESTION_TYPES).filter(
+  (t): t is QuestionTypeInfo & { type: EditableQuestionType } => t.type !== 'tu-vung',
+)
 
 export const BLANK = '___'
 

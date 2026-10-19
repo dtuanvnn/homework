@@ -219,6 +219,7 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
       description: details?.description || `Quét bằng AI từ ${files.length} tệp.`,
       source: 'tai-len',
       status: 'nhap',
+      format: 'cau-hoi',
       questionCount: questions.length,
       estimatedMinutes: details?.estimatedMinutes ?? Math.max(10, questions.length * 3),
       difficulty: details?.difficulty ?? 3,

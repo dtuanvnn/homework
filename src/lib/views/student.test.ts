@@ -22,7 +22,7 @@ const at = (day: number, hour: number) => new Date(Date.UTC(2026, 9, 15 + day, h
 
 const set: ExerciseSet = {
   id: "set-1", title: "Bảng nhân 6, 7", subject: "toan", grade: 3, topic: "", description: "", questionCount: 10,
-  estimatedMinutes: 15, difficulty: 2, kind: "luyen-tap", source: "thu-cong", status: "san-sang", timesAssigned: 1, createdAt: at(-10, 9).toISOString(),
+  estimatedMinutes: 15, difficulty: 2, kind: "luyen-tap", source: "thu-cong", status: "san-sang", format: "cau-hoi", timesAssigned: 1, createdAt: at(-10, 9).toISOString(),
 }
 
 let seq = 0
@@ -296,6 +296,11 @@ describe("toTakeQuestion", () => {
     expect(toTakeQuestion(solved)).not.toHaveProperty("solutionImage")
     expect(toTakeQuestion(solved)).not.toHaveProperty("solutionImageUrl")
     expect(toTakeQuestion(solved)).not.toHaveProperty("answerStatus")
+  })
+
+  it("keeps the word of a tu-vung question (text-to-speech and study cards need it)", () => {
+    const vocab: Question = { id: "v", type: "tu-vung", word: "nest", prompt: "A bird's home made of twigs.", points: 1, skills: [] }
+    expect(toTakeQuestion(vocab)).toEqual(vocab)
   })
 })
 
