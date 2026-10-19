@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
-import { assign, attemptsOf, closeDb, createSet, sql } from "./db"
+import { assign, attemptsOf, closeDb, createFlashcardSet, createSet, sql } from "./db"
 import { open } from "./helpers"
 
 /*
@@ -74,6 +74,52 @@ test("hands in offline and syncs later", async ({ page, context }, testInfo) => 
   const [{ id }] = await sql<{ id: string }>(`select id from attempts where assignment_id = $1`, [assignmentId])
   await open(page, `/parent/grading/${id}`)
   await expect(page.getByText("Nộp offline")).toBeVisible()
+})
+
+test("a flashcard word list is studied, written and handed in offline", async ({ page, context }, testInfo) => {
+  test.setTimeout(90_000)
+  const title = `Offline từ vựng ${testInfo.project.name} ${Date.now()}`
+  const words = [
+    { word: "nest", explanation: "A bird's home made of twigs." },
+    { word: "hive", explanation: "A home where bees make honey." },
+  ]
+  const assignmentId = await assign(await createFlashcardSet(title, words))
+
+  await open(page, "/student/assignments")
+  await expect(page.locator("article", { hasText: title }).getByText("Đã tải ✓")).toBeVisible({ timeout: 20_000 })
+  await open(page, `/student/assignments/${assignmentId}/do`)
+  const take = takeScreen(page, title)
+  await expect(take).toBeVisible()
+
+  await context.setOffline(true)
+  for (let i = 0; i < words.length; i++) await take.getByRole("button", { name: "Em thuộc rồi" }).click()
+  await take.getByRole("button", { name: "Sang phần Viết từ" }).click()
+  for (const [i] of words.entries()) {
+    const strip = take.getByRole("img", { name: `Khung viết từ ${i + 1}` })
+    await strip.scrollIntoViewIfNeeded()
+    const box = (await strip.boundingBox())!
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.5)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.6, { steps: 8 })
+    await page.mouse.up()
+    await expect(take.getByText(`Đã viết ${i + 1}/2`)).toBeVisible()
+    await take.getByRole("button", { name: i === words.length - 1 ? "Xem lại" : "Câu tiếp", exact: true }).click()
+  }
+  await expect(take.getByRole("heading", { name: "Đã viết 2/2 từ" })).toBeVisible()
+  await take.getByRole("button", { name: "Nộp bài" }).first().click()
+  await page.getByRole("dialog", { name: "Nộp bài nhé?" }).getByRole("button", { name: "Nộp bài" }).click()
+  await expect(page.getByText("Đã nộp — sẽ gửi khi có mạng")).toBeVisible()
+  expect(await attemptsOf(assignmentId)).toEqual([])
+
+  await context.setOffline(false)
+  await expect(page.getByText("Đã gửi 1 bài")).toBeVisible({ timeout: 20_000 })
+  // Waits for the parent: handwriting is never auto-graded.
+  expect(await attemptsOf(assignmentId)).toEqual([{ attempt_no: 1, submitted: true, submitted_offline: true, score: null, answered: 2 }])
+  const inks = await sql<{ size: string }>(
+    `select w.response->'ink'->>'size' as size from answers w join attempts t on t.id = w.attempt_id where t.assignment_id = $1`,
+    [assignmentId],
+  )
+  expect(inks.map((r) => r.size)).toEqual(["strip", "strip"])
 })
 
 test("a timed attempt started offline runs on the device and is handed in at zero", async ({ page, context }, testInfo) => {

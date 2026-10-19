@@ -1,6 +1,6 @@
 # Vocabulary flashcards (Từ vựng – Flashcard) — design
 
-Date: 2026-10-19 · Status: draft design, not implemented
+Date: 2026-10-19 · Status: implemented (plan: `docs/superpowers/plans/2026-10-19-vocab-flashcard.md`)
 
 ## Goal
 
