@@ -167,3 +167,27 @@ describe("readable answers", () => {
     expect(essayInk(3)).toBeUndefined()
   })
 })
+
+describe("flashcard attempts in the queue", () => {
+  it("marks attempts of word lists and doesn't count blank words as auto-graded", () => {
+    const [item] = buildGradingQueue(
+      [{ id: "a1", maxAttempts: 2, set, attempts: [attempt({ id: "t1" })] }],
+      stats("t1", [["tu-vung", null], ["tu-vung", false]]),
+    )
+    expect(item).toMatchObject({ flashcard: true, totalQuestions: 2, ungraded: 1, autoWrong: 0, autoCorrect: 0 })
+  })
+
+  it("leaves ordinary attempts alone", () => {
+    const [item] = buildGradingQueue([{ id: "a1", maxAttempts: 2, set, attempts: [attempt({ id: "t1" })] }], stats("t1", [["tu-luan", null]]))
+    expect(item.flashcard).toBe(false)
+  })
+})
+
+describe("tu-vung answers for the parent", () => {
+  const vocab = { id: "v", type: "tu-vung" as const, word: "nest", prompt: "A bird's home.", points: 1, skills: [] }
+  it("shows the word as the key and handwriting instead of text", () => {
+    expect(correctAnswerText(vocab)).toBe("nest")
+    expect(responseText(vocab, { text: "", ink })).toBe("")
+    expect(responseText(vocab, { text: "" })).toBe("(Chưa trả lời)")
+  })
+})

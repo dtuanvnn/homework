@@ -4,6 +4,8 @@ import {
   MAX_PAGES,
   PAGE_H,
   PAGE_W,
+  STRIP_H,
+  pageHeight,
   eraseStrokes,
   inkPageSvg,
   inkSchema,
@@ -176,5 +178,28 @@ describe("inkSchema", () => {
     expect(inkSchema.safeParse({ ...valid, pages }).success).toBe(false)
     expect(inkSchema.safeParse({ ...valid, paper: "grid" }).success).toBe(false)
     expect(inkSchema.safeParse({ ...valid, pages: [] }).success).toBe(false)
+  })
+})
+
+describe("strip ink (one written word)", () => {
+  it("has its own page height and validates strokes against it", () => {
+    expect(pageHeight({ size: "strip" })).toBe(STRIP_H)
+    expect(pageHeight({})).toBe(PAGE_H)
+    const strip = newInk("o-li", "strip")
+    expect(strip.size).toBe("strip")
+    expect(inkSchema.safeParse({ ...strip, pages: [{ strokes: [[10, STRIP_H - 10, 5, 20, STRIP_H - 10, 5]] }] }).success).toBe(true)
+    expect(inkSchema.safeParse({ ...strip, pages: [{ strokes: [[10, STRIP_H + 10, 5, 20, STRIP_H + 10, 5]] }] }).success).toBe(false)
+    expect(inkSchema.safeParse({ ...newInk("o-li"), pages: [{ strokes: [[10, 690, 5, 20, 690, 5]] }] }).success).toBe(true)
+  })
+
+  it("draws paper lines only inside the strip", () => {
+    expect(paperLines("o-li", STRIP_H).every((l) => l.y < STRIP_H)).toBe(true)
+    expect(paperLines("o-li", STRIP_H).length).toBeLessThan(paperLines("o-li").length)
+  })
+
+  it("renders a strip SVG with the strip's aspect ratio", () => {
+    const svg = inkPageSvg(newInk("ke-ngang", "strip"), 0, { width: 500 })
+    expect(svg).toContain(`viewBox="0 0 ${PAGE_W} ${STRIP_H}"`)
+    expect(svg).toContain(`height="${(500 * STRIP_H) / PAGE_W}"`)
   })
 })

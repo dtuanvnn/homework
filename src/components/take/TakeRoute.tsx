@@ -8,10 +8,14 @@ import { TAB_PATHS, studentPaths } from "@/components/layout/routes"
 import { play } from "@/hooks/useSound"
 import { chooseDraft, correctedNow, type LocalDraft } from "@/lib/offline/drafts"
 import { getDraft, getMeta } from "@/lib/offline/store"
+import { isFlashcardSet } from "@/lib/flashcard"
+import { studyKey } from "@/lib/flashcard-study"
 import type { SubjectId } from "@/lib/types"
 import type { TakeQuestion } from "@/lib/views/student"
 import StartTimed from "./StartTimed"
 import TakeAssignment, { type Answers, type TakeTimer } from "./TakeAssignment"
+import type { TakeSessionProps } from "./use-take-session"
+import TakeFlashcards from "./TakeFlashcards"
 import { useWorkAdapter } from "./use-work-adapter"
 
 interface TakeRouteProps {
@@ -124,52 +128,52 @@ function TakeRouteInner({
     )
   }
 
-  return (
-    <TakeAssignment
-      title={title}
-      subject={subject}
-      questions={questions}
-      initialAnswers={answers}
-      timer={timer}
-      onResync={
-        fromProps
-          ? async () => {
-              const res = await work.start()
-              if ("error" in res && res.expired) timeIsUp(res.error)
-              return "error" in res ? null : res
-            }
-          : undefined
-      }
-      onSave={(answers, seconds) => work.save(answers, seconds)}
-      onExit={() => {
-        leave(TAB_PATHS.today)
-        toast(timer.kind === "countdown" ? "Đã lưu bài làm. Đồng hồ vẫn chạy, em quay lại sớm nhé!" : "Đã lưu bài làm. Em làm tiếp sau nhé!")
-      }}
-      onSubmit={async (answers, seconds, quiet) => {
-        const res = await work.submit(answers, seconds)
-        if ("queued" in res) {
-          next.current = TAB_PATHS.today
-          return { queued: true }
+  const session: TakeSessionProps = {
+    initialAnswers: answers,
+    timer,
+    onResync: fromProps
+      ? async () => {
+          const res = await work.start()
+          if ("error" in res && res.expired) timeIsUp(res.error)
+          return "error" in res ? null : res
         }
-        if ("error" in res) {
-          if (res.expired) {
-            timeIsUp(res.error)
-            return null
-          }
-          if (res.error === "Tài khoản đang tạm khoá.") {
-            router.refresh()
-            return null
-          }
-          if (!quiet) toast.error(res.error || "Chưa nộp được bài. Em kiểm tra mạng rồi thử lại nhé!")
+      : undefined,
+    onSave: (answers, seconds) => work.save(answers, seconds),
+    onExit: () => {
+      leave(TAB_PATHS.today)
+      toast(timer.kind === "countdown" ? "Đã lưu bài làm. Đồng hồ vẫn chạy, em quay lại sớm nhé!" : "Đã lưu bài làm. Em làm tiếp sau nhé!")
+    },
+    onSubmit: async (answers, seconds, quiet) => {
+      const res = await work.submit(answers, seconds)
+      if ("queued" in res) {
+        next.current = TAB_PATHS.today
+        return { queued: true }
+      }
+      if ("error" in res) {
+        if (res.expired) {
+          timeIsUp(res.error)
           return null
         }
-        next.current = res.graded ? studentPaths.result(res.attemptId) : TAB_PATHS.today
-        return { graded: res.graded }
-      }}
-      onSubmitted={() => {
-        if (next.current === TAB_PATHS.today && navigator.onLine) toast.success("Em đã nộp bài, giỏi quá! 🎉")
-        leave(next.current)
-      }}
-    />
+        if (res.error === "Tài khoản đang tạm khoá.") {
+          router.refresh()
+          return null
+        }
+        if (!quiet) toast.error(res.error || "Chưa nộp được bài. Em kiểm tra mạng rồi thử lại nhé!")
+        return null
+      }
+      next.current = res.graded ? studentPaths.result(res.attemptId) : TAB_PATHS.today
+      return { graded: res.graded }
+    },
+    onSubmitted: () => {
+      if (next.current === TAB_PATHS.today && navigator.onLine) toast.success("Em đã nộp bài, giỏi quá! 🎉")
+      leave(next.current)
+    },
+  }
+
+  // A word list (only tu-vung questions) is studied on flip cards and written by hand.
+  return isFlashcardSet(questions) ? (
+    <TakeFlashcards title={title} subject={subject} questions={questions} studyKey={studyKey(studentId, assignmentId, attemptNo)} {...session} />
+  ) : (
+    <TakeAssignment title={title} subject={subject} questions={questions} {...session} />
   )
 }

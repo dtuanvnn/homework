@@ -22,7 +22,7 @@ const at = (day: number, hour: number) => new Date(Date.UTC(2026, 9, 15 + day, h
 
 const set: ExerciseSet = {
   id: "set-1", title: "Bảng nhân 6, 7", subject: "toan", grade: 3, topic: "", description: "", questionCount: 10,
-  estimatedMinutes: 15, difficulty: 2, kind: "luyen-tap", source: "thu-cong", status: "san-sang", timesAssigned: 1, createdAt: at(-10, 9).toISOString(),
+  estimatedMinutes: 15, difficulty: 2, kind: "luyen-tap", source: "thu-cong", status: "san-sang", format: "cau-hoi", timesAssigned: 1, createdAt: at(-10, 9).toISOString(),
 }
 
 let seq = 0
@@ -225,6 +225,15 @@ describe("buildResultDetail", () => {
     expect(view?.hintsPending).toBe(true)
   })
 
+  it("shows the right spelling of wrong words right away and asks for no hints", () => {
+    const vocab: Question = { id: "v1", type: "tu-vung", word: "nest", prompt: "A bird's home made of twigs.", points: 1, skills: [] }
+    const first = graded(5)
+    const strip = { v: 1, paper: "o-li", size: "strip", pages: [{ strokes: [[10, 10, 5, 20, 20, 5]] }] } as Ink
+    const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { attempts: [first] }), answers: [row(vocab, { text: "", ink: strip }, false)] }, now)
+    expect(view).toMatchObject({ canRetry: true, answersRevealed: false, hintsPending: false })
+    expect(view?.review[0]).toMatchObject({ word: "nest", correctAnswer: "nest", answer: "(bài viết tay)", handwriting: { ink: strip } })
+  })
+
   it("reveals correct answers once no attempt is left", () => {
     const first = graded(5)
     const second = graded(8, { attemptNo: 2 })
@@ -296,6 +305,11 @@ describe("toTakeQuestion", () => {
     expect(toTakeQuestion(solved)).not.toHaveProperty("solutionImage")
     expect(toTakeQuestion(solved)).not.toHaveProperty("solutionImageUrl")
     expect(toTakeQuestion(solved)).not.toHaveProperty("answerStatus")
+  })
+
+  it("keeps the word of a tu-vung question (text-to-speech and study cards need it)", () => {
+    const vocab: Question = { id: "v", type: "tu-vung", word: "nest", prompt: "A bird's home made of twigs.", points: 1, skills: [] }
+    expect(toTakeQuestion(vocab)).toEqual(vocab)
   })
 })
 

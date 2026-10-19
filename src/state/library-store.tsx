@@ -143,6 +143,7 @@ export function LibraryProvider({
           kind: set.kind,
           source: set.source,
           status: set.status,
+          format: set.format,
         },
         questions: qs,
         keepAttachmentIds: files.filter((f) => !f.file && !f.uploaded).map((f) => f.id),

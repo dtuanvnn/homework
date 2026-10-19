@@ -37,5 +37,7 @@ export function withLaterAnswerKey(snapshot: Question, current: Question | undef
       return snapshot
     case "tu-luan":
       return { ...snapshot, ...extra, rubric: (current as typeof snapshot).rubric }
+    case "tu-vung":
+      return snapshot
   }
 }

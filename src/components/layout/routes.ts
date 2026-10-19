@@ -51,12 +51,14 @@ export const libraryPaths = {
   set: (id: string) => `/parent/library/${encodeURIComponent(id)}` as Route,
   upload: "/parent/library/upload" as Route,
   generate: "/parent/library/generate" as Route,
+  newFlashcard: "/parent/library/flashcard/new" as Route,
 }
 
 /** Sub-pages of a tab: title shown in the phone app bar, plus a back button and no tab bar. */
 const SUB_PAGE_TITLES: [RegExp, string][] = [
   [/^\/parent\/library\/upload$/, "Tải lên tài liệu"],
   [/^\/parent\/library\/generate$/, "Tạo bằng AI"],
+  [/^\/parent\/library\/flashcard\/new$/, "Bộ từ vựng mới"],
   [/^\/parent\/library\/[^/]+$/, "Chi tiết bộ bài tập"],
   [/^\/parent\/grading\/[^/]+$/, "Chấm bài"],
   [/^\/parent\/rewards$/, "Phần thưởng"],

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { Search, X } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
-import AddExerciseMenu from "@/components/library/AddExerciseMenu"
+import AddExerciseMenu, { type AddChoice } from "@/components/library/AddExerciseMenu"
 import ExerciseCard, {
   type ExerciseCardActions,
 } from "@/components/library/ExerciseCard"
@@ -17,18 +17,19 @@ import {
   filterExerciseSets,
   type LibraryFilters,
 } from "@/lib/library"
-import type { ExerciseSource } from "@/lib/types"
 
 interface ExerciseLibraryProps {
   onOpenSet: (id: string) => void
   onUpload: () => void
   onGenerate: () => void
+  onFlashcard: () => void
 }
 
 export default function ExerciseLibrary({
   onOpenSet,
   onUpload,
   onGenerate,
+  onFlashcard,
 }: ExerciseLibraryProps) {
   const library = useLibrary()
   const student = useRequiredStudent()
@@ -50,7 +51,7 @@ export default function ExerciseLibrary({
     setQuery("")
   }
 
-  const handleAdd = async (source: ExerciseSource) => {
+  const handleAdd = async (source: AddChoice) => {
     if (source === "thu-cong") {
       if (creating) return
       setCreating(true)
@@ -65,6 +66,10 @@ export default function ExerciseLibrary({
     }
     if (source === "tai-len") {
       onUpload()
+      return
+    }
+    if (source === "flashcard") {
+      onFlashcard()
       return
     }
     onGenerate()

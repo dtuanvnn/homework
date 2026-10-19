@@ -172,7 +172,7 @@ export default function AssignSheet({
                     role="radio"
                     aria-checked={s.id === draft.exerciseSetId}
                     disabled={!s.questionCount}
-                    onClick={() => patch({ exerciseSetId: s.id })}
+                    onClick={() => patch({ exerciseSetId: s.id, ...(s.format === "flashcard" ? { mode: "web" as const } : {}) })}
                     className={cn(
                       "h-auto min-h-16 w-full justify-start whitespace-normal p-3 text-left",
                       s.id === draft.exerciseSetId &&
@@ -243,7 +243,7 @@ export default function AssignSheet({
                 <Monitor />
                 Làm trên web
               </ToggleGroupItem>
-              <ToggleGroupItem value="paper">
+              <ToggleGroupItem value="paper" disabled={selected?.format === "flashcard"} title={selected?.format === "flashcard" ? "Bộ từ vựng chỉ làm trên web" : undefined}>
                 <FileText />
                 In ra giấy
               </ToggleGroupItem>

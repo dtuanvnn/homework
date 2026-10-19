@@ -129,6 +129,8 @@ export function applySolution(q: Question, res: SolveResponse): Question | null 
         const rubric = res.rubric?.trim() || solution
         return rubric ? { ...q, rubric } : null
       }
+      case "tu-vung":
+        return null
     }
   })()
   if (!key) return null

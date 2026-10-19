@@ -1,4 +1,4 @@
-import { ChevronDown, PenLine, Plus, Sparkles, Upload, type LucideIcon } from 'lucide-react'
+import { ChevronDown, Layers, PenLine, Plus, Sparkles, Upload, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -9,14 +9,18 @@ import {
 import { cn } from '@/lib/utils'
 import type { ExerciseSource } from '@/lib/types'
 
-const OPTIONS: { source: ExerciseSource; label: string; hint: string; icon: LucideIcon; tone: string }[] = [
+/** What "Thêm bài tập" creates: a question set from one of the sources, or a flashcard word list. */
+export type AddChoice = ExerciseSource | 'flashcard'
+
+const OPTIONS: { source: AddChoice; label: string; hint: string; icon: LucideIcon; tone: string }[] = [
   { source: 'thu-cong', label: 'Soạn thủ công', hint: 'Tự nhập câu hỏi và đáp án', icon: PenLine, tone: 'bg-slate-100 text-slate-600' },
   { source: 'tai-len', label: 'Tải lên ảnh / PDF', hint: 'Chụp phiếu bài tập hoặc chọn file', icon: Upload, tone: 'bg-slate-100 text-slate-600' },
   { source: 'ai', label: 'Tạo bằng AI', hint: 'Tạo đề theo chủ đề và độ khó', icon: Sparkles, tone: 'bg-violet-50 text-violet-600' },
+  { source: 'flashcard', label: 'Từ vựng (Flashcard)', hint: 'Dán danh sách từ, con học thẻ và viết tay', icon: Layers, tone: 'bg-green-50 text-green-600' },
 ]
 
 interface AddExerciseMenuProps {
-  onSelect: (source: ExerciseSource) => void
+  onSelect: (choice: AddChoice) => void
   align?: 'start' | 'center' | 'end'
   className?: string
 }

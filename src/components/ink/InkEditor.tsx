@@ -12,16 +12,21 @@ import { InkPaper } from "./InkPage"
  * palm resting on the iPad leaves no marks.
  */
 
-type Tool = "pen" | "eraser"
+export type Tool = "pen" | "eraser"
 
-const HISTORY = 50
+export const HISTORY = 50
 /** Eraser radius in page units. */
-const ERASER_R = 14
+export const ERASER_R = 14
 const FINGER_KEY = "hh-ink-finger"
 
 /* ---------- "Viết bằng ngón tay" (remembered on the device) ---------- */
 
 const fingerListeners = new Set<() => void>()
+/** "Viết bằng ngón tay" and its setter, shared by every handwriting area on the device. */
+export function useFingerMode(): [boolean, (on: boolean) => void] {
+  return [useSyncExternalStore(subscribeFinger, readFinger, () => false), writeFinger]
+}
+
 function readFinger(): boolean {
   try {
     return localStorage.getItem(FINGER_KEY) === "1"
@@ -53,7 +58,7 @@ export function InkEditor({ ink, onChange }: { ink: Ink; onChange: (ink: Ink) =>
   const [scrollTo, setScrollTo] = useState<{ page: number } | null>(null)
   const [history, setHistory] = useState({ undo: 0, redo: 0 })
   const [tool, setTool] = useState<Tool>("pen")
-  const finger = useSyncExternalStore(subscribeFinger, readFinger, () => false)
+  const [finger] = useFingerMode()
 
   const apply = (next: Ink, record = true) => {
     if (record) {
@@ -180,6 +185,8 @@ function pathOf(stroke: number[]): Path2D {
 
 interface PageProps {
   label: string
+  /** Page height in ink units (pageHeight() of the ink). */
+  height?: number
   paper: Ink["paper"]
   strokes: number[][]
   tool: Tool
@@ -189,7 +196,7 @@ interface PageProps {
   onEraseEnd: () => void
 }
 
-function InkCanvasPage({ label, paper, strokes, tool, finger, onStroke, onErase, onEraseEnd }: PageProps) {
+export function InkCanvasPage({ label, height = PAGE_H, paper, strokes, tool, finger, onStroke, onErase, onEraseEnd }: PageProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const base = useRef<HTMLCanvasElement>(null)
   const live = useRef<HTMLCanvasElement>(null)
@@ -221,7 +228,7 @@ function InkCanvasPage({ label, paper, strokes, tool, finger, onStroke, onErase,
     if (!width) return
     const ratio = window.devicePixelRatio || 1
     const w = Math.round(width * ratio)
-    const h = Math.round(((width * PAGE_H) / PAGE_W) * ratio)
+    const h = Math.round(((width * height) / PAGE_W) * ratio)
     for (const c of [base.current!, live.current!]) {
       if (c.width !== w) c.width = w
       if (c.height !== h) c.height = h
@@ -232,7 +239,7 @@ function InkCanvasPage({ label, paper, strokes, tool, finger, onStroke, onErase,
     g.setTransform(w / PAGE_W, 0, 0, w / PAGE_W, 0, 0)
     g.fillStyle = INK_COLOR
     for (const s of strokes) g.fill(pathOf(s))
-  }, [strokes, width])
+  }, [strokes, width, height])
 
   const drawLive = () => {
     frame.current = 0
@@ -262,7 +269,7 @@ function InkCanvasPage({ label, paper, strokes, tool, finger, onStroke, onErase,
 
   const toPage = (e: { clientX: number; clientY: number }) => {
     const r = wrap.current!.getBoundingClientRect()
-    return [((e.clientX - r.left) / r.width) * PAGE_W, ((e.clientY - r.top) / r.height) * PAGE_H] as const
+    return [((e.clientX - r.left) / r.width) * PAGE_W, ((e.clientY - r.top) / r.height) * height] as const
   }
   const pressureOf = (e: PointerEvent) => (e.pointerType === "pen" ? e.pressure || 0.5 : 0.5) * 10
 
@@ -273,7 +280,7 @@ function InkCanvasPage({ label, paper, strokes, tool, finger, onStroke, onErase,
     if (a.tool === "pen") {
       const stroke: number[] = []
       for (let i = 0; i < a.points.length; i += 3) {
-        const [x, y, p] = quantizePoint(a.points[i], a.points[i + 1], a.points[i + 2] / 10)
+        const [x, y, p] = quantizePoint(a.points[i], Math.min(a.points[i + 1], height), a.points[i + 2] / 10)
         // Skip repeats of the same quantized point.
         if (stroke.length && stroke[stroke.length - 3] === x && stroke[stroke.length - 2] === y) continue
         stroke.push(x, y, p)
@@ -291,10 +298,10 @@ function InkCanvasPage({ label, paper, strokes, tool, finger, onStroke, onErase,
       role="img"
       aria-label={label}
       className={cn(
-        "relative aspect-[10/7] w-full overflow-hidden rounded-2xl border-2 border-slate-200 select-none [-webkit-touch-callout:none]",
+        "relative w-full overflow-hidden rounded-2xl border-2 border-slate-200 select-none [-webkit-touch-callout:none]",
         tool === "eraser" ? "cursor-cell" : "cursor-crosshair",
       )}
-      style={{ touchAction: finger ? "none" : "pan-y" }}
+      style={{ touchAction: finger ? "none" : "pan-y", aspectRatio: `${PAGE_W} / ${height}` }}
       onPointerDown={(e) => {
         const ok = e.pointerType === "pen" || (e.pointerType === "mouse" && e.button === 0) || (e.pointerType === "touch" && finger)
         if (active.current || !ok) return
@@ -318,8 +325,8 @@ function InkCanvasPage({ label, paper, strokes, tool, finger, onStroke, onErase,
       onPointerUp={finish}
       onPointerCancel={finish}
     >
-      <svg viewBox={`0 0 ${PAGE_W} ${PAGE_H}`} className="pointer-events-none absolute inset-0 size-full" aria-hidden>
-        <InkPaper paper={paper} />
+      <svg viewBox={`0 0 ${PAGE_W} ${height}`} className="pointer-events-none absolute inset-0 size-full" aria-hidden>
+        <InkPaper paper={paper} height={height} />
       </svg>
       <canvas ref={base} className="pointer-events-none absolute inset-0 size-full" />
       <canvas ref={live} className="pointer-events-none absolute inset-0 size-full" />
@@ -327,7 +334,7 @@ function InkCanvasPage({ label, paper, strokes, tool, finger, onStroke, onErase,
   )
 }
 
-function ToolBtn({
+export function ToolBtn({
   on,
   onClick,
   disabled,

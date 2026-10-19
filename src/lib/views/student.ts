@@ -13,7 +13,7 @@ import { attemptStars } from "@/lib/rewards/stars"
 import { streakRuns } from "@/lib/rewards/streak"
 import { answerAsRichText } from "@/lib/rich-text"
 import { essayDrawing, essayInk } from "@/lib/views/grading"
-import type { EssayQuestion, FillBlankQuestion, MultipleChoiceQuestion, Question, ShortAnswerQuestion, SubjectId, TrueFalseQuestion } from "@/lib/types"
+import type { EssayQuestion, FillBlankQuestion, MultipleChoiceQuestion, Question, ShortAnswerQuestion, SubjectId, TrueFalseQuestion, VocabQuestion } from "@/lib/types"
 import type { AnswerRecord, AssignmentRecord, AttemptRecord } from "@/server/queries"
 
 export type StudentStatus = "not-started" | "in-progress" | "submitted" | "graded"
@@ -118,6 +118,8 @@ export interface ReviewItem {
   imageUrl?: string
   /** The child's handwritten essay pages (or a legacy drawing). */
   handwriting?: { ink?: Ink; drawing?: string }
+  /** Flashcard word (tu-vung): its spelling is shown with wrong answers even before answers are revealed. */
+  word?: string
 }
 
 export interface ResultView {
@@ -331,6 +333,8 @@ export function answerText(q: Question, response: Response | null | undefined, m
       if (essay.drawing) return text ? `${text} (kèm hình vẽ)` : "(bài viết tay)"
       return text || NO_ANSWER
     }
+    case "tu-vung":
+      return essayInk(response) ? "(bài viết tay)" : NO_ANSWER
   }
 }
 
@@ -352,6 +356,8 @@ export function correctAnswerText(q: Question): string | undefined {
       return q.tokens.join(" ")
     case "tu-luan":
       return undefined
+    case "tu-vung":
+      return q.word
   }
 }
 
@@ -383,15 +389,18 @@ export function buildResultDetail(
     canRetry: latest?.id === attempt.id && state.canRetry,
     answersRevealed,
     hintsPending:
-      !answersRevealed && answers.some((a) => a.isCorrect === false && !a.hint && a.question.type !== "tu-luan" && a.question.answerStatus !== "missing"),
+      !answersRevealed && answers.some((a) => a.isCorrect === false && !a.hint && needsHint(a.question)),
     review: answers.map((row) => {
       const correct = row.isCorrect === true
+      // A word's spelling is no secret: the retry starts with study cards that show every word.
+      const word = row.question.type === "tu-vung" ? row.question.word : undefined
       return {
+        word,
         id: row.id,
         prompt: row.question.prompt,
         answer: answerText(row.question, row.response, attempt.mode),
         correct,
-        correctAnswer: correct || !answersRevealed ? undefined : correctAnswerText(row.question),
+        correctAnswer: correct || (!answersRevealed && !word) ? undefined : correctAnswerText(row.question),
         solution: answersRevealed ? row.question.solution : undefined,
         solutionImage: answersRevealed ? row.question.solutionImage : undefined,
         solutionImageUrl: answersRevealed ? row.question.solutionImageUrl : undefined,
@@ -403,6 +412,11 @@ export function buildResultDetail(
       }
     }),
   }
+}
+
+/** Wrong answers that get an AI hint while a retry is open: not essays, handwritten words or questions without a key. */
+export function needsHint(q: Question): boolean {
+  return q.type !== "tu-luan" && q.type !== "tu-vung" && q.answerStatus !== "missing"
 }
 
 function handwritingOf(response: Response | null): ReviewItem["handwriting"] {
@@ -426,6 +440,8 @@ export type TakeQuestion =
   | Omit<Extract<Question, { type: "noi" }>, KeyInfo>
   | Omit<Extract<Question, { type: "sap-xep" }>, KeyInfo>
   | Omit<EssayQuestion, "rubric" | KeyInfo>
+  /** Keeps `word`: the device reads it aloud and shows it on the study cards (never while writing). */
+  | Omit<VocabQuestion, KeyInfo>
 
 function without<T extends object, K extends keyof T>(obj: T, key: K): Omit<T, K> {
   return Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key)) as Omit<T, K>

@@ -40,7 +40,7 @@ import QuestionEditorSheet from "@/components/exercise-detail/QuestionEditorShee
 import { findInvalidQuestion } from "@/components/exercise-detail/question-draft"
 import { useRequiredStudent } from "@/components/layout/AppFrame"
 import { GRADES, EXERCISE_KINDS } from "@/lib/library"
-import { QUESTION_TYPE_LIST } from "@/lib/questions"
+import { QUESTION_TYPE_LIST, type EditableQuestionType } from "@/lib/questions"
 import { SUBJECT_LIST, SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
 import { unwrap } from "@/lib/action-result"
@@ -51,7 +51,6 @@ import type {
   Difficulty,
   ExerciseSet,
   Question,
-  QuestionType,
   SubjectId,
 } from "@/lib/types"
 import type { LeaveGuard } from "@/components/layout/AppFrame"
@@ -107,7 +106,7 @@ export default function AIGenerate({
   const [customTopic, setCustomTopic] = useState("")
   const [count, setCount] = useState(10)
   const [difficulty, setDifficulty] = useState<Difficulty>(2)
-  const [types, setTypes] = useState<QuestionType[]>([
+  const [types, setTypes] = useState<EditableQuestionType[]>([
     "trac-nghiem",
     "dien-cho-trong",
     "tra-loi-ngan",
@@ -212,6 +211,7 @@ export default function AIGenerate({
         description: generated.description,
         source: "ai",
         status: "nhap",
+        format: "cau-hoi",
         timesAssigned: 0,
         estimatedMinutes: generated.estimatedMinutes,
         createdAt: new Date().toISOString(),

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { isFigurePath } from "./figures"
+import { isValidWord } from "./flashcard"
 import type { QuestionContent } from "./types"
 
 /**
@@ -51,6 +52,12 @@ export const questionContentSchema = z.discriminatedUnion("type", [
   }),
   z.object({ ...base, type: z.literal("sap-xep"), tokens: z.array(z.string().min(1)).min(2), shuffled: z.array(z.number().int().min(0)) }),
   z.object({ ...base, type: z.literal("tu-luan"), rubric: z.string() }),
+  z.object({
+    ...base,
+    type: z.literal("tu-vung"),
+    word: z.string().trim().refine(isValidWord, "Từ chỉ gồm chữ cái, dấu cách, gạch nối hoặc dấu nháy (tối đa 60 ký tự)"),
+    prompt: z.string().trim().min(1, "Từ cần có giải thích").max(300, "Giải thích tối đa 300 ký tự"),
+  }),
 ]) satisfies z.ZodType<QuestionContent>
 
 /** A question as edited in the UI: content plus a client-side id. */

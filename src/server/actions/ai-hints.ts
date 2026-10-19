@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm"
 import { db, schema } from "@/db"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { HINTS_SYSTEM, hintsPrompt, hintsResponseSchema, validateHints, type HintItem } from "@/lib/ai/hints"
-import { buildResultDetail } from "@/lib/views/student"
+import { buildResultDetail, needsHint } from "@/lib/views/student"
 import { assertAccess } from "../access"
 import { ask, storageFileBlocks, type ContentBlock } from "../ai/llm"
 import { getAttemptDetail, isUuid } from "../queries"
@@ -28,7 +28,7 @@ export async function explainMistakes(attemptId: string): Promise<ActionResult<R
 
     const items: HintItem[] = detail.answers
       // Without an answer key a hint would explain a placeholder.
-      .filter((a) => a.isCorrect === false && !a.hint && a.question.type !== "tu-luan" && a.question.answerStatus !== "missing")
+      .filter((a) => a.isCorrect === false && !a.hint && needsHint(a.question))
       .map((a) => ({ id: a.id, question: a.question, response: a.response }))
     if (!items.length) return {}
 

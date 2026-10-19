@@ -3,6 +3,7 @@
  * pages feed them database rows, tests feed them plain objects.
  */
 import { chosenOptions, correctOptions } from "../choice"
+import { isFlashcardSet } from "../flashcard"
 import { OPTION_LETTERS } from "../questions"
 import type { EssayValue, Response } from "../grading"
 import { inkSchema, isInkEmpty, type Ink } from "../ink"
@@ -66,6 +67,8 @@ export interface GradingQueueItem {
   retryPending: boolean
   /** "Nộp offline": handed in without network and synced later. */
   submittedOffline: boolean
+  /** A vocabulary word list written by hand (every answer is tu-vung). */
+  flashcard: boolean
 }
 
 /** Submitted attempts, newest submission first. */
@@ -81,7 +84,7 @@ export function buildGradingQueue(
     for (const t of assignment.attempts) {
       if (!t.submittedAt) continue
       const rows = byAttempt.get(t.id) ?? []
-      const objective = rows.filter((r) => r.type !== "tu-luan" && r.isCorrect !== null)
+      const objective = rows.filter((r) => r.type !== "tu-luan" && r.type !== "tu-vung" && r.isCorrect !== null)
       const graded = t.gradedAt !== null
       items.push({
         attemptId: t.id,
@@ -104,6 +107,7 @@ export function buildGradingQueue(
         feedback: t.feedback,
         retryPending: graded && t.attemptNo === latestNo && t.retryAllowed && t.attemptNo < assignment.maxAttempts,
         submittedOffline: t.submittedOffline ?? false,
+        flashcard: isFlashcardSet(rows),
       })
     }
   }
@@ -197,6 +201,8 @@ export function correctAnswerText(q: Question): string {
       return q.tokens.join(" ")
     case "tu-luan":
       return q.rubric.trim() || "Phụ huynh tự đánh giá"
+    case "tu-vung":
+      return q.word
   }
 }
 
@@ -239,6 +245,8 @@ export function responseText(q: Question, response: Response | null | undefined)
       // A handwriting-only essay has no text; the handwriting is shown instead.
       return response.text?.trim() || (response.drawing || essayInk(response) ? "" : NO_ANSWER)
     }
+    case "tu-vung":
+      return essayInk(response) ? "" : NO_ANSWER
   }
 }
 
