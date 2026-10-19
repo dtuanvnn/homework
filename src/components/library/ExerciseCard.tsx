@@ -1,4 +1,4 @@
-import { Copy, ListChecks, MoreVertical, Pencil, PencilLine, Send, Trash2 } from 'lucide-react'
+import { Copy, Layers, ListChecks, MoreVertical, Pencil, PencilLine, Send, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -29,6 +29,7 @@ export default function ExerciseCard({ set, actions }: { set: ExerciseSet; actio
   const source = EXERCISE_SOURCES[set.source]
   const SourceIcon = source.icon
   const isDraft = set.status === 'nhap'
+  const flashcard = set.format === 'flashcard'
 
   return (
     <Card className="relative h-full gap-4 overflow-hidden p-5 pl-6 transition-shadow focus-within:ring-[3px] focus-within:ring-ring/40 hover:shadow-md">
@@ -87,7 +88,14 @@ export default function ExerciseCard({ set, actions }: { set: ExerciseSet; actio
 
       <div className="flex flex-wrap gap-1.5">
         <Badge variant="secondary" className="bg-slate-100 text-slate-700">Lớp {set.grade}</Badge>
-        <Badge variant="secondary" className="bg-slate-100 text-slate-700">{EXERCISE_KINDS[set.kind]}</Badge>
+        {flashcard ? (
+          <Badge variant="secondary" className="bg-green-50 text-green-700">
+            <Layers />
+            Flashcard
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="bg-slate-100 text-slate-700">{EXERCISE_KINDS[set.kind]}</Badge>
+        )}
         <Badge
           variant="secondary"
           className={cn(set.source === 'ai' ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-700')}
@@ -101,7 +109,7 @@ export default function ExerciseCard({ set, actions }: { set: ExerciseSet; actio
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
             <ListChecks className="size-4 text-slate-400" aria-hidden />
-            {set.questionCount} câu
+            {set.questionCount} {flashcard ? 'từ' : 'câu'}
           </span>
           <DifficultyDots level={set.difficulty} colorClass={subject.bg} />
         </div>

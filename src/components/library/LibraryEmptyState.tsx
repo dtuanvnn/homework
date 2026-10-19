@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { useRequiredStudent } from '@/components/layout/AppFrame'
 import { Button } from '@/components/ui/button'
-import type { ExerciseSource } from '@/lib/types'
+import type { AddChoice } from './AddExerciseMenu'
 import AddExerciseMenu from './AddExerciseMenu'
 
 function EmptyIllustration() {
@@ -38,7 +38,7 @@ function EmptyIllustration() {
 interface LibraryEmptyStateProps {
   /** true when the library has items but none match the current search/filters. */
   filtered: boolean
-  onAdd: (source: ExerciseSource) => void
+  onAdd: (choice: AddChoice) => void
   onReset: () => void
 }
 

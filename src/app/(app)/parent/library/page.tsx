@@ -11,6 +11,7 @@ export default function LibraryPage() {
       onOpenSet={(id) => navigate(libraryPaths.set(id))}
       onUpload={() => navigate(libraryPaths.upload)}
       onGenerate={() => navigate(libraryPaths.generate)}
+      onFlashcard={() => navigate(libraryPaths.newFlashcard)}
     />
   )
 }
