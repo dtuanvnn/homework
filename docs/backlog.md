@@ -20,7 +20,7 @@ Phụ thuộc: bài viết tay lưu dạng nét bút (`EssayValue.ink`, `lib/ink
 - Bài đọc (Tiếng Anh + Tiếng Việt): trình bày đoạn văn hoặc đoạn hội thoại, cuộn dài; đọc từng đoạn bằng nút loa.
 - Gắn bộ đề với bài học SGK; xuất PDF đề và báo cáo; hỏi AI về bài làm của con.
 
-- Format bài đọc (tiếng anh + tiếng việt) với scroll, trình bày đoạn văn, hoặc đoạn hội thoại. Có thể hỗ trợ đọc từng đoạn, với button loa.
+## Đã xong
 
 - Toán và hình vẽ (LaTeX, MathLive, cắt hình): `specs/2026-10-13-math-and-figures-design.md`.
 - Viết tay nhiều trang: `specs/2026-10-15-handwriting-pages-design.md`.
