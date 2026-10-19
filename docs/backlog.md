@@ -16,13 +16,13 @@ Phụ thuộc: bài viết tay lưu dạng nét bút (`EssayValue.ink`, `lib/ink
 **Đã chốt.**
 - **Cấu trúc.** Một **bài** gồm phần đề chung (lời dẫn, đoạn văn/hội thoại/bài thơ, hình) và nhiều **câu con**, mỗi câu con có dạng riêng (trắc nghiệm, điền, trả lời ngắn, tự luận…), trộn dạng trong cùng bài. Câu không thuộc bài nào vẫn đứng riêng như bây giờ.
 - **Đánh số.** Bài đánh "Bài 1, 2…"; câu con đánh số liên tục qua cả đề: Bài 1 có câu 1, 2; Bài 2 có câu 3, 4, 5.
-- **Điểm.** Phụ huynh nhập điểm của bài; điểm chia đều cho các câu con. Thang 10 của cả đề không đổi.
+- **Điểm.** Phụ huynh nhập điểm của bài; điểm chia đều chính xác cho các câu con, không làm tròn từng câu (1 điểm cho 3 câu = 1/3 mỗi câu). Chỉ làm tròn tổng: điểm đề quy về thang 10 rồi làm tròn 0,25 như hiện tại; điểm bài hiển thị làm tròn ("Bài 3 · 0,75/1"). `points` và `answers.points_awarded` đã là số thực nên không cần đổi schema; chỉ cần bỏ làm tròn 0,01 trong `proportional()` / ô chấm tay của phụ huynh đối với câu con, để tổng không lệch.
 - **Chấm.** Chấm từng câu con, kể cả bài làm trên giấy: tự chấm câu khách quan như hiện tại, phụ huynh chấm câu tự luận/giấy; sai câu nào thì đánh dấu, gợi ý AI (`answers.hint`) và đáp án ở câu đó. Màn chấm và kết quả: tiêu đề bài kèm điểm tổng "Bài 3 · 2,5/3", bên dưới là từng câu con.
 - **Điền chỗ trống trong đoạn văn.** Mỗi chỗ trống là một câu con (báo đúng/sai từng chỗ). Đoạn văn nằm ở đề chung, chỗ trống đánh số theo câu ("(3) ___"), câu con chỉ chứa ô trả lời cho chỗ đó.
 - **Hiển thị đề chung.** Đề chung ở đầu bài, trong một khung cuộn riêng có chiều cao tối đa (đoạn văn dài cuộn bên trong khung, không đẩy vỡ form câu con), trên cả iPad và iPhone.
 - **Quét đề.** Nhiều chỗ cần trả lời dùng chung một đề/đoạn văn thì gộp vào một bài; đề chung chỉ xuất hiện một lần, câu con chỉ chứa phần riêng. Bước review cho phụ huynh gộp/tách bài, kéo câu vào/ra bài.
 - **Bài bị cắt qua hai trang.** Mỗi trang đang được quét riêng và song song (`SCAN_BATCH_FILES = 1`), nên trang sau không thấy đề chung của trang trước. AI đánh dấu các câu con ở đầu trang không có đề (`continues: true`, kèm nhãn bài nếu thấy, ví dụ "Bài 3"); sau khi các batch xong, một hàm thuần trong `lib/ai/` nối các câu đó vào bài cuối của trang trước (cùng nhãn, hoặc bài cuối nếu không có nhãn). Đoạn văn bị cắt giữa hai trang thì nối phần đề chung lại. Review vẫn cho sửa tay khi AI nối sai.
-- **Bài đọc (làm cùng đợt).** Đề chung trình bày được dạng đoạn văn hoặc hội thoại (mỗi lượt lời một dòng, giữ tên/gạch đầu dòng người nói), Tiếng Anh và Tiếng Việt. Mỗi đoạn/lượt lời có nút loa đọc đoạn đó, dùng `lib/speech.ts` (hiện chỉ chọn giọng tiếng Anh: cần thêm giọng `vi-VN` theo môn và thông báo khi thiết bị không có giọng).
+- **Bài đọc (làm cùng đợt).** Đề chung trình bày được dạng đoạn văn hoặc hội thoại (mỗi lượt lời một dòng, giữ tên/gạch đầu dòng người nói), Tiếng Anh và Tiếng Việt. Mỗi đoạn/lượt lời có nút loa đọc đoạn đó, dùng `lib/speech.ts` (hiện chỉ chọn giọng tiếng Anh: cần thêm giọng `vi-VN` theo môn và thông báo khi thiết bị không có giọng). Bài đọc không có câu con (chỉ để đọc/nghe) được phép và tính vào hoàn thành bài: con bấm "Đã đọc" thì xong, không có điểm. Vì bài là lớp nhóm trên các dòng `questions`, bài đọc trơn cần một dòng riêng (ví dụ dạng `doc`, 0 điểm, `isCorrect` không áp dụng); cách chấm cả đề khi chỉ có bài đọc (không có điểm) chốt trong spec.
 
 **Hướng làm (đề xuất).** Giữ mỗi câu con là một dòng `questions` như hiện tại, để chấm (`lib/grading.ts`), `answers` theo từng câu, snapshot, analytics theo kỹ năng, sao, lượt làm lại và gói offline gần như không phải sửa. Bài chỉ là lớp nhóm:
 - Thêm `group?: { id, label?, prompt, image?, layout?: "doan-van" | "hoi-thoai" }` vào câu hỏi (hoặc cột `groups jsonb` trên `exercise_sets` + `groupId` trên câu); các câu cùng `group.id` phải liền nhau theo `position`.
@@ -30,10 +30,6 @@ Phụ thuộc: bài viết tay lưu dạng nét bút (`EssayValue.ink`, `lib/ink
 - Quét/sinh đề: `aiQuestionSchema` thêm khoá nhóm + đề chung + `continues`, bỏ quy tắc "chép lại ngữ cảnh"; `toQuestion()` gom nhóm; `toTakeQuestion` giữ đề chung (không lộ đáp án).
 - Chỉ giao diện gom theo bài: take, review/editor, grading, result, Reports (điểm theo bài khi cần).
 - Không áp dụng cho bộ flashcard.
-
-**Còn mở khi viết spec.**
-- Chia đều trên thang 0,25 có thể không chia hết (1 điểm cho 3 câu). Đề xuất: chia theo bước 0,25, phần dư dồn cho các câu đầu (0,5 / 0,25 / 0,25), editor hiện điểm từng câu; hay cho phép điểm lẻ (0,33) miễn tổng bài đúng?
-- Bài đọc không có câu con (chỉ để đọc/nghe) có được không, và có tính là hoàn thành bài không?
 
 ## Gợi ý tính năng khác (chưa chốt)
 
