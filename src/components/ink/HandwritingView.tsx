@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from "lucide-react"
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { trimInk, type Ink } from "@/lib/ink"
+import { pageHeight, trimInk, type Ink } from "@/lib/ink"
 import { InkPageSvg } from "./InkPage"
 
 export interface Handwriting {
@@ -27,7 +27,7 @@ export default function HandwritingView({ handwriting, label }: { handwriting: H
 
   const page = (i: number, large = false) =>
     ink ? (
-      <InkPageSvg paper={ink.paper} strokes={ink.pages[i].strokes} label={`${label}, trang ${i + 1}/${count}`} />
+      <InkPageSvg paper={ink.paper} height={pageHeight(ink)} strokes={ink.pages[i].strokes} label={count > 1 ? `${label}, trang ${i + 1}/${count}` : label} />
     ) : (
       // eslint-disable-next-line @next/next/no-img-element -- inline data URL
       <img src={handwriting.drawing} alt={label} className={large ? "w-full bg-white" : "w-full rounded-xl bg-white"} />
