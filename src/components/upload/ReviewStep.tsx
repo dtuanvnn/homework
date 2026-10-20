@@ -8,7 +8,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import QuestionEditorSheet from '@/components/exercise-detail/QuestionEditorSheet'
 import GroupEditorSheet, { type GroupEdit } from '@/components/exercise-detail/GroupEditorSheet'
 import { groupBlocks } from '@/lib/question-groups'
-import { canRelease, joinGroup, joinPreviousGroup, releaseQuestion, splitGroupAt, ungroup, updateGroup } from '@/lib/question-groups-edit'
+import {
+  canRelease,
+  hasBlanks,
+  isBlankQuestion,
+  joinGroup,
+  joinPreviousGroup,
+  mergeBlanks,
+  releaseQuestion,
+  splitGroupAt,
+  ungroup,
+  updateGroup,
+} from '@/lib/question-groups-edit'
 import { SUBJECTS } from '@/lib/subjects'
 import { TABLET_QUERY, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
@@ -122,11 +133,21 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
   const update = (id: string, patch: Partial<ReviewItem>) =>
     onItemsChange(latestItems.current.map((it) => (it.question.id === id ? { ...it, ...patch } : it)))
 
-  const handleDelete = (index: number) => withUndo(items.filter((_, i) => i !== index), `Đã xóa câu ${index + 1}`)
+  const handleDelete = (index: number) => {
+    // A blank câu answers one "___" of its passage: it goes with the whole passage ("Bỏ bài" merges them back).
+    if (isBlankQuestion(items[index].question)) {
+      toast('Câu này là một chỗ trống của đoạn văn', { description: 'Dùng "Bỏ bài" để gộp lại thành một câu điền chỗ trống.' })
+      return
+    }
+    withUndo(items.filter((_, i) => i !== index), `Đã xóa câu ${index + 1}`)
+  }
 
   /** A bài move on the questions (lib/question-groups-edit.ts), with undo. */
   const applyGroups = (next: Question[], message: string) => withUndo(withQuestions(items, next), message)
   const questionsNow = () => items.map((it) => it.question)
+  const allQuestions = questionsNow()
+  /** Offer a bài move only when it changes something (the helpers refuse moves that would break a split passage). */
+  const changes = (next: Question[]) => next !== allQuestions
 
   const handleMergeUp = (index: number) => {
     const upper = items[index - 1]
@@ -204,7 +225,7 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
     const next = items[i + 1]
     const groupActions: { label: string; onSelect: () => void }[] = []
     if (q.group) {
-      if (prev?.question.group?.id === q.group.id && !prev.placeholder)
+      if (prev?.question.group?.id === q.group.id && !prev.placeholder && changes(splitGroupAt(allQuestions, q.id)))
         groupActions.push({ label: 'Tách thành bài riêng', onSelect: () => applyGroups(splitGroupAt(questionsNow(), q.id), 'Đã tách thành bài riêng') })
       if (canRelease(questionsNow(), q.id)) groupActions.push({ label: 'Đưa ra khỏi bài', onSelect: () => applyGroups(releaseQuestion(questionsNow(), q.id), 'Đã đưa câu ra khỏi bài') })
     } else {
@@ -213,7 +234,7 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
       if (next?.question.group && !next.placeholder)
         groupActions.push({ label: 'Đưa vào bài dưới', onSelect: () => applyGroups(joinGroup(questionsNow(), q.id, 'down'), 'Đã đưa câu vào bài') })
     }
-    const canMerge = i > 0 && !prev?.placeholder
+    const canMerge = i > 0 && !prev?.placeholder && !isBlankQuestion(q) && !(prev && isBlankQuestion(prev.question))
     return (
       <ExtractedQuestionCard
         key={q.id}
@@ -252,11 +273,16 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
             onEdit={() => setEditingGroupId(block.group.id)}
             onAdjustFigure={() => setGroupFigureFor(items[first])}
             onJoinAbove={
-              above?.kind === 'group' && !waiting
+              above?.kind === 'group' && !waiting && changes(joinPreviousGroup(allQuestions, block.group.id))
                 ? () => applyGroups(joinPreviousGroup(questionsNow(), block.group.id), `Đã gộp ${block.title} vào bài trên`)
                 : undefined
             }
-            onUngroup={() => applyGroups(ungroup(questionsNow(), block.group.id), `Đã bỏ ${block.title}`)}
+            onUngroup={() =>
+              applyGroups(
+                hasBlanks(allQuestions, block.group.id) ? mergeBlanks(allQuestions, block.group.id) : ungroup(allQuestions, block.group.id),
+                `Đã bỏ ${block.title}`,
+              )
+            }
             onFillFromBelow={waiting && below && !below.question.group ? () => withUndo(fillPlaceholder(items, items[first].question.id), 'Đã đưa câu vào bài') : undefined}
             onDeletePassage={() => withUndo(deletePassage(items, block.group.id), 'Đã xóa đoạn văn')}
           >

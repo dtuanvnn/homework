@@ -118,7 +118,9 @@ function groupRun(run: Question[]): Question[] | null {
 
 /* ---------- Split passage (Tách / Gộp chỗ trống) ---------- */
 
-const isBlank = (q: Question): q is ShortAnswerQuestion & { blank: number } => q.type === "tra-loi-ngan" && q.blank !== undefined
+/** A blank câu of a split passage: it only moves with its passage ("Gộp chỗ trống" / "Bỏ bài"). */
+export const isBlankQuestion = (q: Question): q is ShortAnswerQuestion & { blank: number } => q.type === "tra-loi-ngan" && q.blank !== undefined
+const isBlank = isBlankQuestion
 
 /** A standalone fill-blank question with at least `min` blanks. */
 export function canSplitBlanks(qs: Question[], questionId: string, min = 2): boolean {
@@ -259,7 +261,7 @@ export function joinGroup(qs: Question[], questionId: string, direction: "up" | 
 export function joinPreviousGroup(qs: Question[], groupId: string): Question[] {
   const i = qs.findIndex((q) => q.group?.id === groupId)
   const above = qs[i - 1]?.group
-  if (i < 0 || !above) return qs
+  if (i < 0 || !above || hasBlanks(qs, groupId) || hasBlanks(qs, above.id)) return qs
   return qs.map((q) => (q.group?.id === groupId ? withGroup(release(q), above) : q))
 }
 
@@ -267,7 +269,7 @@ export function joinPreviousGroup(qs: Question[], groupId: string): Question[] {
 export function splitGroupAt(qs: Question[], questionId: string): Question[] {
   const i = qs.findIndex((q) => q.id === questionId)
   const group = qs[i]?.group
-  if (!group || qs[i - 1]?.group?.id !== group.id) return qs
+  if (!group || qs[i - 1]?.group?.id !== group.id || hasBlanks(qs, group.id)) return qs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the new bài is titled "Bài n" until the parent names it
   const { label: _label, ...shared } = group
   const next: QuestionGroup = { ...shared, id: uid("bai") }
@@ -278,7 +280,7 @@ export function splitGroupAt(qs: Question[], questionId: string): Question[] {
 export function canRelease(qs: Question[], questionId: string): boolean {
   const i = qs.findIndex((q) => q.id === questionId)
   const id = qs[i]?.group?.id
-  if (!id) return false
+  if (!id || isBlank(qs[i])) return false
   return qs[i - 1]?.group?.id !== id || qs[i + 1]?.group?.id !== id
 }
 

@@ -99,3 +99,20 @@ describe("deletePassage", () => {
     expect(out.map((i) => i.question.id)).toEqual(["q2"])
   })
 })
+
+describe("withQuestions after Bỏ bài on a split passage", () => {
+  it("gives the merged passage the review details of the blank câu it replaces", () => {
+    const g: QuestionGroup = { id: "g", prompt: "A ___ b ___." }
+    const blank = (id: string, k: number): ReviewItem => ({
+      question: { id, type: "tra-loi-ngan", prompt: "", answer: String(k), blank: k, points: 1, skills: [], group: g },
+      confidence: 0.7,
+      page: 3,
+      reviewed: false,
+      note: "mờ",
+    })
+    const merged = { id: "m", type: "dien-cho-trong" as const, prompt: "A ___ b ___.", answers: ["1", "2"], points: 2, skills: [] }
+    const out = withQuestions([blank("b1", 1), blank("b2", 2), { ...scanned(4), reviewed: false }], [merged, scanned(4).question])
+    expect(out.map((i) => i.question.id)).toEqual(["m", "q4"])
+    expect(out[0]).toMatchObject({ page: 3, confidence: 0.7, note: "mờ" })
+  })
+})

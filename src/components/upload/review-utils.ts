@@ -49,10 +49,17 @@ export function withSignedFigures(items: ReviewItem[], urls: Record<string, stri
 
 /** Bài operations work on questions (lib/question-groups-edit.ts); this puts the result back on the review items. */
 export function withQuestions(items: ReviewItem[], questions: Question[]): ReviewItem[] {
-  const byId = new Map(questions.map((q) => [q.id, q]))
-  return items.flatMap((it) => {
-    const q = byId.get(it.question.id)
-    return q ? [q === it.question ? it : { ...it, question: q }] : []
+  const byId = new Map(items.map((it) => [it.question.id, it]))
+  const kept = new Set(questions.map((q) => q.id))
+  // A new câu (a split passage merged back by "Bỏ bài") takes the details of the first câu it replaced.
+  const replaced = items.find((it) => !kept.has(it.question.id))
+  return questions.flatMap((q) => {
+    const it = byId.get(q.id) ?? replaced
+    if (!it) return []
+    if (it.question === q) return [it]
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a merged passage is a plain câu again
+    const { placeholder: _placeholder, ...rest } = it
+    return [{ ...(byId.has(q.id) ? it : rest), question: q }]
   })
 }
 

@@ -13,6 +13,7 @@ import {
   isBlankGroup,
   joinGroup,
   joinPreviousGroup,
+  isBlankQuestion,
   mergeBlanks,
   releaseQuestion,
   setGroupPoints,
@@ -332,5 +333,28 @@ describe("scan and review bài helpers", () => {
     expect(splitBlanksInGroup(mixed, "p")).toBe(mixed)
     const short = [cloze("c", "I ___ a ___.", ["a", "b"], g)]
     expect(splitBlanksInGroup(short, "p")).toBe(short)
+  })
+})
+
+describe("bài moves keep split passages whole", () => {
+  const passage = (): Question[] => splitBlanks([{ id: "p", type: "dien-cho-trong", prompt: "A ___ b ___ c ___.", answers: ["1", "2", "3"], points: 3, skills: [] }], "p")
+  const other: QuestionGroup = { id: "o", prompt: "Other" }
+
+  it("splitGroupAt refuses to cut a split passage", () => {
+    const qs = passage()
+    expect(splitGroupAt(qs, qs[1].id)).toBe(qs)
+  })
+
+  it("joinPreviousGroup refuses when either bài is a split passage", () => {
+    const below = [...passage(), q("x", "x", other)]
+    expect(joinPreviousGroup(below, "o")).toBe(below)
+    const above = [q("x", "x", other), ...passage()]
+    expect(joinPreviousGroup(above, above[1].group!.id)).toBe(above)
+  })
+
+  it("a blank câu cannot leave its bài", () => {
+    const qs = passage()
+    expect(canRelease(qs, qs[2].id)).toBe(false)
+    expect(isBlankQuestion(qs[0])).toBe(true)
   })
 })
