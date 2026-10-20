@@ -12,10 +12,13 @@ import {
   hasBlanks,
   isBlankGroup,
   joinGroup,
+  joinPreviousGroup,
   mergeBlanks,
   releaseQuestion,
   setGroupPoints,
   splitBlanks,
+  splitBlanksInGroup,
+  splitGroupAt,
   suggestGroups,
   ungroup,
   updateGroup,
@@ -261,5 +264,73 @@ describe("split passage blanks", () => {
     expect(canApplyMove([s[0], s[2], s[1], s[3]])).toBe(false)
     expect(canApplyMove([s[0], { ...s[3], group: s[0].group }, s[1], s[2]])).toBe(true)
     expect(canApplyMove([s[1], s[2], s[3], { ...s[0], group: undefined }])).toBe(false)
+  })
+})
+
+describe("scan and review bài helpers", () => {
+  const A: QuestionGroup = { id: "a", label: "Bài 1", prompt: "Đề A" }
+  const B: QuestionGroup = { id: "b", prompt: "Đề B" }
+
+  it("joinPreviousGroup moves a bài into the one above, keeping its prompt on each câu", () => {
+    const qs = [q("1", "c1", A), q("2", "c2", B), q("3", "c3", B)]
+    const out = joinPreviousGroup(qs, "b")
+    expect(ids(out)).toEqual(["1:a", "2:a", "3:a"])
+    expect(out[1].prompt).toBe("Đề B\nc2")
+    expect(checkGroups(out)).toBeNull()
+  })
+
+  it("joinPreviousGroup does nothing when the item above is not in a bài", () => {
+    const qs = [q("1"), q("2", "c2", B)]
+    expect(joinPreviousGroup(qs, "b")).toBe(qs)
+  })
+
+  it("splitGroupAt makes the câu and those after it a new bài with the same prompt", () => {
+    const qs = [q("1", "1", A), q("2", "2", A), q("3", "3", A), q("4", "4", A)]
+    const out = splitGroupAt(qs, "3")
+    expect(out[0].group?.id).toBe("a")
+    expect(out[1].group?.id).toBe("a")
+    expect(out[2].group?.id).not.toBe("a")
+    expect(out[3].group?.id).toBe(out[2].group?.id)
+    expect(out[2].group).toMatchObject({ prompt: "Đề A" })
+    expect(out[2].group?.label).toBeUndefined()
+    expect(checkGroups(out)).toBeNull()
+    expect(splitGroupAt(qs, "1")).toBe(qs)
+  })
+
+  const cloze = (id: string, prompt: string, answers: string[], group?: QuestionGroup): Question => ({
+    id,
+    type: "dien-cho-trong",
+    prompt,
+    answers,
+    points: 3,
+    skills: ["Đọc hiểu"],
+    ...(group ? { group } : {}),
+  })
+
+  it("splitBlanksInGroup splits a cloze passage inside its bài and keeps the layout", () => {
+    const g: QuestionGroup = { id: "p", label: "Part 2", prompt: "**Fill in.**", layout: "doan-van" }
+    const out = splitBlanksInGroup([cloze("c", "I ___ a ___ cat ___.", ["have", "big", "too"], g)], "p")
+    expect(out).toHaveLength(3)
+    expect(out.map((x) => (x as ShortAnswerQuestion).blank)).toEqual([1, 2, 3])
+    expect(out.map((x) => (x as ShortAnswerQuestion).answer)).toEqual(["have", "big", "too"])
+    expect(out[0].group).toMatchObject({ id: "p", label: "Part 2", layout: "doan-van", prompt: "**Fill in.**\nI ___ a ___ cat ___." })
+    expect(out.every((x) => x.points === 1)).toBe(true)
+    expect(checkGroups(out)).toBeNull()
+  })
+
+  it("splitBlanksInGroup merges several cloze câu of a bài into one passage first", () => {
+    const g: QuestionGroup = { id: "p", prompt: "", layout: "doan-van" }
+    const out = splitBlanksInGroup([cloze("c1", "One ___ two ___.", ["a", "b"], g), cloze("c2", "Three ___.", ["c"], g)], "p")
+    expect(out.map((x) => (x as ShortAnswerQuestion).answer)).toEqual(["a", "b", "c"])
+    expect(out[0].group?.prompt).toBe("One ___ two ___.\nThree ___.")
+    expect(checkGroups(out)).toBeNull()
+  })
+
+  it("splitBlanksInGroup leaves mixed bài and short passages alone", () => {
+    const g: QuestionGroup = { id: "p", prompt: "x" }
+    const mixed = [cloze("c", "I ___ a ___ cat ___.", ["a", "b", "c"], g), q("t", "t", g)]
+    expect(splitBlanksInGroup(mixed, "p")).toBe(mixed)
+    const short = [cloze("c", "I ___ a ___.", ["a", "b"], g)]
+    expect(splitBlanksInGroup(short, "p")).toBe(short)
   })
 })

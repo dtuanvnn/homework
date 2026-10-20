@@ -141,8 +141,13 @@ export function splitBlanks(qs: Question[], questionId: string): Question[] {
     prompt: match ? q.prompt.slice(match[0].length).trim() : q.prompt,
     ...(q.image ? { image: q.image, ...(q.imageUrl ? { imageUrl: q.imageUrl } : {}) } : {}),
   }
+  return qs.flatMap((x) => (x === q ? blankQuestions(q, group) : [x]))
+}
+
+/** One short-answer câu per "___" of `q`'s prompt, in bài `group`. */
+function blankQuestions(q: FillBlankQuestion, group: QuestionGroup): Question[] {
   const count = countBlanks(q.prompt)
-  const blanks = Array.from({ length: count }, (_, k): Question => {
+  return Array.from({ length: count }, (_, k): Question => {
     const answer = q.answers[k] ?? ""
     // A blank the key list doesn't reach has no key, whatever the passage's status.
     const answerStatus = answer.trim() ? q.answerStatus : "missing"
@@ -163,7 +168,23 @@ export function splitBlanks(qs: Question[], questionId: string): Question[] {
       ...(k === 0 && q.solutionImage ? { solutionImage: q.solutionImage, ...(q.solutionImageUrl ? { solutionImageUrl: q.solutionImageUrl } : {}) } : {}),
     }
   })
-  return qs.flatMap((x) => (x === q ? blanks : [x]))
+}
+
+/**
+ * A bài whose câu are only fill-blank passages (a scanned cloze text under its
+ * instruction) becomes a split passage in place: the passages join into one,
+ * appended to the bài's prompt, with one blank câu per "___". The bài keeps
+ * its id, label, layout and figure.
+ */
+export function splitBlanksInGroup(qs: Question[], groupId: string, min = SUGGEST_SPLIT_BLANKS): Question[] {
+  const members = qs.filter((q) => q.group?.id === groupId)
+  if (!members.length || !members.every((q): q is FillBlankQuestion => q.type === "dien-cho-trong")) return qs
+  const passage = members.map((q) => q.prompt.trim()).join("\n")
+  if (countBlanks(passage) < min) return qs
+  const first = members[0]
+  const group: QuestionGroup = { ...first.group!, prompt: [first.group!.prompt, passage].filter((p) => p.trim()).join("\n") }
+  const merged: FillBlankQuestion = { ...first, prompt: passage, answers: members.flatMap((q) => q.answers) }
+  return qs.flatMap((q) => (q === first ? blankQuestions(merged, group) : q.group?.id === groupId ? [] : [q]))
 }
 
 /** The bài consists only of blank câu (so it can go back to one question). */
@@ -232,6 +253,25 @@ export function joinGroup(qs: Question[], questionId: string, direction: "up" | 
   if (i < 0 || !neighbour || qs[i].group) return qs
   const group = neighbour.group ?? newGroup()
   return qs.map((q) => (q === qs[i] || q === neighbour ? withGroup(q, group) : q))
+}
+
+/** The bài's câu join the bài directly above it, each keeping the shared prompt it had (lossless). */
+export function joinPreviousGroup(qs: Question[], groupId: string): Question[] {
+  const i = qs.findIndex((q) => q.group?.id === groupId)
+  const above = qs[i - 1]?.group
+  if (i < 0 || !above) return qs
+  return qs.map((q) => (q.group?.id === groupId ? withGroup(release(q), above) : q))
+}
+
+/** "Tách thành bài riêng": the câu and those after it in its bài form a new bài with the same shared part, unlabelled. */
+export function splitGroupAt(qs: Question[], questionId: string): Question[] {
+  const i = qs.findIndex((q) => q.id === questionId)
+  const group = qs[i]?.group
+  if (!group || qs[i - 1]?.group?.id !== group.id) return qs
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the new bài is titled "Bài n" until the parent names it
+  const { label: _label, ...shared } = group
+  const next: QuestionGroup = { ...shared, id: uid("bai") }
+  return qs.map((q, k) => (k >= i && q.group?.id === group.id ? withGroup(q, next) : q))
 }
 
 /** Only the first or last câu of a bài can leave it without splitting the bài. */
