@@ -87,6 +87,18 @@ export function solveRequestText(q: Question, meta: { subject: SubjectId; grade:
 
 const sameItems = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join("\n") === [...b].sort().join("\n")
 
+/**
+ * A solved câu's answer (key, status, solution) applied to the câu as it is now:
+ * the parent may have edited its prompt, points or bài while the AI worked.
+ * A câu whose type changed meanwhile keeps no answer.
+ */
+export function mergeSolution(current: Question, solved: Question): Question {
+  if (current.type !== solved.type) return current
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id, prompt, points, skills, image, imageUrl, group, solutionImage, solutionImageUrl, ...answer } = solved
+  return { ...current, ...answer } as Question
+}
+
 /** The question with the AI's answer key and solution, or null when the answer doesn't fit the question. */
 export function applySolution(q: Question, res: SolveResponse): Question | null {
   const solution = res.solution.trim()

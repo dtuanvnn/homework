@@ -19,6 +19,7 @@ import { totalPoints } from '@/lib/questions'
 import { cn } from '@/lib/utils'
 import { useLibrary } from '@/state/library-store'
 import { solveQuestion } from '@/server/actions/ai-solve'
+import { mergeSolution } from '@/lib/ai/solve'
 import type { Attachment, ExerciseSet, ExerciseSetStatus, Question } from '@/lib/types'
 
 import { useRequiredStudent, type LeaveGuard } from '@/components/layout/AppFrame'
@@ -181,9 +182,9 @@ export default function ExerciseSetDetail({
       try {
         // The server drops the signed picture URLs; keep them so the pictures stay on screen.
         const answered = unwrap(await solveQuestion({ setId, subject: draft.subject, grade: draft.grade, question: q }))
-        const result = { ...answered, imageUrl: q.imageUrl, solutionImageUrl: q.solutionImageUrl, ...(q.group ? { group: q.group } : {}) }
-        solved.set(q.id, result)
-        setQuestions((prev) => prev.map((x) => (x.id === q.id ? result : x)))
+        // Only the answer is taken: the câu may have been edited (or put in a bài) while the AI worked.
+        solved.set(q.id, answered)
+        setQuestions((prev) => prev.map((x) => (x.id === q.id ? mergeSolution(x, answered) : x)))
       } catch (e) {
         errors.push(e instanceof Error ? e.message : 'Vui lòng thử lại.')
       } finally {
@@ -195,7 +196,7 @@ export default function ExerciseSetDetail({
     if (errors.length) toast.error(`Chưa giải được ${errors.length} câu`, { description: errors[0] })
     if (!solved.size) return
     // State may not hold the last results yet: apply them to the latest list before saving.
-    if (await persist(draft.status, 'solve', latestQuestions.current.map((x) => solved.get(x.id) ?? x))) {
+    if (await persist(draft.status, 'solve', latestQuestions.current.map((x) => (solved.has(x.id) ? mergeSolution(x, solved.get(x.id)!) : x)))) {
       const unsure = [...solved.values()].filter((q) => q.answerStatus === 'ai-check').length
       toast.success(`Đã giải và lưu ${solved.size} câu`, unsure ? { description: `${unsure} câu AI chưa chắc chắn – xem các câu có nhãn “cần kiểm tra”.` } : undefined)
     }
