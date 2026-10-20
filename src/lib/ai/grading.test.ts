@@ -24,6 +24,10 @@ describe("roundToStep", () => {
     expect(roundToStep(2.2, 3)).toBe(2)
     expect(roundToStep(2.3, 3)).toBe(2.5)
   })
+  it("rounds a split-bài câu to halves of its exact points", () => {
+    expect(roundToStep(0.3, 1 / 3)).toBe(1 / 3)
+    expect(roundToStep(0.15, 1 / 3)).toBe(1 / 6)
+  })
   it("clamps to 0 … max and survives junk", () => {
     expect(roundToStep(5, 2)).toBe(2)
     expect(roundToStep(-1, 2)).toBe(0)

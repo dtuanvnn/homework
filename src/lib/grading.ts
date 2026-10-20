@@ -69,7 +69,8 @@ function shortAnswerMatches(expected: string, given: string): boolean {
 
 function proportional(points: number, correct: number, total: number): QuestionGrade {
   if (total === 0) return WRONG
-  return { isCorrect: correct === total, pointsAwarded: Math.round(((points * correct) / total) * 100) / 100 }
+  // Exact (no 0.01 rounding): câu of a split bài may be worth 1/3 point; only the score is rounded.
+  return { isCorrect: correct === total, pointsAwarded: (points * correct) / total }
 }
 
 const allOrNothing = (points: number, ok: boolean): QuestionGrade => (ok ? { isCorrect: true, pointsAwarded: points } : WRONG)

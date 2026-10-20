@@ -152,8 +152,12 @@ export interface GradingDetail {
   offlineSetChanged: boolean
 }
 
-/** Points the parent can pick for a question: 0 … max in quarter (≤ 2 points) or half steps. */
+/**
+ * Points the parent can pick for a question: 0 … max in quarter (≤ 2 points) or half steps.
+ * A câu of a split bài (e.g. 1/3 point) steps 0 / half / full instead.
+ */
 export function pointStep(max: number): number {
+  if (!Number.isInteger(Math.round(max * 4 * 1e9) / 1e9)) return max / 2
   return max <= 2 ? 0.25 : 0.5
 }
 
@@ -162,7 +166,7 @@ export function stepPoints(current: number | null, max: number, direction: 1 | -
   const step = pointStep(max)
   const base = current ?? 0
   const next = direction > 0 ? Math.floor(base / step + 1e-9) * step + step : Math.ceil(base / step - 1e-9) * step - step
-  return Math.round(Math.min(max, Math.max(0, next)) * 100) / 100
+  return Math.min(max, Math.max(0, next))
 }
 
 export interface AnswerMark {
@@ -175,7 +179,7 @@ export function markedTotals(answers: { question: Question }[], marks: AnswerMar
   const total = answers.reduce((sum, a) => sum + a.question.points, 0)
   const awarded = marks.reduce((sum, m) => sum + (m.pointsAwarded ?? 0), 0)
   const remaining = marks.filter((m) => m.isCorrect === null || m.pointsAwarded === null).length
-  return { total, awarded: Math.round(awarded * 100) / 100, remaining }
+  return { total, awarded, remaining }
 }
 
 /* ---------- Readable answers ---------- */

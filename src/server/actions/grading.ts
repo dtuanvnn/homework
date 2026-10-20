@@ -4,6 +4,7 @@ import { asc, eq } from "drizzle-orm"
 import { refresh } from "next/cache"
 import { z } from "zod"
 import { db, schema } from "@/db"
+import { formatScoreValue } from "@/lib/format"
 import { scoreOutOf10 } from "@/lib/grading"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { assertAccess } from "../access"
@@ -58,7 +59,7 @@ export async function gradeAttempt(attemptId: string, input: GradeInput): Promis
     }
     for (const [i, s] of stored.entries()) {
       const points = marks.get(s.id)!.pointsAwarded
-      if (points > s.question.points) throw new Error(`Câu ${i + 1}: điểm tối đa là ${s.question.points}`)
+      if (points > s.question.points + 1e-9) throw new Error(`Câu ${i + 1}: điểm tối đa là ${formatScoreValue(s.question.points)}`)
     }
 
     const total = stored.reduce((sum, s) => sum + s.question.points, 0)
@@ -70,7 +71,7 @@ export async function gradeAttempt(attemptId: string, input: GradeInput): Promis
       for (const a of data.answers) {
         await tx
           .update(answers)
-          .set({ isCorrect: a.isCorrect, pointsAwarded: Math.round(a.pointsAwarded * 100) / 100, comment: a.comment || null })
+          .set({ isCorrect: a.isCorrect, pointsAwarded: a.pointsAwarded, comment: a.comment || null })
           .where(eq(answers.id, a.answerId))
       }
       await tx

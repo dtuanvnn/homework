@@ -97,8 +97,7 @@ export function roundToStep(points: number, max: number): number {
   if (!Number.isFinite(points) || max <= 0) return 0
   const step = pointStep(max)
   const clamped = Math.min(max, Math.max(0, points))
-  const rounded = Math.round(clamped / step) * step
-  return Math.round(Math.min(max, rounded) * 100) / 100
+  return Math.min(max, Math.round(clamped / step) * step)
 }
 
 /** The app's rule: an answer counts as correct with at least half of its points. */
