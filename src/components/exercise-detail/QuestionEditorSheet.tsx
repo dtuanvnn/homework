@@ -163,7 +163,8 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
             </SheetHeader>
 
             <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 pb-5 md:px-6">
-              {editing && (
+              {/* A blank câu answers one "___" of its passage: it stays a short answer. */}
+              {editing && !draft.blank && (
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="q-type">Dạng câu</Label>
                   <Select value={draft.type} onValueChange={(v) => setDraft((d) => (d ? changeDraftType(d, v as QuestionType) : d))}>
@@ -190,7 +191,7 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
 
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Label htmlFor="q-prompt">{promptCopy?.label ?? 'Câu hỏi'}</Label>
+                  <Label htmlFor="q-prompt">{draft.blank ? 'Ghi chú (không bắt buộc)' : (promptCopy?.label ?? 'Câu hỏi')}</Label>
                   <div className="flex flex-wrap gap-1.5">
                     {draft.type === 'dien-cho-trong' && (
                       <Button variant="outline" size="sm" className="h-9" onClick={insertBlank}>

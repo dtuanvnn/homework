@@ -31,6 +31,8 @@ export interface QuestionDraft {
   solution: string
   solutionImage?: QuestionImage
   solutionImageUrl?: string
+  /** Blank câu of a split passage (short answer): its prompt is an optional note. */
+  blank?: number
 }
 
 /** Fields that make up the answer key: changing one makes it the parent's own. */
@@ -94,7 +96,7 @@ export function toDraft(q: Question): QuestionDraft {
     case 'dien-cho-trong':
       return { ...base, blanks: [...q.answers], math: Boolean(q.math), simplest: Boolean(q.simplest) }
     case 'tra-loi-ngan':
-      return { ...base, shortAnswer: q.answer, math: Boolean(q.math), simplest: Boolean(q.simplest) }
+      return { ...base, shortAnswer: q.answer, math: Boolean(q.math), simplest: Boolean(q.simplest), blank: q.blank }
     case 'noi':
       return { ...base, pairs: q.pairs.map((p) => ({ ...p })) }
     case 'sap-xep':
@@ -137,7 +139,7 @@ export function orderingTokens(text: string): string[] {
 /** Returns a list of problems; empty means the draft can be saved. */
 export function validateDraft(d: QuestionDraft): string[] {
   const issues: string[] = []
-  if (!d.prompt.trim()) issues.push('Nhập nội dung câu hỏi')
+  if (!d.prompt.trim() && !d.blank) issues.push('Nhập nội dung câu hỏi')
   // Without a key only the content is checked: the parent grades by hand.
   const keyless = d.answerStatus === 'missing'
   switch (d.type) {
@@ -204,7 +206,7 @@ export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Qu
     case 'dien-cho-trong':
       return { ...base, type: 'dien-cho-trong', answers: Array.from({ length: countBlanks(d.prompt) }, (_, i) => (d.blanks[i] ?? '').trim()), ...math }
     case 'tra-loi-ngan':
-      return { ...base, type: 'tra-loi-ngan', answer: d.shortAnswer.trim(), ...math }
+      return { ...base, type: 'tra-loi-ngan', answer: d.shortAnswer.trim(), ...math, ...(d.blank ? { blank: d.blank } : {}) }
     case 'noi':
       return {
         ...base,

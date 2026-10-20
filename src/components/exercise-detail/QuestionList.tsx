@@ -11,12 +11,27 @@ import {
 } from '@dnd-kit/core'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { toast } from 'sonner'
 import { groupBlocks } from '@/lib/question-groups'
-import { applyDrop, canRelease, createGroup, joinGroup, releaseQuestion, ungroup } from '@/lib/question-groups-edit'
-import { totalPoints } from '@/lib/questions'
+import {
+  applyDrop,
+  canApplyMove,
+  canRelease,
+  canSplitBlanks,
+  createGroup,
+  isBlankGroup,
+  joinGroup,
+  mergeBlanks,
+  releaseQuestion,
+  splitBlanks,
+  ungroup,
+} from '@/lib/question-groups-edit'
+import { countBlanks, totalPoints } from '@/lib/questions'
 import type { Question } from '@/lib/types'
 import GroupCard from './GroupCard'
 import QuestionCard, { type CardAction } from './QuestionCard'
+
+const isBlankCau = (q: Question) => q.type === 'tra-loi-ngan' && q.blank !== undefined
 
 interface QuestionListProps {
   questions: Question[]
@@ -53,7 +68,12 @@ export default function QuestionList({ questions, onChange, onEdit, onDelete, on
     if (!over || active.id === over.id) return
     const from = questions.findIndex((q) => q.id === active.id)
     const to = questions.findIndex((q) => q.id === over.id)
-    onChange(applyDrop(arrayMove(questions, from, to), String(active.id)))
+    const next = applyDrop(arrayMove(questions, from, to), String(active.id))
+    if (!canApplyMove(next)) {
+      toast('Các câu điền chỗ trống phải giữ đúng thứ tự trong bài.')
+      return
+    }
+    onChange(next)
   }
 
   /** Applies a change that may form a new bài; a new, empty bài opens "Sửa bài". */
@@ -65,18 +85,24 @@ export default function QuestionList({ questions, onChange, onEdit, onDelete, on
 
   const actionsFor = (q: Question, i: number): CardAction[] => {
     if (!onEditGroup) return []
+    const splittable = q.type === 'dien-cho-trong' && countBlanks(q.prompt) >= 2
+    const split: CardAction[] = splittable
+      ? [{ label: 'Tách chỗ trống', onSelect: () => onChange(splitBlanks(questions, q.id)), disabled: !canSplitBlanks(questions, q.id), hint: 'Tách khỏi bài trước' }]
+      : []
     if (q.group) {
-      const releasable = canRelease(questions, q.id)
+      const blank = isBlankCau(q)
       return [
+        ...split,
         {
           label: 'Tách khỏi bài',
           onSelect: () => onChange(releaseQuestion(questions, q.id)),
-          disabled: !releasable,
-          hint: 'Kéo câu ra khỏi bài trước',
+          disabled: blank || !canRelease(questions, q.id),
+          hint: blank ? 'Dùng Gộp chỗ trống' : 'Kéo câu ra khỏi bài trước',
         },
       ]
     }
     return [
+      ...split,
       { label: 'Tạo bài từ câu này', onSelect: () => changeAndEdit(createGroup(questions, q.id), q.id) },
       ...(i > 0 ? [{ label: 'Đưa vào bài trên', onSelect: () => changeAndEdit(joinGroup(questions, q.id, 'up'), q.id) }] : []),
       ...(i < questions.length - 1 ? [{ label: 'Đưa vào bài dưới', onSelect: () => changeAndEdit(joinGroup(questions, q.id, 'down'), q.id) }] : []),
@@ -93,6 +119,7 @@ export default function QuestionList({ questions, onChange, onEdit, onDelete, on
       onSolve={onSolve && (() => onSolve(q))}
       solving={solving?.has(q.id)}
       actions={actionsFor(q, i)}
+      canDelete={!isBlankCau(q)}
     />
   )
 
@@ -123,7 +150,11 @@ export default function QuestionList({ questions, onChange, onEdit, onDelete, on
                 count={block.items.length}
                 points={totalPoints(block.items.map((x) => x.item))}
                 onEdit={() => onEditGroup?.(block.group.id, questions)}
-                onUngroup={() => onChange(ungroup(questions, block.group.id))}
+                // A split passage goes back to one question rather than N empty short answers.
+                onUngroup={() =>
+                  onChange(isBlankGroup(questions, block.group.id) ? mergeBlanks(questions, block.group.id) : ungroup(questions, block.group.id))
+                }
+                blanks={isBlankGroup(questions, block.group.id)}
                 onDelete={() => onDeleteGroup?.(block.group.id)}
               >
                 {block.items.map((x) => card(x.item, x.number - 1))}

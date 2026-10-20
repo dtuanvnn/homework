@@ -7,6 +7,14 @@ describe("fromDraft", () => {
     const q: Question = { id: "q1", type: "tu-luan", prompt: "Anna ___", points: 1, skills: [], rubric: "", group: { id: "g", label: "Part 4", prompt: "Read and write." } }
     expect(fromDraft(toDraft(q), q.id, q).group).toEqual(q.group)
   })
+
+  it("keeps a blank câu's index and lets it go without text of its own", () => {
+    const q: Question = { id: "b1", type: "tra-loi-ngan", prompt: "", answer: "calm", points: 1, skills: [], blank: 2, group: { id: "g", prompt: "___ ___" } }
+    const d = toDraft(q)
+    expect(validateDraft(d)).toEqual([])
+    expect(fromDraft(d, q.id, q)).toMatchObject({ blank: 2, prompt: "", answer: "calm", group: q.group })
+    expect(validateDraft(toDraft({ ...q, blank: undefined }))).toContain("Nhập nội dung câu hỏi")
+  })
 })
 
 describe("changeDraftType", () => {

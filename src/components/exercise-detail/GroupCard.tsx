@@ -15,12 +15,14 @@ interface GroupCardProps {
   onEdit: () => void
   onUngroup: () => void
   onDelete: () => void
+  /** A split passage: "Gộp chỗ trống" (and "Bỏ bài", given the merge as onUngroup) turns it back into one question. */
+  blanks?: boolean
   /** The bài's câu cards. */
   children: ReactNode
 }
 
 /** A bài in the editor: its shared prompt and figure once, then its câu. */
-export default function GroupCard({ group, title, count, points, onEdit, onUngroup, onDelete, children }: GroupCardProps) {
+export default function GroupCard({ group, title, count, points, onEdit, onUngroup, onDelete, blanks, children }: GroupCardProps) {
   return (
     <li className="flex flex-col gap-3 rounded-3xl border border-indigo-100 bg-indigo-50/40 p-3 md:p-4" aria-label={title}>
       <div className="flex items-center gap-2 px-1">
@@ -43,6 +45,7 @@ export default function GroupCard({ group, title, count, points, onEdit, onUngro
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60">
+              {blanks && <DropdownMenuItem onSelect={onUngroup}>Gộp chỗ trống</DropdownMenuItem>}
               <DropdownMenuItem onSelect={onUngroup}>Bỏ bài</DropdownMenuItem>
               <DropdownMenuItem onSelect={onDelete} className="text-red-600 focus:text-red-700">
                 Xoá bài

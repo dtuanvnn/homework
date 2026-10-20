@@ -28,9 +28,11 @@ interface QuestionCardProps {
   onSolve?: () => void
   solving?: boolean
   actions?: CardAction[]
+  /** False for a blank câu of a split passage: it leaves only with "Gộp chỗ trống" or its bài. */
+  canDelete?: boolean
 }
 
-export default function QuestionCard({ question, index, onEdit, onDelete, onSolve, solving, actions }: QuestionCardProps) {
+export default function QuestionCard({ question, index, onEdit, onDelete, onSolve, solving, actions, canDelete = true }: QuestionCardProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: question.id,
   })
@@ -81,9 +83,11 @@ export default function QuestionCard({ question, index, onEdit, onDelete, onSolv
           <Button variant="ghost" size="icon" className="text-slate-400 hover:text-indigo-700" onClick={onEdit} aria-label={`Sửa câu ${index + 1}`}>
             <Pencil className="size-[18px]" />
           </Button>
-          <Button variant="ghost" size="icon" className="text-slate-400 hover:bg-red-50 hover:text-red-600" onClick={onDelete} aria-label={`Xóa câu ${index + 1}`}>
-            <Trash2 className="size-[18px]" />
-          </Button>
+          {canDelete && (
+            <Button variant="ghost" size="icon" className="text-slate-400 hover:bg-red-50 hover:text-red-600" onClick={onDelete} aria-label={`Xóa câu ${index + 1}`}>
+              <Trash2 className="size-[18px]" />
+            </Button>
+          )}
           {actions && actions.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -120,6 +124,7 @@ export default function QuestionCard({ question, index, onEdit, onDelete, onSolv
         ))}
       </div>
 
+      {question.type === 'tra-loi-ngan' && question.blank && <p className="font-semibold text-slate-900">Chỗ trống ({index + 1})</p>}
       <QuestionContent question={question} />
     </li>
   )

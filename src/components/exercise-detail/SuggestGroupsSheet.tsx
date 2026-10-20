@@ -33,6 +33,7 @@ export default function SuggestGroupsSheet({ open, onOpenChange, groups, onApply
                 {g.title}
                 <span className="font-medium text-slate-500">
                   · câu {g.from}–{g.to}
+                  {g.blanks ? ` · tách ${g.blanks} chỗ trống` : ''}
                 </span>
               </p>
               {g.prompt && (
