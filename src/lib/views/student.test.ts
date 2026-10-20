@@ -219,6 +219,17 @@ describe("buildResultDetail", () => {
     ])
   })
 
+  it("carries each câu's bài and points for the bài header", () => {
+    const group = { id: "g", label: "Part 3", prompt: "Complete." }
+    const first = graded(5)
+    const view = buildResultDetail(
+      { attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { attempts: [first] }), answers: [row({ ...sa, group } as Question, "24", false), row(mc, 1, true)] },
+      now,
+    )
+    expect(view?.review[0]).toMatchObject({ group, points: { awarded: 0, max: sa.points } })
+    expect(view?.review[1]).not.toHaveProperty("group")
+  })
+
   it("asks for hints when wrong answers have none yet", () => {
     const first = graded(6)
     const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { attempts: [first] }), answers: [row(sa, "24", false)] }, now)

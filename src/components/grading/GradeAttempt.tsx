@@ -29,6 +29,7 @@ import { gradePaperWithAI, suggestAllEssayGrades, suggestEssayGrade } from "@/se
 import { LOW_CONFIDENCE, type AiMark, type AiPaperMark } from "@/lib/ai/grading"
 import { unwrap } from "@/lib/action-result"
 import { scoreOutOf10 } from "@/lib/grading"
+import { groupBlocks } from "@/lib/question-groups"
 import { QUESTION_TYPES } from "@/lib/questions"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
@@ -48,6 +49,7 @@ import { AiAssistCard, AiReadout } from "./AiAssist"
 import { fmt, scoreTone, submittedLabel } from "./format"
 import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
 import AnswerStatusBadge from "@/components/question/AnswerStatusBadge"
+import GroupHeader from "@/components/question/GroupHeader"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 
@@ -412,7 +414,21 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
       <div className={cn("grid grid-cols-1 gap-5", paper && "lg:grid-cols-2 lg:items-start")}>
         {paper && <ScanViewer scans={d.scans} className="min-w-0 h-[60vh] lg:sticky lg:top-4 lg:h-[calc(100vh-8rem)]" />}
         <div className="flex min-w-0 flex-col gap-3">
-          {d.answers.map((a, i) => questionCard(a, i + 1))}
+          {groupBlocks(d.answers.map((a) => ({ ...a, group: a.question.group }))).map((b) =>
+            b.kind === "single" ? (
+              questionCard(b.item, b.number)
+            ) : (
+              <section key={b.group.id} className="flex flex-col gap-3" aria-label={b.title}>
+                <GroupHeader
+                  group={b.group}
+                  title={b.title}
+                  awarded={b.items.reduce((sum, x) => sum + (marks[x.item.id]?.pointsAwarded ?? 0), 0)}
+                  max={b.items.reduce((sum, x) => sum + x.item.question.points, 0)}
+                />
+                {b.items.map((x) => questionCard(x.item, x.number))}
+              </section>
+            ),
+          )}
 
           <Card className="gap-4 p-4 md:p-5">
             <div className="space-y-2">

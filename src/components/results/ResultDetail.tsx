@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import CountUp from "@/components/fun/CountUp"
 import Mascot from "@/components/fun/Mascot"
@@ -19,7 +19,9 @@ import { Button } from "@/components/ui/button"
 import type { ResultView } from "@/lib/views/student"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
+import { groupBlocks } from "@/lib/question-groups"
 import { isLongPrompt } from "@/lib/questions"
+import GroupHeader from "@/components/question/GroupHeader"
 import { explainMistakes } from "@/server/actions/ai-hints"
 import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
 import RichText from "@/components/question/RichText"
@@ -67,6 +69,14 @@ export default function ResultDetail({
   const s = SUBJECTS[r.subject]
   const wrong = r.review.filter((q) => !q.correct)
   const list = filter === "all" ? r.review : wrong
+  // Bài headers score the whole bài, even when only its wrong câu are listed.
+  const groupHeaders = new Map(
+    groupBlocks(r.review).flatMap((b) =>
+      b.kind === "group"
+        ? [[b.group.id, { title: b.title, awarded: b.items.reduce((s, x) => s + (x.item.points?.awarded ?? 0), 0), max: b.items.reduce((s, x) => s + (x.item.points?.max ?? 0), 0) }] as const]
+        : [],
+    ),
+  )
   const flashcard = r.review.length > 0 && r.review.every((q) => q.word)
 
   // While a retry is open the answers stay hidden; wrong answers get AI hints, written once and saved.
@@ -214,11 +224,17 @@ export default function ResultDetail({
           <p className="rounded-3xl bg-emerald-50 p-6 text-center text-xl font-bold text-emerald-700">Không có câu nào sai, tuyệt vời! 🎉</p>
         )}
         <motion.ol key={filter} className="space-y-3" variants={listVariants} initial="initial" animate="animate">
-          {list.map((q) => {
+          {list.map((q, i) => {
             const n = r.review.indexOf(q) + 1
+            const bai = q.group && list[i - 1]?.group?.id !== q.group.id ? groupHeaders.get(q.group.id) : undefined
             return (
+              <Fragment key={q.id}>
+              {bai && q.group && (
+                <motion.li variants={listItem(reduced)}>
+                  <GroupHeader group={q.group} title={bai.title} awarded={bai.awarded} max={bai.max} />
+                </motion.li>
+              )}
               <motion.li
-                key={q.id}
                 variants={listItem(reduced)}
                 onViewportEnter={() => play(q.correct ? "correct" : "wrong")}
                 viewport={{ once: true, amount: 0.6 }}
@@ -274,6 +290,7 @@ export default function ResultDetail({
                   )}
                 </div>
               </motion.li>
+              </Fragment>
             )
           })}
         </motion.ol>

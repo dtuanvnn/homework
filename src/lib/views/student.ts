@@ -13,7 +13,7 @@ import { attemptStars } from "@/lib/rewards/stars"
 import { streakRuns } from "@/lib/rewards/streak"
 import { answerAsRichText } from "@/lib/rich-text"
 import { essayDrawing, essayInk } from "@/lib/views/grading"
-import type { EssayQuestion, FillBlankQuestion, MultipleChoiceQuestion, Question, ShortAnswerQuestion, SubjectId, TrueFalseQuestion, VocabQuestion } from "@/lib/types"
+import type { EssayQuestion, FillBlankQuestion, MultipleChoiceQuestion, Question, QuestionGroup, ShortAnswerQuestion, SubjectId, TrueFalseQuestion, VocabQuestion } from "@/lib/types"
 import type { AnswerRecord, AssignmentRecord, AttemptRecord } from "@/server/queries"
 
 export type StudentStatus = "not-started" | "in-progress" | "submitted" | "graded"
@@ -120,6 +120,10 @@ export interface ReviewItem {
   handwriting?: { ink?: Ink; drawing?: string }
   /** Flashcard word (tu-vung): its spelling is shown with wrong answers even before answers are revealed. */
   word?: string
+  /** The câu's bài, from the snapshot taken at submit time. */
+  group?: QuestionGroup
+  /** Only for câu of a bài: summed into the bài header's score. */
+  points?: { awarded: number; max: number }
 }
 
 export interface ResultView {
@@ -409,6 +413,7 @@ export function buildResultDetail(
         image: row.question.image,
         imageUrl: row.question.imageUrl,
         handwriting: handwritingOf(row.response),
+        ...(row.question.group ? { group: row.question.group, points: { awarded: row.pointsAwarded ?? 0, max: row.question.points } } : {}),
       }
     }),
   }
