@@ -5,7 +5,9 @@ import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { formatPoints, formatScoreValue } from '@/lib/format'
-import type { QuestionGroup } from '@/lib/types'
+import type { PassageLayout, QuestionGroup } from '@/lib/types'
+import { cn } from '@/lib/utils'
+import Passage from '@/components/question/Passage'
 import FigureField, { type FigureSource } from './FigureField'
 import FormulaPreview from './FormulaPreview'
 import { parsePoints } from './question-draft'
@@ -13,6 +15,8 @@ import { parsePoints } from './question-draft'
 export interface GroupEdit {
   label?: string
   prompt: string
+  /** Formatted passage or dialogue; undefined shows the prompt as typed. */
+  layout?: PassageLayout
   image?: QuestionGroup['image']
   imageUrl?: string
   /** "Điểm cả bài", split evenly over the câu; null keeps each câu's points. */
@@ -28,13 +32,22 @@ interface GroupEditorSheetProps {
   points: number
   setId: string
   sources: FigureSource[]
+  /** The scan review step: no "Điểm cả bài" (points are set after saving). */
+  previewOnly?: boolean
   onSubmit: (edit: GroupEdit) => void
 }
 
-/** "Sửa bài": label, shared prompt, shared figure and the bài's total points. */
-export default function GroupEditorSheet({ open, onOpenChange, group, title, count, points, setId, sources, onSubmit }: GroupEditorSheetProps) {
+const LAYOUTS: { value: PassageLayout | undefined; label: string }[] = [
+  { value: undefined, label: 'Thường' },
+  { value: 'doan-van', label: 'Đoạn văn' },
+  { value: 'hoi-thoai', label: 'Hội thoại' },
+]
+
+/** "Sửa bài": label, shared prompt and its layout, shared figure and the bài's total points. */
+export default function GroupEditorSheet({ open, onOpenChange, group, title, count, points, setId, sources, previewOnly, onSubmit }: GroupEditorSheetProps) {
   const [label, setLabel] = useState('')
   const [prompt, setPrompt] = useState('')
+  const [layout, setLayout] = useState<PassageLayout | undefined>()
   const [image, setImage] = useState<{ image?: QuestionGroup['image']; imageUrl?: string }>({})
   const [totalText, setTotalText] = useState('')
 
@@ -45,6 +58,7 @@ export default function GroupEditorSheet({ open, onOpenChange, group, title, cou
     if (open && group) {
       setLabel(group.label ?? '')
       setPrompt(group.prompt)
+      setLayout(group.layout)
       setImage({ image: group.image, imageUrl: group.imageUrl })
       setTotalText('')
     }
@@ -55,7 +69,7 @@ export default function GroupEditorSheet({ open, onOpenChange, group, title, cou
 
   const submit = () => {
     if (totalInvalid) return
-    onSubmit({ label: label.trim() || undefined, prompt: prompt.trim(), ...image, total })
+    onSubmit({ label: label.trim() || undefined, prompt: prompt.trim(), layout, ...image, total: previewOnly ? null : total })
     onOpenChange(false)
   }
 
@@ -82,7 +96,40 @@ export default function GroupEditorSheet({ open, onOpenChange, group, title, cou
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="VD: Đọc đoạn văn sau và trả lời các câu hỏi."
             />
-            <FormulaPreview text={prompt} />
+            {layout ? (
+              <>
+                <p className="text-xs text-slate-500">
+                  # tiêu đề · **hướng dẫn**{layout === 'hoi-thoai' ? ' · Tên: lời nói' : ''} · mỗi đoạn một dòng
+                </p>
+                {prompt.trim() && (
+                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 text-slate-800">
+                    <Passage group={{ id: group?.id ?? 'preview', prompt, layout, ...image }} pictureClassName="max-h-48" />
+                  </div>
+                )}
+              </>
+            ) : (
+              <FormulaPreview text={prompt} />
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label id="group-layout">Trình bày</Label>
+            <div role="radiogroup" aria-labelledby="group-layout" className="flex gap-1 rounded-full bg-slate-100 p-1">
+              {LAYOUTS.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={layout === option.value}
+                  onClick={() => setLayout(option.value)}
+                  className={cn(
+                    'h-10 flex-1 rounded-full text-sm font-semibold transition',
+                    layout === option.value ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
           <FigureField
             setId={setId}
@@ -92,23 +139,25 @@ export default function GroupEditorSheet({ open, onOpenChange, group, title, cou
             onChange={(img, imageUrl) => setImage({ image: img, imageUrl })}
             label="Hình chung"
           />
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="group-total">Điểm cả bài</Label>
-            <Input
-              id="group-total"
-              inputMode="decimal"
-              className="w-32 tabular-nums"
-              aria-invalid={totalInvalid || undefined}
-              placeholder={formatScoreValue(Math.round(points * 100) / 100)}
-              value={totalText}
-              onChange={(e) => setTotalText(e.target.value)}
-            />
-            <p className="text-xs text-slate-500">
-              {total !== null
-                ? `Mỗi câu ${formatPoints(total / count)} điểm (chia đều).`
-                : 'Để trống để giữ điểm từng câu; nhập điểm thì chia đều cho các câu của bài.'}
-            </p>
-          </div>
+          {!previewOnly && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="group-total">Điểm cả bài</Label>
+              <Input
+                id="group-total"
+                inputMode="decimal"
+                className="w-32 tabular-nums"
+                aria-invalid={totalInvalid || undefined}
+                placeholder={formatScoreValue(Math.round(points * 100) / 100)}
+                value={totalText}
+                onChange={(e) => setTotalText(e.target.value)}
+              />
+              <p className="text-xs text-slate-500">
+                {total !== null
+                  ? `Mỗi câu ${formatPoints(total / count)} điểm (chia đều).`
+                  : 'Để trống để giữ điểm từng câu; nhập điểm thì chia đều cho các câu của bài.'}
+              </p>
+            </div>
+          )}
         </div>
         <SheetFooter>
           <div className="flex gap-2">
