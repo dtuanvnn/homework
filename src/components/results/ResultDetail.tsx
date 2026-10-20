@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils"
 import { groupBlocks } from "@/lib/question-groups"
 import { isLongPrompt } from "@/lib/questions"
 import GroupHeader from "@/components/question/GroupHeader"
+import BlankText, { type BlankSlotProps } from "@/components/question/BlankText"
+import { blankCount, passagePieces } from "@/lib/blanks"
 import { explainMistakes } from "@/server/actions/ai-hints"
 import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
 import RichText from "@/components/question/RichText"
@@ -71,11 +73,19 @@ export default function ResultDetail({
   const list = filter === "all" ? r.review : wrong
   // Bài headers score the whole bài, even when only its wrong câu are listed.
   const groupHeaders = new Map(
-    groupBlocks(r.review).flatMap((b) =>
-      b.kind === "group"
-        ? [[b.group.id, { title: b.title, awarded: b.items.reduce((s, x) => s + (x.item.points?.awarded ?? 0), 0), max: b.items.reduce((s, x) => s + (x.item.points?.max ?? 0), 0) }] as const]
-        : [],
-    ),
+    groupBlocks(r.review).flatMap((b) => {
+      if (b.kind !== "group") return []
+      // A split passage: each blank shows the child's word, coloured by its câu's verdict.
+      const slots = new Map(b.items.flatMap(({ item, number }): [number, BlankSlotProps][] =>
+        item.blankSlot ? [[item.blankSlot.index, { label: String(number), given: item.blankSlot.given, correct: item.blankSlot.correct, answer: item.correctAnswer }]] : [],
+      ))
+      return [[b.group.id, {
+        title: b.title,
+        awarded: b.items.reduce((s, x) => s + (x.item.points?.awarded ?? 0), 0),
+        max: b.items.reduce((s, x) => s + (x.item.points?.max ?? 0), 0),
+        passage: slots.size ? (index: number) => slots.get(index) ?? {} : undefined,
+      }] as const]
+    }),
   )
   const flashcard = r.review.length > 0 && r.review.every((q) => q.word)
 
@@ -226,12 +236,13 @@ export default function ResultDetail({
         <motion.ol key={filter} className="space-y-3" variants={listVariants} initial="initial" animate="animate">
           {list.map((q, i) => {
             const n = r.review.indexOf(q) + 1
+            const count = q.blanks && blankCount(q.blanks)
             const bai = q.group && list[i - 1]?.group?.id !== q.group.id ? groupHeaders.get(q.group.id) : undefined
             return (
               <Fragment key={q.id}>
               {bai && q.group && (
                 <motion.li variants={listItem(reduced)}>
-                  <GroupHeader group={q.group} title={bai.title} awarded={bai.awarded} max={bai.max} />
+                  <GroupHeader group={q.group} title={bai.title} awarded={bai.awarded} max={bai.max} passage={bai.passage} />
                 </motion.li>
               )}
               <motion.li
@@ -248,19 +259,38 @@ export default function ResultDetail({
                   {q.correct ? <DrawnCheck reduced={reduced} /> : <X className="size-7" strokeWidth={3} />}
                 </motion.span>
                 <div className="min-w-0 flex-1 space-y-2">
-                  <p className="text-sm font-bold text-slate-400">Câu {n}</p>
+                  <p className="text-sm font-bold text-slate-400">
+                    Câu {n}
+                    {count && ` · ${count.right}/${count.total} ô đúng`}
+                  </p>
                   <p className={cn("leading-snug break-words whitespace-pre-line text-slate-900", isLongPrompt(q.prompt) ? "text-lg font-medium leading-relaxed" : "text-xl font-bold")}>
-                    <RichText text={q.prompt} />
+                    {q.blanks ? (
+                      // Each blank with the child's word in place: right/wrong per blank, the key once revealed.
+                      <BlankText pieces={passagePieces(q.prompt)} slot={(index) => q.blanks?.[index - 1] ?? {}} />
+                    ) : q.blankSlot ? (
+                      <>
+                        Chỗ trống ({n})
+                        {q.prompt && (
+                          <span className="block text-lg font-medium">
+                            <RichText text={q.prompt} />
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <RichText text={q.prompt} />
+                    )}
                   </p>
                   <QuestionPicture question={q} />
-                  <p className="text-lg text-slate-600">
-                    Em trả lời:{" "}
-                    <span className={cn("font-bold", q.correct ? "text-emerald-700" : "text-red-600 line-through decoration-2")}>
-                      <RichText text={q.answer} />
-                    </span>
-                  </p>
+                  {!q.blanks && (
+                    <p className="text-lg text-slate-600">
+                      Em trả lời:{" "}
+                      <span className={cn("font-bold", q.correct ? "text-emerald-700" : "text-red-600 line-through decoration-2")}>
+                        <RichText text={q.answer} />
+                      </span>
+                    </p>
+                  )}
                   {q.handwriting && <HandwritingView handwriting={q.handwriting} label={`Bài viết của em, câu ${n}`} />}
-                  {!q.correct && r.answersRevealed && q.correctAnswer && (
+                  {!q.blanks && !q.correct && r.answersRevealed && q.correctAnswer && (
                     <p className="text-lg text-slate-600">
                       Đáp án đúng: <span className="rounded-lg bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700">
                         <RichText text={q.correctAnswer} />

@@ -4,6 +4,7 @@
  * label is computed here so server and client render the same text.
  */
 import { deriveAssignmentState, type DerivedState } from "@/lib/assignment-status"
+import { blankMarks, type BlankMark } from "@/lib/blanks"
 import { chosenOptions, correctOptions, isMultiAnswer } from "@/lib/choice"
 import { addDays, startOfDay, startOfWeek } from "@/lib/dates"
 import { formatDayMonth, formatShortDate, formatTime, formatVietnameseDate, formatWeekday } from "@/lib/format"
@@ -120,6 +121,10 @@ export interface ReviewItem {
   handwriting?: { ink?: Ink; drawing?: string }
   /** Flashcard word (tu-vung): its spelling is shown with wrong answers even before answers are revealed. */
   word?: string
+  /** Unsplit fill-blank question with 2+ blanks (web): right/wrong per blank, keys only once revealed. */
+  blanks?: BlankMark[]
+  /** Blank câu of a split passage: which "___" it answers; the child's word and verdict (web) colour the bài's passage. */
+  blankSlot?: { index: number; given?: string; correct: boolean | null }
   /** The câu's bài, from the snapshot taken at submit time. */
   group?: QuestionGroup
   /** Only for câu of a bài: summed into the bài header's score. */
@@ -413,10 +418,25 @@ export function buildResultDetail(
         image: row.question.image,
         imageUrl: row.question.imageUrl,
         handwriting: handwritingOf(row.response),
+        ...blankFields(row, attempt.mode !== "paper", answersRevealed),
         ...(row.question.group ? { group: row.question.group, points: { awarded: row.pointsAwarded ?? 0, max: row.question.points } } : {}),
       }
     }),
   }
+}
+
+/** Per-blank result fields: marks for an unsplit fill-blank question, the slot of a blank câu. Paper work has no typed words. */
+function blankFields(row: AnswerRecord, web: boolean, showKeys: boolean): Pick<ReviewItem, "blanks" | "blankSlot"> {
+  const q = row.question
+  if (web && q.type === "dien-cho-trong" && q.answers.length >= 2) {
+    return { blanks: blankMarks(q, row.response, { isCorrect: row.isCorrect, pointsAwarded: row.pointsAwarded }, showKeys) }
+  }
+  if (q.type === "tra-loi-ngan" && q.blank) {
+    if (!web) return { blankSlot: { index: q.blank, correct: null } }
+    const given = typeof row.response === "string" ? row.response.trim() : ""
+    return { blankSlot: { index: q.blank, ...(given ? { given } : {}), correct: row.isCorrect } }
+  }
+  return {}
 }
 
 /** Wrong answers that get an AI hint while a retry is open: not essays, handwritten words or questions without a key. */

@@ -230,6 +230,38 @@ describe("buildResultDetail", () => {
     expect(view?.review[1]).not.toHaveProperty("group")
   })
 
+  describe("per-blank marks", () => {
+    const fill: Question = { id: "f", type: "dien-cho-trong", prompt: "___ helps ___.", answers: ["He", "her"], points: 1, skills: [] }
+    const half = { ...row(fill, ["He", "him"], false), pointsAwarded: 0.5 }
+
+    it("marks each blank of an unsplit question, keys only once revealed", () => {
+      const first = graded(5)
+      const open = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { attempts: [first] }), answers: [half] }, now)
+      expect(open?.review[0].blanks).toEqual([{ given: "He", correct: true }, { given: "him", correct: false }])
+      const second = graded(5, { attemptNo: 2 })
+      const done = buildResultDetail({ attempt: { ...second, assignmentId: "a" }, assignment: assignment("a", { attempts: [first, second] }), answers: [half] }, now)
+      expect(done?.review[0].blanks?.[1]).toEqual({ given: "him", correct: false, answer: "her" })
+    })
+
+    it("gives a blank câu its index, the child's word and the stored verdict", () => {
+      const blankCau = { ...sa, prompt: "", blank: 2, group: { id: "g", prompt: "___ ___" } } as Question
+      const first = graded(5)
+      const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { attempts: [first] }), answers: [row(blankCau, "calm", false)] }, now)
+      expect(view?.review[0].blankSlot).toEqual({ index: 2, given: "calm", correct: false })
+    })
+
+    it("paper attempts carry no per-blank marks", () => {
+      const blankCau = { ...sa, prompt: "", blank: 2, group: { id: "g", prompt: "___ ___" } } as Question
+      const first = graded(5, { mode: "paper" })
+      const view = buildResultDetail(
+        { attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { mode: "paper", attempts: [first] }), answers: [{ ...half, response: null }, row(blankCau, null, true)] },
+        now,
+      )
+      expect(view?.review[0].blanks).toBeUndefined()
+      expect(view?.review[1].blankSlot).toEqual({ index: 2, correct: null })
+    })
+  })
+
   it("asks for hints when wrong answers have none yet", () => {
     const first = graded(6)
     const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { attempts: [first] }), answers: [row(sa, "24", false)] }, now)
