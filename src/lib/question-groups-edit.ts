@@ -256,6 +256,7 @@ export function updateGroup(qs: Question[], groupId: string, patch: Partial<Omit
     if (q.group?.id !== groupId) return q
     const next: QuestionGroup = { ...q.group, ...patch }
     if (!next.label) delete next.label
+    if (!next.layout) delete next.layout
     if (!next.image) {
       delete next.image
       delete next.imageUrl

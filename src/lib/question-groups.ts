@@ -37,7 +37,7 @@ export function groupBlocks<T extends Groupable>(items: T[], numberOf: (item: T,
 }
 
 const sameGroup = (a: QuestionGroup, b: QuestionGroup) =>
-  (a.label ?? "") === (b.label ?? "") && a.prompt === b.prompt && a.image?.path === b.image?.path
+  (a.label ?? "") === (b.label ?? "") && a.prompt === b.prompt && (a.layout ?? "") === (b.layout ?? "") && a.image?.path === b.image?.path
 
 /** Vietnamese error when a bài is split or its câu disagree on the shared part; null when valid. */
 export function checkGroups(items: Groupable[]): string | null {

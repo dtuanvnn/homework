@@ -23,6 +23,7 @@ const groupSchema = z.object({
     .optional()
     .transform((v) => v || undefined),
   prompt: z.string().trim().max(10000),
+  layout: z.enum(["doan-van", "hoi-thoai"]).optional(),
   image: imageSchema.optional(),
 })
 

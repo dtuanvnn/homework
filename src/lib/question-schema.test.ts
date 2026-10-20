@@ -61,6 +61,8 @@ describe("question schema", () => {
     expect(parsed.group).toEqual({ id: "g1", label: "Part 3", prompt: "Complete.", image: { path: FIG, width: 4, height: 3 } })
     expect(questionContentSchema.parse({ ...q, group: { id: "g1", label: "", prompt: "" } }).group).toEqual({ id: "g1", prompt: "" })
     expect(questionContentSchema.safeParse({ ...q, group: { id: "g1", label: "x".repeat(41), prompt: "" } }).success).toBe(false)
+    expect(questionContentSchema.parse({ ...q, group: { id: "g1", prompt: "# T", layout: "doan-van" } }).group).toEqual({ id: "g1", prompt: "# T", layout: "doan-van" })
+    expect(questionContentSchema.safeParse({ ...q, group: { id: "g1", prompt: "", layout: "x" } }).success).toBe(false)
   })
 
   it("keeps blank on a short answer and refuses blank 0", () => {

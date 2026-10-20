@@ -9,12 +9,15 @@ import type { FillBlankQuestion } from "./types"
  * print (components/question/BlankText).
  */
 
-export type PassagePiece = { kind: "text"; text: string } | { kind: "blank"; index: number }
+export type PassagePiece = { kind: "text"; text: string; bold?: boolean } | { kind: "blank"; index: number }
 
-/** The text between blanks and the blanks (1-based) in order; empty text pieces are left out. */
-export function passagePieces(prompt: string): PassagePiece[] {
+/**
+ * The text between blanks and the blanks (1-based, after `offset` earlier
+ * blanks) in order; empty text pieces are left out.
+ */
+export function passagePieces(prompt: string, offset = 0): PassagePiece[] {
   return prompt.split(BLANK).flatMap((text, i): PassagePiece[] => [
-    ...(i > 0 ? [{ kind: "blank" as const, index: i }] : []),
+    ...(i > 0 ? [{ kind: "blank" as const, index: offset + i }] : []),
     ...(text ? [{ kind: "text" as const, text }] : []),
   ])
 }

@@ -20,6 +20,10 @@ describe("groupBlocks", () => {
 })
 
 describe("checkGroups", () => {
+  it("requires the same layout on every câu of a bài", () => {
+    expect(checkGroups([{ group: g("x", { layout: "doan-van" }) }, { group: g("x") }])).toMatch(/cùng đề chung/)
+  })
+
   it("rejects a split bài", () => {
     expect(checkGroups([{ group: g("x") }, {}, { group: g("x") }])).toMatch(/liền nhau/)
     expect(checkGroups(items)).toBeNull()

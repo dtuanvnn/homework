@@ -174,12 +174,17 @@ interface QuestionBase {
  * A bài: consecutive questions sharing `id` show `label`, `prompt` and `image`
  * once above them. Stored on every câu con as identical copies (lib/question-groups.ts).
  */
+/** How a bài's shared prompt is laid out (lib/passage.ts); absent ⇒ plain text as typed. */
+export type PassageLayout = "doan-van" | "hoi-thoai"
+
 export interface QuestionGroup {
   id: string
   /** As printed on the paper ("Part 3"); absent ⇒ "Bài n". */
   label?: string
   /** Shared instruction or passage; may be empty. May contain LaTeX. */
   prompt: string
+  /** Formatted passage or dialogue; absent ⇒ the prompt shows as plain lines. */
+  layout?: PassageLayout
   image?: QuestionImage
   /** Read side only: signed URL of `image`. Never stored. */
   imageUrl?: string
