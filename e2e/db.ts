@@ -28,6 +28,19 @@ export async function createSet(title: string): Promise<string> {
   return set.id
 }
 
+/** A set (Tiếng Anh, `status`) holding exactly `questions` (raw question JSON, so bài can be seeded). */
+export async function createSetWithQuestions(title: string, questions: object[], status: "nhap" | "san-sang" = "san-sang"): Promise<string> {
+  const [{ household_id }] = await sql<{ household_id: string }>(`select household_id from students order by created_at limit 1`)
+  const [set] = await sql<{ id: string }>(
+    `insert into exercise_sets (household_id, title, subject, grade, estimated_minutes, kind, source, status) values ($1, $2, 'tieng-anh', 3, 10, 'luyen-tap', 'thu-cong', $3) returning id`,
+    [household_id, title, status],
+  )
+  for (const [position, content] of questions.entries()) {
+    await sql(`insert into questions (set_id, position, content) values ($1, $2, $3)`, [set.id, position, JSON.stringify(content)])
+  }
+  return set.id
+}
+
 /** A ready flashcard word list (Tiếng Anh) with a unique title. */
 export async function createFlashcardSet(title: string, words: { word: string; explanation: string }[]): Promise<string> {
   const [{ household_id }] = await sql<{ household_id: string }>(`select household_id from students order by created_at limit 1`)
