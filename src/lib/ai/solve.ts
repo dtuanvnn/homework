@@ -3,6 +3,7 @@ import { MATH_NOTATION_RULES, optionIndexes } from "@/lib/ai/question-format"
 import { choiceKey } from "@/lib/choice"
 import { evaluateMath } from "@/lib/math-answer"
 import { OPTION_LETTERS } from "@/lib/questions"
+import { fullPrompt } from "@/lib/question-groups"
 import type { Question, SubjectId } from "@/lib/types"
 
 /*
@@ -52,7 +53,7 @@ const stripDollars = (s: string) => s.trim().replace(/^\$+|\$+$/g, "").trim()
 
 /** The question as the child sees it, plus which answer field to fill. */
 export function solveRequestText(q: Question, meta: { subject: SubjectId; grade: number }): string {
-  const lines = [`Subject: ${SUBJECT_NAMES[meta.subject]}. Grade ${meta.grade} (Vietnamese primary school).`, "", `Question: ${q.prompt}`]
+  const lines = [`Subject: ${SUBJECT_NAMES[meta.subject]}. Grade ${meta.grade} (Vietnamese primary school).`, "", `Question: ${fullPrompt(q)}`]
   switch (q.type) {
     case "trac-nghiem":
       lines.push(...q.options.map((o, i) => `${OPTION_LETTERS[i]}. ${o}`), "", "Type trac-nghiem (multiple choice): fill correctIndexes with every correct option (usually one).")

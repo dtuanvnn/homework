@@ -41,6 +41,12 @@ it("isPassing needs half the points", () => {
 })
 
 describe("prompt builders", () => {
+  it("includes the bài's shared prompt for essays and paper work", () => {
+    const grouped = { ...essay, group: { id: "g", label: "Part 4", prompt: "Read and write." } }
+    expect(essayQuestionText(grouped, 21, "")).toContain("Đề bài: Part 4\nRead and write.\n")
+    expect(paperQuestionText(grouped, 21)).toContain("Đề bài: Part 4\nRead and write.\n")
+  })
+
   it("essay text has prompt, rubric, points and typed answer", () => {
     const text = essayQuestionText(essay, 4, "Con mèo nhà em")
     expect(text).toContain("Câu 4 (tự luận, tối đa 2 điểm)")

@@ -5,6 +5,7 @@ import { db, schema } from "@/db"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { HINTS_SYSTEM, hintsPrompt, hintsResponseSchema, validateHints, type HintItem } from "@/lib/ai/hints"
 import { buildResultDetail, needsHint } from "@/lib/views/student"
+import { questionFigures } from "@/lib/question-groups"
 import { assertAccess } from "../access"
 import { ask, storageFileBlocks, type ContentBlock } from "../ai/llm"
 import { getAttemptDetail, isUuid } from "../queries"
@@ -33,11 +34,16 @@ export async function explainMistakes(attemptId: string): Promise<ActionResult<R
     if (!items.length) return {}
 
     const { set } = detail.assignment
-    const figures: ContentBlock[] = (
-      await Promise.all(
-        items.map((i) => (i.question.image ? storageFileBlocks(i.question.image.path, `Hình của câu id ${i.id}:`).catch(() => []) : [])),
-      )
-    ).flat()
+    // A bài's shared figure is sent once, labelled with its first câu.
+    const sent = new Set<string>()
+    const wanted = items.flatMap((i) =>
+      questionFigures(i.question).flatMap((f) => {
+        if (sent.has(f.path)) return []
+        sent.add(f.path)
+        return [{ path: f.path, label: f.path === i.question.group?.image?.path ? `Hình chung của bài (câu id ${i.id}):` : `Hình của câu id ${i.id}:` }]
+      }),
+    )
+    const figures: ContentBlock[] = (await Promise.all(wanted.map((f) => storageFileBlocks(f.path, f.label).catch(() => [])))).flat()
     const result = await ask({
       system: HINTS_SYSTEM,
       content: [{ type: "text", text: hintsPrompt(items, set.subject, set.grade) }, ...figures],

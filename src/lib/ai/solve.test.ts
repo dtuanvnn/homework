@@ -58,6 +58,12 @@ describe("applySolution", () => {
 })
 
 describe("solveRequestText", () => {
+  it("puts the bài's shared prompt before the câu", () => {
+    const group = { id: "g", label: "Part 3", prompt: "Complete the sentences with the correct pronoun." }
+    const text = solveRequestText({ ...base, id: "q", type: "tu-luan", rubric: "", prompt: "David ___", group }, { subject: "tieng-anh", grade: 3 })
+    expect(text).toContain("Question: Part 3\nComplete the sentences with the correct pronoun.\nDavid ___")
+  })
+
   it("shows the question as the child sees it, with what to fill in", () => {
     const text = solveRequestText({ ...base, id: "q", type: "trac-nghiem", options: ["3", "4"], correctIndex: 0 }, { subject: "toan", grade: 3 })
     expect(text).toContain("Grade 3")

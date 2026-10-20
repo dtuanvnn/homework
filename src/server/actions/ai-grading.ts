@@ -17,6 +17,7 @@ import {
   type AiPaperResult,
 } from "@/lib/ai/grading"
 import type { Response } from "@/lib/grading"
+import { questionFigures } from "@/lib/question-groups"
 import type { Question } from "@/lib/types"
 import { essayDrawing, essayInk, isEssayValue } from "@/lib/views/grading"
 import { assertAccess } from "../access"
@@ -35,10 +36,17 @@ const { answers, attempts, attachments } = schema
 
 type AnswerRow = { id: string; position: number; question: Question; response: Response | null }
 
-/** The question's figure as an image block, when it has one. */
-async function figureBlocks(question: Question, number: number): Promise<ContentBlock[]> {
-  if (!question.image) return []
-  return storageFileBlocks(question.image.path, `Hình của câu ${number}:`).catch(() => [])
+/** The câu's figures (its bài's shared one first) as image blocks; `seen` skips a bài figure already sent. */
+async function figureBlocks(question: Question, number: number, seen = new Set<string>()): Promise<ContentBlock[]> {
+  const figures = questionFigures(question).filter((f) => !seen.has(f.path))
+  figures.forEach((f) => seen.add(f.path))
+  const blocks = await Promise.all(
+    figures.map((f) => {
+      const label = f.path === question.group?.image?.path ? `Hình chung của bài (câu ${number}):` : `Hình của câu ${number}:`
+      return storageFileBlocks(f.path, label).catch(() => [])
+    }),
+  )
+  return blocks.flat()
 }
 
 async function submittedAttempt(attemptId: string) {
@@ -60,10 +68,11 @@ async function answerRows(attemptId: string): Promise<AnswerRow[]> {
 /** Text + handwriting blocks of essays; `number` is the question number on the grading screen. */
 async function essayBlocks(items: { row: AnswerRow; number: number }[]): Promise<ContentBlock[]> {
   const blocks: ContentBlock[] = []
+  const sentFigures = new Set<string>()
   for (const { row, number } of items) {
     const typed = isEssayValue(row.response) ? (row.response.text ?? "") : ""
     blocks.push({ type: "text", text: essayQuestionText(row.question, number, typed) })
-    blocks.push(...(await figureBlocks(row.question, number)))
+    blocks.push(...(await figureBlocks(row.question, number, sentFigures)))
     const ink = essayInk(row.response)
     const drawing = essayDrawing(row.response)
     const image = drawing ? parseImageDataUrl(drawing) : null
@@ -163,12 +172,13 @@ export async function gradePaperWithAI(attemptId: string): Promise<ActionResult<
       }),
     )
     const items = rows.map((row, i) => ({ row, number: i + 1 }))
+    const sentFigures = new Set<string>()
     const result = await ask({
       system: PAPER_SYSTEM,
       content: [
         ...pages.flat(),
         { type: "text", text: paperQuestionList(rows) },
-        ...(await Promise.all(items.map(({ row, number }) => figureBlocks(row.question, number)))).flat(),
+        ...(await Promise.all(items.map(({ row, number }) => figureBlocks(row.question, number, sentFigures)))).flat(),
         { type: "text", text: `Hãy đọc bài làm trên ảnh và chấm đủ ${rows.length} câu.` },
       ],
       schema: paperGradesSchema,

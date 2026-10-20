@@ -3,6 +3,7 @@ import { OPTION_LETTERS } from "@/lib/questions"
 import type { Question } from "@/lib/types"
 import { correctAnswerText, pointStep } from "@/lib/views/grading"
 import { answerKey, QUESTION_TYPE_NAMES } from "./question-format"
+import { fullPrompt } from "@/lib/question-groups"
 
 /*
  * Pure pieces of AI grading: system prompts, output schemas, the question
@@ -120,7 +121,7 @@ export function essayQuestionText(q: Question, n: number, typed: string): string
   const rubric = q.type === "tu-luan" && q.rubric.trim() ? q.rubric.trim() : "(không có – tự đánh giá theo đề bài)"
   return [
     `${questionHeader(q, n)}`,
-    `Đề bài: ${q.prompt}`,
+    `Đề bài: ${fullPrompt(q)}`,
     `Gợi ý chấm: ${rubric}`,
     `Bài làm của con (gõ phím): ${typed.trim() || "(không gõ chữ)"}`,
   ].join("\n")
@@ -128,7 +129,7 @@ export function essayQuestionText(q: Question, n: number, typed: string): string
 
 /** One question of the paper list, with what the child sees and the answer key. */
 export function paperQuestionText(q: Question, n: number): string {
-  const lines = [questionHeader(q, n), `Đề bài: ${q.prompt}`]
+  const lines = [questionHeader(q, n), `Đề bài: ${fullPrompt(q)}`]
   switch (q.type) {
     case "trac-nghiem":
       lines.push(`Các lựa chọn: ${q.options.map((o, i) => `${OPTION_LETTERS[i] ?? i + 1}. ${o}`).join(" | ")}`)

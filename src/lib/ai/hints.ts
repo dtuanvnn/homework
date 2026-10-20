@@ -6,6 +6,7 @@ import { equalRational, evaluateMath, latexToPlain, mathValuesIn } from "@/lib/m
 import { SUBJECTS } from "@/lib/subjects"
 import type { Question, SubjectId } from "@/lib/types"
 import { answerText } from "@/lib/views/student"
+import { fullPrompt } from "@/lib/question-groups"
 
 /*
  * Hints for wrong answers on the child's result page while a retry is still
@@ -44,7 +45,7 @@ export function hintsPrompt(items: HintItem[], subject: SubjectId, grade: number
   const lines = [`Môn ${SUBJECTS[subject].name}, lớp ${grade}.`, ""]
   for (const { id, question: q, response } of items) {
     lines.push(`id: ${id} (${QUESTION_TYPE_NAMES[q.type]})`)
-    lines.push(`Câu hỏi: ${q.prompt}`)
+    lines.push(`Câu hỏi: ${fullPrompt(q)}`)
     if (q.type === "trac-nghiem") lines.push(`Các lựa chọn: ${q.options.join(" | ")}`)
     if (q.type === "noi") lines.push(`Cột A: ${q.pairs.map((p) => p.left).join(" | ")} — Cột B: ${q.pairs.map((p) => p.right).join(" | ")}`)
     if (q.type === "sap-xep") lines.push(`Các phần: ${q.shuffled.map((i) => q.tokens[i]).join(" / ")}`)
@@ -79,7 +80,7 @@ const containsWord = (text: string, word: string) => new RegExp(`(^|[^\\p{L}\\p{
 export function leaksAnswer(hint: string, q: Question): boolean {
   const plainHint = latexToPlain(hint)
   const text = normalizeText(plainHint)
-  const prompt = normalizeText(latexToPlain(q.prompt))
+  const prompt = normalizeText(latexToPlain(fullPrompt(q)))
   const textLeak = secrets(q).some((s) => {
     const secret = normalizeText(latexToPlain(s))
     return secret.length > 0 && containsWord(text, secret) && !containsWord(prompt, secret)
@@ -91,7 +92,7 @@ export function leaksAnswer(hint: string, q: Question): boolean {
 function mathValueLeaks(plainHint: string, q: Question): boolean {
   if ((q.type !== "tra-loi-ngan" && q.type !== "dien-cho-trong") || !q.math) return false
   const keys = q.type === "tra-loi-ngan" ? [q.answer] : q.answers
-  const shown = mathValuesIn(latexToPlain(q.prompt))
+  const shown = mathValuesIn(latexToPlain(fullPrompt(q)))
   const said = mathValuesIn(plainHint).filter((c) => !/^\d$/.test(c.raw))
   return keys.some((k) => {
     const value = evaluateMath(k)

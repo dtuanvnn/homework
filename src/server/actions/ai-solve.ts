@@ -4,6 +4,7 @@ import { z } from "zod"
 import { runAction, type ActionResult } from "@/lib/action-result"
 import { applySolution, SOLVE_SYSTEM_PROMPT, solveRequestText, solveResponseSchema } from "@/lib/ai/solve"
 import { figureOwner } from "@/lib/figures"
+import { questionFigures } from "@/lib/question-groups"
 import { editedQuestionSchema } from "@/lib/question-schema"
 import type { Question } from "@/lib/types"
 import { assertAccess } from "../access"
@@ -34,7 +35,13 @@ export async function solveQuestion(input: SolveInput): Promise<ActionResult<Que
     if (await db.$count(schema.exerciseSets, eq(schema.exerciseSets.id, setId))) await assertSetInHousehold(ctx, setId)
     const q = question as Question
     // Only figures of this set (the schema already checks the path's shape).
-    const figure = q.image && figureOwner(q.image.path) === setId ? await storageFileBlocks(q.image.path, "Hình minh họa của câu hỏi:") : []
+    const figure = (
+      await Promise.all(
+        questionFigures(q)
+          .filter((f) => figureOwner(f.path) === setId)
+          .map((f) => storageFileBlocks(f.path, f.path === q.group?.image?.path ? "Hình chung của bài:" : "Hình minh họa của câu hỏi:")),
+      )
+    ).flat()
     const response = await ask({
       system: SOLVE_SYSTEM_PROMPT,
       content: [{ type: "text", text: solveRequestText(q, { subject, grade }) }, ...figure],
