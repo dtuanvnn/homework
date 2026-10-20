@@ -4,17 +4,22 @@ import { FIG, lifeInTheWild } from "./fixtures/life-in-the-wild"
 import { checkGroups } from "./question-groups"
 import {
   applyDrop,
+  canApplyMove,
   canRelease,
+  canSplitBlanks,
   createGroup,
   deleteGroup,
+  isBlankGroup,
   joinGroup,
+  mergeBlanks,
   releaseQuestion,
   setGroupPoints,
+  splitBlanks,
   suggestGroups,
   ungroup,
   updateGroup,
 } from "./question-groups-edit"
-import type { Question, QuestionGroup } from "./types"
+import type { Question, QuestionGroup, ShortAnswerQuestion } from "./types"
 
 const q = (id: string, prompt = id, group?: QuestionGroup): Question => ({
   id,
@@ -29,32 +34,33 @@ const G: QuestionGroup = { id: "g", prompt: "Shared" }
 const ids = (qs: Question[]) => qs.map((x) => `${x.id}${x.group ? `:${x.group.id}` : ""}`)
 
 describe("suggestGroups", () => {
-  it("suggests the three bài of the reference set", () => {
+  it("suggests the bài of the reference set and splits its passage", () => {
     const { questions, groups } = suggestGroups(lifeInTheWild)
-    expect(groups.map((g) => [g.title, g.from, g.to])).toEqual([
-      ["Bài 1", 1, 9],
-      ["Part 3", 11, 20],
-      ["Part 4", 21, 25],
+    expect(groups.map((g) => [g.title, g.from, g.to, g.blanks])).toEqual([
+      ["Bài 1", 1, 9, undefined],
+      ["Bài 2", 10, 12, 3],
+      ["Part 3", 13, 22, undefined],
+      ["Part 4", 23, 27, undefined],
     ])
     expect(questions[0].prompt).toBe("Pandas are usually **kind and soft** animals.")
     expect(questions[0].group?.prompt).toMatch(/^Replace the bold words/)
-    expect(questions[9].group).toBeUndefined()
-    expect(questions[9].prompt).toBe(lifeInTheWild[9].prompt)
-    expect(questions[10].group).toMatchObject({ label: "Part 3", prompt: "Complete the sentences with the correct subject or object pronoun." })
-    expect(questions[20].group).toMatchObject({ label: "Part 4", prompt: "Read and write.", image: { path: FIG } })
-    expect(questions[20].image).toBeUndefined()
-    expect(questions[20].prompt).toBe("Write the sentences about Anna using the table in the picture.\nAnna ___")
+    expect(questions[9]).toMatchObject({ type: "tra-loi-ngan", blank: 1, prompt: "", points: 3 })
+    expect(questions[9].group?.prompt).toBe(lifeInTheWild[9].prompt)
+    expect(questions[12].group).toMatchObject({ label: "Part 3", prompt: "Complete the sentences with the correct subject or object pronoun." })
+    expect(questions.filter((x) => x.group?.label === "Part 3").every((x) => x.type === "dien-cho-trong")).toBe(true)
+    expect(questions[22].group).toMatchObject({ label: "Part 4", prompt: "Read and write.", image: { path: FIG } })
+    expect(questions[22].image).toBeUndefined()
+    expect(questions[22].prompt).toBe("Write the sentences about Anna using the table in the picture.\nAnna ___")
     expect(checkGroups(questions)).toBeNull()
   })
 
   it("ungroup after suggest restores prompts and figures (label token aside)", () => {
     const { questions } = suggestGroups(lifeInTheWild)
-    const back = [0, 10, 20].reduce((list, i) => ungroup(list, questions[i].group!.id), questions)
+    const back = [0, 12, 22].reduce((list, i) => ungroup(list, questions[i].group!.id), questions)
     expect(back[0].prompt).toBe(lifeInTheWild[0].prompt)
-    expect(back[10].prompt).toBe(lifeInTheWild[10].prompt.replace(/^Part 3\. /, ""))
-    expect(back[20].prompt).toBe(lifeInTheWild[20].prompt.replace(/^Part 4\. /, ""))
-    expect(back[20].image?.path).toBe(FIG)
-    expect(back.every((x) => !x.group)).toBe(true)
+    expect(back[12].prompt).toBe(lifeInTheWild[10].prompt.replace(/^Part 3\. /, ""))
+    expect(back[22].prompt).toBe(lifeInTheWild[20].prompt.replace(/^Part 4\. /, ""))
+    expect(back[22].image?.path).toBe(FIG)
   })
 
   it("finds nothing when no câu share a first line", () => {
@@ -160,5 +166,82 @@ describe("applyDrop", () => {
   it("leaves standalone moves alone", () => {
     const qs = [q("a"), q("b"), q("c")]
     expect(ids(drop(qs, 0, 2))).toEqual(["b", "c", "a"])
+  })
+})
+
+describe("split passage blanks", () => {
+  const keyed: Question = {
+    id: "p",
+    type: "dien-cho-trong",
+    prompt: "Part 2. Fill in.\nThey are ___ and ___. Lions ___.",
+    answers: ["gentle", "fierce", "hunt"],
+    points: 9,
+    skills: ["vocab"],
+    solution: "S",
+    image: { path: FIG, width: 1, height: 1 },
+  }
+  const short = (x: Question) => x as ShortAnswerQuestion
+
+  it("splits a passage into one short answer per blank", () => {
+    const out = splitBlanks([keyed], "p")
+    expect(out.map((x) => x.type)).toEqual(["tra-loi-ngan", "tra-loi-ngan", "tra-loi-ngan"])
+    expect(out.map((x) => short(x).answer)).toEqual(["gentle", "fierce", "hunt"])
+    expect(out.map((x) => short(x).blank)).toEqual([1, 2, 3])
+    expect(out.every((x) => x.points === 3 && x.prompt === "" && x.id !== "p" && x.skills[0] === "vocab")).toBe(true)
+    expect(new Set(out.map((x) => x.id)).size).toBe(3)
+    expect(out[0].group).toMatchObject({ label: "Part 2", prompt: "Fill in.\nThey are ___ and ___. Lions ___.", image: keyed.image })
+    expect(out[0].image).toBeUndefined()
+    expect(out[0].solution).toBe("S")
+    expect(out[1].solution).toBeUndefined()
+    expect(checkGroups(out)).toBeNull()
+  })
+
+  it("pads missing keys and drops extra ones", () => {
+    const out = splitBlanks([{ ...keyed, answers: ["gentle"] }], "p")
+    expect(out.map((x) => x.answerStatus)).toEqual([undefined, "missing", "missing"])
+    expect(checkGroups(out)).toBeNull()
+    expect(splitBlanks([{ ...keyed, answers: ["a", "b", "c", "d"] }], "p")).toHaveLength(3)
+  })
+
+  it("refuses a 1-blank question or one already in a bài", () => {
+    const one: Question[] = [{ ...keyed, prompt: "A ___." }]
+    expect(splitBlanks(one, "p")).toBe(one)
+    const inBai: Question[] = [{ ...keyed, group: G }]
+    expect(canSplitBlanks(inBai, "p")).toBe(false)
+    expect(splitBlanks(inBai, "p")).toBe(inBai)
+    expect(canSplitBlanks([keyed], "p")).toBe(true)
+    expect(canSplitBlanks([keyed], "p", 4)).toBe(false)
+  })
+
+  it("merge undoes split", () => {
+    const split = splitBlanks([q("a"), keyed, q("b")], "p")
+    expect(isBlankGroup(split, split[1].group!.id)).toBe(true)
+    const merged = mergeBlanks(split, split[1].group!.id)
+    expect(ids(merged)).toEqual(["a", merged[1].id, "b"])
+    expect(merged[1]).toMatchObject({ type: "dien-cho-trong", prompt: keyed.prompt, answers: keyed.answers, points: 9, skills: ["vocab"], solution: "S", image: keyed.image })
+    expect(merged[1].group).toBeUndefined()
+    expect(merged[1].answerStatus).toBeUndefined()
+  })
+
+  it("merge takes the weakest answerStatus and keeps notes", () => {
+    const split = splitBlanks([keyed], "p")
+    const gid = split[0].group!.id
+    const status = (a: Question["answerStatus"], b: Question["answerStatus"]) =>
+      mergeBlanks([{ ...split[0], answerStatus: a }, { ...split[1], answerStatus: b }, split[2]], gid)[0].answerStatus
+    expect(status("ai", "missing")).toBe("missing")
+    expect(status("ai", "ai-check")).toBe("ai-check")
+    expect(status("ai", undefined)).toBe("ai")
+    const noted = mergeBlanks([split[0], { ...split[1], prompt: "x" }, split[2]], gid)[0]
+    expect(noted.solution).toBe("S\n(2) x")
+    expect(mergeBlanks([...split, { ...q("z"), group: split[0].group }], gid)).toHaveLength(4)
+  })
+
+  it("refuses moves that break blank order but allows ordinary câu among them", () => {
+    const other: Question = { id: "x", type: "tra-loi-ngan", prompt: "Q", answer: "a", points: 1, skills: [] }
+    const s = splitBlanks([keyed, other], "p")
+    expect(canApplyMove(s)).toBe(true)
+    expect(canApplyMove([s[0], s[2], s[1], s[3]])).toBe(false)
+    expect(canApplyMove([s[0], { ...s[3], group: s[0].group }, s[1], s[2]])).toBe(true)
+    expect(canApplyMove([s[1], s[2], s[3], { ...s[0], group: undefined }])).toBe(false)
   })
 })

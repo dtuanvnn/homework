@@ -1,6 +1,6 @@
-import { groupBlocks } from "./question-groups"
-import { uid } from "./questions"
-import type { Question, QuestionGroup, QuestionImage } from "./types"
+import { checkBlanks, groupBlocks } from "./question-groups"
+import { countBlanks, uid } from "./questions"
+import type { FillBlankQuestion, Question, QuestionGroup, QuestionImage, ShortAnswerQuestion } from "./types"
 
 /*
  * Pure editor operations on bài. Every function returns a new list in which
@@ -32,16 +32,31 @@ export interface SuggestedGroup {
   prompt: string
   image?: QuestionImage
   imageUrl?: string
+  /** Set when the bài is a passage split into this many blank câu. */
+  blanks?: number
 }
 
 const LABEL = /^(Part|Bài|Exercise|Câu|Phần)\s+(\d+|[IVXLC]+)([a-z])?\s*[.:)]\s*/iu
 
 const linesOf = (prompt: string) => prompt.split("\n").map((l) => l.trim())
 
-/** Groups runs of standalone câu that start with the same line(s); existing bài are left alone. */
-export function suggestGroups(qs: Question[]): { questions: Question[]; groups: SuggestedGroup[] } {
-  const out: Question[] = []
+/** Proposed by "Tự chia bài" only from this many blanks; the manual action needs 2. */
+const SUGGEST_SPLIT_BLANKS = 3
+
+/**
+ * Splits standalone passages with 3+ blanks, then groups runs of standalone câu
+ * that start with the same line(s); existing bài are left alone.
+ */
+export function suggestGroups(input: Question[]): { questions: Question[]; groups: SuggestedGroup[] } {
   const created = new Set<string>()
+  let qs = input
+  for (const q of input) {
+    if (!canSplitBlanks(qs, q.id, SUGGEST_SPLIT_BLANKS)) continue
+    const at = qs.indexOf(q)
+    qs = splitBlanks(qs, q.id)
+    created.add(qs[at].group!.id)
+  }
+  const out: Question[] = []
   let i = 0
   while (i < qs.length) {
     const first = linesOf(qs[i].prompt)[0]
@@ -55,12 +70,21 @@ export function suggestGroups(qs: Question[]): { questions: Question[]; groups: 
     } else out.push(...run)
     i += run.length
   }
-  const groups = groupBlocks(out).flatMap((b) =>
-    b.kind === "group" && created.has(b.group.id)
-      ? [{ title: b.title, from: b.items[0].number, to: b.items.at(-1)!.number, prompt: b.group.prompt, ...(b.group.image ? { image: b.group.image, imageUrl: b.group.imageUrl } : {}) }]
-      : [],
-  )
-  return { questions: created.size ? out : qs, groups }
+  const groups = groupBlocks(out).flatMap((b) => {
+    if (b.kind !== "group" || !created.has(b.group.id)) return []
+    const blanks = b.items.filter((x) => isBlank(x.item)).length
+    return [
+      {
+        title: b.title,
+        from: b.items[0].number,
+        to: b.items.at(-1)!.number,
+        prompt: b.group.prompt,
+        ...(b.group.image ? { image: b.group.image, imageUrl: b.group.imageUrl } : {}),
+        ...(blanks ? { blanks } : {}),
+      },
+    ]
+  })
+  return { questions: created.size ? out : input, groups }
 }
 
 function groupRun(run: Question[]): Question[] | null {
@@ -90,6 +114,95 @@ function groupRun(run: Question[]): Question[] | null {
     const { image: _image, imageUrl: _imageUrl, ...rest } = own // eslint-disable-line @typescript-eslint/no-unused-vars
     return rest as Question
   })
+}
+
+/* ---------- Split passage (Tách / Gộp chỗ trống) ---------- */
+
+const isBlank = (q: Question): q is ShortAnswerQuestion & { blank: number } => q.type === "tra-loi-ngan" && q.blank !== undefined
+
+/** A standalone fill-blank question with at least `min` blanks. */
+export function canSplitBlanks(qs: Question[], questionId: string, min = 2): boolean {
+  const q = qs.find((x) => x.id === questionId)
+  return !!q && q.type === "dien-cho-trong" && !q.group && countBlanks(q.prompt) >= min
+}
+
+/**
+ * The passage becomes a bài (its text, still with "___", as the shared prompt;
+ * its figure as the shared figure) with one short answer per blank. Keys pair
+ * with the blanks in order; a blank without a key is marked "missing".
+ */
+export function splitBlanks(qs: Question[], questionId: string): Question[] {
+  if (!canSplitBlanks(qs, questionId)) return qs
+  const q = qs.find((x) => x.id === questionId) as FillBlankQuestion
+  const match = LABEL.exec(q.prompt)
+  const group: QuestionGroup = {
+    id: uid("bai"),
+    ...(match ? { label: `${match[1]} ${match[2]}${match[3] ?? ""}` } : {}),
+    prompt: match ? q.prompt.slice(match[0].length).trim() : q.prompt,
+    ...(q.image ? { image: q.image, ...(q.imageUrl ? { imageUrl: q.imageUrl } : {}) } : {}),
+  }
+  const count = countBlanks(q.prompt)
+  const blanks = Array.from({ length: count }, (_, k): Question => {
+    const answer = q.answers[k] ?? ""
+    const answerStatus = q.answerStatus ?? (answer.trim() ? undefined : "missing")
+    return {
+      id: uid("ch"),
+      type: "tra-loi-ngan",
+      prompt: "",
+      answer,
+      blank: k + 1,
+      points: q.points / count,
+      skills: q.skills,
+      group,
+      ...(q.math !== undefined ? { math: q.math } : {}),
+      ...(q.simplest !== undefined ? { simplest: q.simplest } : {}),
+      ...(answerStatus ? { answerStatus } : {}),
+      ...(k === 0 && q.solution ? { solution: q.solution } : {}),
+      ...(k === 0 && q.solutionImage ? { solutionImage: q.solutionImage, ...(q.solutionImageUrl ? { solutionImageUrl: q.solutionImageUrl } : {}) } : {}),
+    }
+  })
+  return qs.flatMap((x) => (x === q ? blanks : [x]))
+}
+
+/** The bài consists only of blank câu (so it can go back to one question). */
+export function isBlankGroup(qs: Question[], groupId: string): boolean {
+  const members = qs.filter((q) => q.group?.id === groupId)
+  return members.length > 0 && members.every(isBlank)
+}
+
+const STATUS_ORDER = ["missing", "ai-check", "ai"] as const
+
+/** Inverse of splitBlanks: one fill-blank question in the bài's place. */
+export function mergeBlanks(qs: Question[], groupId: string): Question[] {
+  if (!isBlankGroup(qs, groupId)) return qs
+  const members = qs.filter((q) => q.group?.id === groupId) as (ShortAnswerQuestion & { blank: number })[]
+  const sorted = [...members].sort((a, b) => a.blank - b.blank)
+  const group = members[0].group!
+  const notes = sorted.filter((m) => m.prompt.trim()).map((m) => `(${m.blank}) ${m.prompt.trim()}`)
+  const solution = [...members.flatMap((m) => (m.solution ? [m.solution] : [])), ...notes].join("\n")
+  const solutionImage = members.find((m) => m.solutionImage)
+  const answerStatus = STATUS_ORDER.find((s) => members.some((m) => m.answerStatus === s))
+  const first = members[0]
+  const merged: FillBlankQuestion = {
+    id: uid("ch"),
+    type: "dien-cho-trong",
+    prompt: `${group.label ? `${group.label}. ` : ""}${group.prompt}`,
+    answers: sorted.map((m) => m.answer),
+    points: members.reduce((sum, m) => sum + m.points, 0),
+    skills: [...new Set(members.flatMap((m) => m.skills))],
+    ...(first.math !== undefined ? { math: first.math } : {}),
+    ...(first.simplest !== undefined ? { simplest: first.simplest } : {}),
+    ...(group.image ? { image: group.image, ...(group.imageUrl ? { imageUrl: group.imageUrl } : {}) } : {}),
+    ...(answerStatus ? { answerStatus } : {}),
+    ...(solution ? { solution } : {}),
+    ...(solutionImage ? { solutionImage: solutionImage.solutionImage, ...(solutionImage.solutionImageUrl ? { solutionImageUrl: solutionImage.solutionImageUrl } : {}) } : {}),
+  }
+  return qs.flatMap((q) => (q === first ? [merged] : q.group?.id === groupId ? [] : [q]))
+}
+
+/** A reorder is allowed unless it moves a blank câu out of its bài or out of order. */
+export function canApplyMove(next: Question[]): boolean {
+  return checkBlanks(next) === null
 }
 
 /* ---------- Manual editing ---------- */

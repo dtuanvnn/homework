@@ -55,7 +55,7 @@ export function checkGroups(items: Groupable[]): string | null {
 }
 
 /** Blank câu sit in a bài and answer its prompt's "___" one by one, in order. */
-function checkBlanks(items: Groupable[]): string | null {
+export function checkBlanks(items: Groupable[]): string | null {
   const blanks = new Map<string, { group: QuestionGroup; seen: number[] }>()
   for (const { group, blank } of items) {
     if (blank === undefined) continue
