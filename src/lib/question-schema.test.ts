@@ -54,4 +54,12 @@ describe("question schema", () => {
     expect(questionContentSchema.safeParse({ ...q, answerStatus: "missing" }).success).toBe(true)
     expect(questionContentSchema.parse({ ...q, answer: "42", answerStatus: "ai", solution: "6 × 7 = 42" })).toMatchObject({ answerStatus: "ai", solution: "6 × 7 = 42" })
   })
+
+  it("keeps a bài group and drops its signed URL", () => {
+    const q = { id: "q1", type: "tra-loi-ngan", prompt: "David ___", points: 1, skills: [], answer: "He" }
+    const parsed = editedQuestionSchema.parse({ ...q, group: { id: "g1", label: " Part 3 ", prompt: "Complete.", image: { path: FIG, width: 4, height: 3 }, imageUrl: "https://x/y" } })
+    expect(parsed.group).toEqual({ id: "g1", label: "Part 3", prompt: "Complete.", image: { path: FIG, width: 4, height: 3 } })
+    expect(questionContentSchema.parse({ ...q, group: { id: "g1", label: "", prompt: "" } }).group).toEqual({ id: "g1", prompt: "" })
+    expect(questionContentSchema.safeParse({ ...q, group: { id: "g1", label: "x".repeat(41), prompt: "" } }).success).toBe(false)
+  })
 })

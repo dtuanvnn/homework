@@ -24,4 +24,8 @@ describe("figures", () => {
     expect(figurePaths({ image: { path: FIG }, solutionImage: { path: "s" } })).toEqual([FIG, "s"])
     expect(figurePaths({ solutionImage: { path: "s" } })).toEqual(["s"])
   })
+
+  it("lists a bài's shared figure", () => {
+    expect(figurePaths({ image: { path: FIG }, group: { image: { path: "g" } } })).toEqual([FIG, "g"])
+  })
 })

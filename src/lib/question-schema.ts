@@ -14,6 +14,18 @@ const imageSchema = z.object({
   height: z.number().int().min(1).max(10000),
 })
 
+const groupSchema = z.object({
+  id: z.string().min(1).max(64),
+  label: z
+    .string()
+    .trim()
+    .max(40, "Nhãn bài tối đa 40 ký tự")
+    .optional()
+    .transform((v) => v || undefined),
+  prompt: z.string().trim().max(10000),
+  image: imageSchema.optional(),
+})
+
 const base = {
   prompt: z.string().trim().min(1, "Câu hỏi cần có nội dung"),
   points: z.number().positive().max(100),
@@ -22,6 +34,7 @@ const base = {
   answerStatus: z.enum(["missing", "ai", "ai-check"]).optional(),
   solution: z.string().max(10000).optional(),
   solutionImage: imageSchema.optional(),
+  group: groupSchema.optional(),
 }
 
 const mathFlags = { math: z.boolean().optional(), simplest: z.boolean().optional() }
@@ -64,5 +77,8 @@ export const questionContentSchema = z.discriminatedUnion("type", [
 export const editedQuestionSchema = z.intersection(z.object({ id: z.string() }), questionContentSchema).transform((q) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { imageUrl: _imageUrl, solutionImageUrl: _solutionImageUrl, ...rest } = q as typeof q & { imageUrl?: string; solutionImageUrl?: string }
-  return rest
+  if (!rest.group) return rest
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { imageUrl: _groupImageUrl, ...group } = rest.group as typeof rest.group & { imageUrl?: string }
+  return { ...rest, group }
 })
