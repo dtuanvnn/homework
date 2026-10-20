@@ -160,3 +160,26 @@ describe("finalizeScanGroups", () => {
     expect(out[1].question.group).toEqual(out[0].question.group)
   })
 })
+
+describe("cloze passages keep keys and notes", () => {
+  it("a passage cut across pages keeps each key on its blank", () => {
+    const a: QuestionGroup = { id: "a", prompt: "", layout: "doan-van" }
+    const b: QuestionGroup = { id: "b", prompt: "", layout: "doan-van" }
+    const p1 = [item(cloze("One ___ two ___", ["1"], a), 1)]
+    const p2 = [item(cloze("three ___ four ___.", ["3", "4"], b), 2)]
+    const out = finalizeScanGroups(joinPages([part(p1, { tail: tailOf(p1) }), part(p2, { lead: { groupId: "b", continues: true, midParagraph: true } })]))
+    expect(out.map((i) => (i.question as ShortAnswerQuestion).answer)).toEqual(["1", "", "3", "4"])
+  })
+
+  it("blank câu carry every passage's note and the lowest confidence", () => {
+    const g: QuestionGroup = { id: "g", prompt: "" }
+    const out = finalizeScanGroups([
+      item(cloze("A ___ b ___.", ["1", "2"], g), 1, { note: "Chữ mờ", confidence: 0.9 }),
+      item(cloze("C ___.", ["3"], g), 1, { note: "Số chỗ trống khác số đáp án", confidence: 0.6 }),
+    ])
+    expect(out).toHaveLength(3)
+    expect(out.every((i) => i.confidence === 0.6)).toBe(true)
+    expect(out[0].note).toContain("Chữ mờ")
+    expect(out[0].note).toContain("Số chỗ trống khác số đáp án")
+  })
+})

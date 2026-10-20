@@ -1,5 +1,5 @@
 import { checkGroups, normalizeGroups } from "@/lib/question-groups"
-import { canSplitBlanks, splitBlanks, splitBlanksInGroup, ungroup, updateGroup } from "@/lib/question-groups-edit"
+import { blankKeys, canSplitBlanks, splitBlanks, splitBlanksInGroup, ungroup, updateGroup } from "@/lib/question-groups-edit"
 import type { FillBlankQuestion, Question, QuestionGroup } from "@/lib/types"
 import type { ScannedQuestion, ScanPart } from "./scan"
 
@@ -54,7 +54,7 @@ export function joinPages(parts: ScanPart[]): ScannedQuestion[] {
         const merged: FillBlankQuestion = {
           ...upper,
           prompt: joinText(upper.prompt, lower.prompt, lead.midParagraph),
-          answers: [...upper.answers, ...lower.answers],
+          answers: [...blankKeys(upper), ...blankKeys(lower)],
           points: upper.points + lower.points,
         }
         items = items.map((it) => (it === before ? { ...it, question: merged, confidence: Math.min(it.confidence, after.confidence) } : it))
@@ -94,9 +94,17 @@ export function finalizeScanGroups(items: ScannedQuestion[]): ScannedQuestion[] 
   const byId = new Map(items.map((it) => [it.question.id, it]))
   const byGroup = new Map<string, ScannedQuestion>()
   let qs = items.map((it) => it.question)
+  // Blank câu split from a bài's passages carry every passage's note and the lowest confidence.
   for (const it of items) {
     const id = it.question.group?.id
-    if (id && !byGroup.has(id)) byGroup.set(id, it)
+    if (!id) continue
+    const seen = byGroup.get(id)
+    if (!seen) {
+      byGroup.set(id, it)
+      continue
+    }
+    const notes = [...new Set([seen.note, it.note].flatMap((n) => (n ? n.split(" · ") : [])))].join(" · ")
+    byGroup.set(id, { ...seen, confidence: Math.min(seen.confidence, it.confidence), ...(notes ? { note: notes } : {}) })
   }
   for (const id of byGroup.keys()) qs = splitBlanksInGroup(qs, id)
   for (const it of items) {

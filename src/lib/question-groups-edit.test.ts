@@ -358,3 +358,14 @@ describe("bài moves keep split passages whole", () => {
     expect(isBlankQuestion(qs[0])).toBe(true)
   })
 })
+
+describe("splitBlanksInGroup keeps keys on their blanks", () => {
+  it("pads or trims each passage's keys to its own blanks before joining", () => {
+    const g: QuestionGroup = { id: "p", prompt: "" }
+    const a: Question = { id: "a", type: "dien-cho-trong", prompt: "One ___ two ___.", answers: ["1", "2", "extra"], points: 3, skills: [], group: g }
+    const b: Question = { id: "b", type: "dien-cho-trong", prompt: "Three ___ four ___.", answers: ["3"], points: 2, skills: [], group: g }
+    const out = splitBlanksInGroup([a, b], "p")
+    expect(out.map((x) => (x as ShortAnswerQuestion).answer)).toEqual(["1", "2", "3", ""])
+    expect(out[3].answerStatus).toBe("missing")
+  })
+})

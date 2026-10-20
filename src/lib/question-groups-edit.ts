@@ -172,6 +172,11 @@ function blankQuestions(q: FillBlankQuestion, group: QuestionGroup): Question[] 
   })
 }
 
+/** One key per "___" of the passage: missing keys are empty, extra keys dropped (so joined passages keep keys on their blanks). */
+export function blankKeys(q: FillBlankQuestion): string[] {
+  return Array.from({ length: countBlanks(q.prompt) }, (_, k) => q.answers[k] ?? "")
+}
+
 /**
  * A bài whose câu are only fill-blank passages (a scanned cloze text under its
  * instruction) becomes a split passage in place: the passages join into one,
@@ -185,7 +190,7 @@ export function splitBlanksInGroup(qs: Question[], groupId: string, min = SUGGES
   if (countBlanks(passage) < min) return qs
   const first = members[0]
   const group: QuestionGroup = { ...first.group!, prompt: [first.group!.prompt, passage].filter((p) => p.trim()).join("\n") }
-  const merged: FillBlankQuestion = { ...first, prompt: passage, answers: members.flatMap((q) => q.answers) }
+  const merged: FillBlankQuestion = { ...first, prompt: passage, answers: members.flatMap(blankKeys) }
   return qs.flatMap((q) => (q === first ? blankQuestions(merged, group) : q.group?.id === groupId ? [] : [q]))
 }
 
