@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test"
-import { assign, closeDb, createSetWithQuestions } from "./db"
+import { assign, createSetWithQuestions } from "./db"
 import { open, trackPageErrors } from "./helpers"
 
 /*
@@ -8,8 +8,8 @@ import { open, trackPageErrors } from "./helpers"
  * grading and the result show the bài with its score.
  */
 
+// No closeDb() here: the pool is shared by every spec in the worker, and offline.spec runs later.
 test.describe.configure({ mode: "serial" })
-test.afterAll(() => closeDb())
 
 const visible = (locator: Locator) => locator.filter({ visible: true }).first()
 const takeScreen = (page: Page, title: string) => page.getByRole("dialog", { name: `Làm bài: ${title}` })
