@@ -17,9 +17,12 @@ import { Essay, FillBlank, Matching, MultipleChoice, Ordering, ShortAnswer, True
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 import { clockLabel } from "@/lib/timer"
-import SharedPromptBox from "./SharedPromptBox"
+import SharedPromptBox, { type PassageBlanks } from "./SharedPromptBox"
 import { SaveStatus, TakeClock, TakeDialogs, TakeOverlays } from "./TakeChrome"
 import { useTakeSession, type Answers, type TakeSessionProps } from "./use-take-session"
+
+/** Which "___" of its bài's passage a câu answers (split passage), if any. */
+const blankOf = (q: TakeQuestion) => (q.type === "tra-loi-ngan" ? q.blank : undefined)
 
 export type { Answers, TakeTimer } from "./use-take-session"
 
@@ -77,6 +80,21 @@ export default function TakeAssignment({
   const q = questions[index]
   const pct = (answeredCount / questions.length) * 100
   const groupTitles = new Map(groupBlocks(questions).flatMap((b) => (b.kind === "group" ? [[b.group.id, b.title] as const] : [])))
+  // A split passage: each blank shows its câu number and what the child wrote; the current one is highlighted.
+  const passage: PassageBlanks | undefined =
+    q?.group && questions.some((x) => x.group?.id === q.group?.id && blankOf(x))
+      ? {
+          slots: new Map(
+            questions.flatMap((x, i) => {
+              const blank = blankOf(x)
+              const given = answers[x.id]
+              return x.group?.id === q.group?.id && blank ? [[blank, { number: i + 1, given: typeof given === "string" && given.trim() ? given : undefined }] as const] : []
+            }),
+          ),
+          current: blankOf(q),
+        }
+      : undefined
+  const heading = q && blankOf(q) && !q.prompt.trim() ? `Chỗ trống (${index + 1})` : q?.prompt
 
   // Pop a star on the progress bar whenever another question becomes answered.
   const prevAnswered = useRef(answeredCount)
@@ -143,7 +161,7 @@ export default function TakeAssignment({
       {/* Body */}
       <main className="flex-1 overflow-x-hidden overflow-y-auto">
         <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-10">
-          {!reviewing && q.group && <SharedPromptBox key={q.group.id} group={q.group} title={groupTitles.get(q.group.id) ?? ""} />}
+          {!reviewing && q.group && <SharedPromptBox key={q.group.id} group={q.group} title={groupTitles.get(q.group.id) ?? ""} blanks={passage} />}
           <AnimatePresence mode="wait" custom={dir} initial={false}>
           {reviewing ? (
             <motion.div key="review" custom={dir} variants={questionSlide(reduced)} initial="initial" animate="animate" exit="exit" className="flex flex-col items-center gap-6 text-center">
@@ -169,13 +187,14 @@ export default function TakeAssignment({
                   {TYPE_LABEL[q.type]} · {q.points.toLocaleString("vi-VN")} điểm
                 </span>
                 {q.type !== "dien-cho-trong" &&
-                  (isLongPrompt(q.prompt) ? (
+                  heading !== undefined &&
+                  (isLongPrompt(heading) ? (
                     <h2 className="rounded-3xl bg-white p-5 text-xl leading-relaxed font-semibold break-words whitespace-pre-line text-slate-900 md:p-6 md:text-2xl md:leading-relaxed">
-                      <RichText text={q.prompt} />
+                      <RichText text={heading} />
                     </h2>
                   ) : (
                     <h2 className="text-3xl leading-snug font-extrabold break-words whitespace-pre-line text-slate-900 md:text-4xl">
-                      <RichText text={q.prompt} />
+                      <RichText text={heading} />
                     </h2>
                   ))}
                 {q.type === "dien-cho-trong" && <h2 className="text-xl font-bold text-slate-600">Em điền từ thích hợp vào chỗ trống:</h2>}

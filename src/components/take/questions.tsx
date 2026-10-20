@@ -161,6 +161,14 @@ export function FillBlank({ q, value = [], onChange, tone }: Props<Q<"dien-cho-t
 }
 
 export function ShortAnswer({ q, value = "", onChange, tone, math }: Props<Q<"tra-loi-ngan">, string> & { math: boolean }) {
+  // Long answers (or Apple Pencil handwriting turned into text) grow the box instead of scrolling inside it.
+  const box = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el) return
+    el.style.height = "auto"
+    el.style.height = `${el.scrollHeight}px`
+  }, [value])
   return (
     <div className="space-y-3">
       {q.math ? (
@@ -177,6 +185,7 @@ export function ShortAnswer({ q, value = "", onChange, tone, math }: Props<Q<"tr
       ) : (
         // Answers in words are often a whole sentence: let them wrap.
         <Textarea
+          ref={box}
           aria-label="Câu trả lời"
           rows={2}
           value={value}
