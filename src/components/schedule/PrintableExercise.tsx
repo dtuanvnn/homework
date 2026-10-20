@@ -2,6 +2,7 @@ import { createPortal } from "react-dom"
 import { useEffect } from "react"
 import { CardTitle } from "@/components/ui/card"
 import { useRequiredStudent } from "@/components/layout/AppFrame"
+import { groupBlocks } from "@/lib/question-groups"
 import { OPTION_LETTERS } from "@/lib/questions"
 import { isMultiAnswer } from "@/lib/choice"
 import type { ExerciseSet, Question } from "@/lib/types"
@@ -21,6 +22,7 @@ export default function PrintableExercise({
   onDone: () => void
 }) {
   const student = useRequiredStudent()
+  const groupTitles = new Map(groupBlocks(questions).flatMap((b) => (b.kind === "group" ? [[b.group.id, b.title] as const] : [])))
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       window.print()
@@ -36,6 +38,17 @@ export default function PrintableExercise({
       <ol className="mt-6 space-y-6">
         {questions.map((q, i) => (
           <li key={q.id} className="break-inside-avoid">
+            {q.group && questions[i - 1]?.group?.id !== q.group.id && (
+              <div className="mb-4 space-y-2">
+                <p className="text-lg font-bold">{groupTitles.get(q.group.id)}</p>
+                {q.group.prompt && (
+                  <p className="whitespace-pre-line">
+                    <RichText text={q.group.prompt} />
+                  </p>
+                )}
+                <QuestionPicture question={q.group} className="max-h-64" />
+              </div>
+            )}
             <p className="font-semibold whitespace-pre-line">
               Câu {i + 1}. <RichText text={q.prompt} />
             </p>

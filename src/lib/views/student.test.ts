@@ -288,6 +288,11 @@ describe("buildResultDetail", () => {
 })
 
 describe("toTakeQuestion", () => {
+  it("keeps the câu's bài (shared prompt and figure) for the take screen", () => {
+    const group = { id: "g", label: "Part 3", prompt: "Complete the sentences." }
+    expect(toTakeQuestion({ ...sa, group } as Question)).toMatchObject({ group })
+  })
+
   it("strips answer keys but keeps what the UI needs", () => {
     expect(toTakeQuestion(mc)).not.toHaveProperty("correctIndex")
     expect(toTakeQuestion(mc)).not.toHaveProperty("multi")

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { SUBJECTS } from "@/lib/subjects"
 import { isInkEmpty } from "@/lib/ink"
+import { groupBlocks } from "@/lib/question-groups"
 import { isLongPrompt } from "@/lib/questions"
 import { cn } from "@/lib/utils"
 import type { QuestionType, SubjectId } from "@/lib/types"
@@ -16,6 +17,7 @@ import { Essay, FillBlank, Matching, MultipleChoice, Ordering, ShortAnswer, True
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 import { clockLabel } from "@/lib/timer"
+import SharedPromptBox from "./SharedPromptBox"
 import { SaveStatus, TakeClock, TakeDialogs, TakeOverlays } from "./TakeChrome"
 import { useTakeSession, type Answers, type TakeSessionProps } from "./use-take-session"
 
@@ -74,6 +76,7 @@ export default function TakeAssignment({
   const reviewing = index === questions.length
   const q = questions[index]
   const pct = (answeredCount / questions.length) * 100
+  const groupTitles = new Map(groupBlocks(questions).flatMap((b) => (b.kind === "group" ? [[b.group.id, b.title] as const] : [])))
 
   // Pop a star on the progress bar whenever another question becomes answered.
   const prevAnswered = useRef(answeredCount)
@@ -140,6 +143,7 @@ export default function TakeAssignment({
       {/* Body */}
       <main className="flex-1 overflow-x-hidden overflow-y-auto">
         <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-10">
+          {!reviewing && q.group && <SharedPromptBox key={q.group.id} group={q.group} title={groupTitles.get(q.group.id) ?? ""} />}
           <AnimatePresence mode="wait" custom={dir} initial={false}>
           {reviewing ? (
             <motion.div key="review" custom={dir} variants={questionSlide(reduced)} initial="initial" animate="animate" exit="exit" className="flex flex-col items-center gap-6 text-center">
@@ -238,7 +242,17 @@ export default function TakeAssignment({
 function QuestionGrid({ questions, answers, current, onPick, toneBg }: { questions: TakeQuestion[]; answers: Answers; current: number; onPick: (i: number) => void; toneBg: string }) {
   return (
     <div className="grid w-full max-w-md grid-cols-5 gap-2.5 mx-auto">
-      {questions.map((q, i) => {
+      {groupBlocks(questions).flatMap((b) => (b.kind === "single" ? [b] : [{ title: b.title, start: b.items[0].number - 1 }, ...b.items])).map((cell) => {
+        // A bài's title spans the row above its câu.
+        if ("title" in cell) {
+          return (
+            <p key={`bai-${cell.start}`} className="col-span-5 mt-1 text-left text-sm font-bold text-slate-500">
+              {cell.title}
+            </p>
+          )
+        }
+        const i = cell.number - 1
+        const q = cell.item
         const done = isAnswered(q, answers[q.id])
         return (
           <button
