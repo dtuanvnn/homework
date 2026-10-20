@@ -27,10 +27,13 @@ const withGroup = (it: ScannedQuestion, group: QuestionGroup, groupFigure: Scann
  */
 export function joinPages(parts: ScanPart[]): ScannedQuestion[] {
   let items: ScannedQuestion[] = []
+  // A page's bài that joined an earlier one is known by the earlier id from then on (a bài over 3+ pages).
+  const joinedInto = new Map<string, string>()
   parts.forEach((part, n) => {
     let incoming = part.items
     const tail = n > 0 ? parts[n - 1].tail : undefined
-    const target = tail && items.find((it) => it.question.group?.id === tail.groupId)?.question.group
+    const tailId = tail && (joinedInto.get(tail.groupId) ?? tail.groupId)
+    const target = tailId ? items.find((it) => it.question.group?.id === tailId)?.question.group : undefined
     const targetFigure = target && items.find((it) => it.question.group?.id === target.id && it.groupFigure)?.groupFigure
     const lead = part.lead
     if (target && lead && (!lead.label || !target.label || lead.label === target.label)) {
@@ -39,6 +42,7 @@ export function joinPages(parts: ScanPart[]): ScannedQuestion[] {
       const group: QuestionGroup = { ...target, prompt: joinText(target.prompt, leadGroup?.prompt ?? "", lead.midParagraph) }
       if (!group.layout && leadGroup?.layout) group.layout = leadGroup.layout
       const figure = targetFigure ?? leadMembers.find((it) => it.groupFigure)?.groupFigure
+      joinedInto.set(lead.groupId, target.id)
       items = items.map((it) => (it.question.group?.id === target.id ? withGroup(it, group, figure) : it))
       incoming = incoming.map((it) => (it.question.group?.id === lead.groupId ? withGroup(it, group, figure) : it))
       // A fill-in passage cut by the page break goes back to one passage (split later, numbered across both pages).

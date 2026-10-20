@@ -66,6 +66,11 @@ export function fillPlaceholder(items: ReviewItem[], placeholderId: string): Rev
   return [...items.slice(0, i), joined, ...items.slice(i + 2)]
 }
 
+/** "Xóa đoạn văn": a waiting passage goes, with every stand-in it has. */
+export function deletePassage(items: ReviewItem[], groupId: string): ReviewItem[] {
+  return items.filter((it) => !(it.placeholder && it.question.group?.id === groupId))
+}
+
 /** A passage the scan found without câu is still waiting for the parent. */
 export const hasPlaceholder = (items: ReviewItem[]) => items.some((it) => it.placeholder)
 

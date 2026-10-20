@@ -20,7 +20,7 @@ import ReviewGroupCard from './ReviewGroupCard'
 import FigureCropDialog from './FigureCropDialog'
 import SourceViewer from './SourceViewer'
 import type { UploadMeta } from './UploadStep'
-import { fillPlaceholder, mergeQuestions, needsCheck, pageSource, withQuestions, type ReviewItem, type SourcePage } from './review-utils'
+import { deletePassage, fillPlaceholder, mergeQuestions, needsCheck, pageSource, withQuestions, type ReviewItem, type SourcePage } from './review-utils'
 
 interface ReviewStepProps {
   pages: SourcePage[]
@@ -258,7 +258,7 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
             }
             onUngroup={() => applyGroups(ungroup(questionsNow(), block.group.id), `Đã bỏ ${block.title}`)}
             onFillFromBelow={waiting && below && !below.question.group ? () => withUndo(fillPlaceholder(items, items[first].question.id), 'Đã đưa câu vào bài') : undefined}
-            onDeletePassage={() => withUndo(items.filter((it) => it !== items[first]), 'Đã xóa đoạn văn')}
+            onDeletePassage={() => withUndo(deletePassage(items, block.group.id), 'Đã xóa đoạn văn')}
           >
             {block.items.map((x) => card(items[x.number - 1], x.number - 1))}
           </ReviewGroupCard>

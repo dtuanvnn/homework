@@ -115,6 +115,27 @@ describe("joinPages", () => {
   })
 })
 
+describe("joinPages over three pages", () => {
+  it("joins a bài that runs over three pages", () => {
+    const a: QuestionGroup = { id: "a", prompt: "Page one text.", layout: "doan-van" }
+    const b: QuestionGroup = { id: "b", prompt: "Page two text.", layout: "doan-van" }
+    const c: QuestionGroup = { id: "c", prompt: "", layout: "doan-van" }
+    const p1 = [placeholder(a, 1)]
+    const p2 = [placeholder(b, 2)]
+    const p3 = [item(essay("Q1", c), 3), item(essay("Q2", c), 3)]
+    const out = joinPages([
+      part(p1, { tail: tailOf(p1) }),
+      part(p2, { lead: { groupId: "b", continues: true, midParagraph: false }, tail: tailOf(p2) }),
+      part(p3, { lead: { groupId: "c", continues: true, midParagraph: false } }),
+    ])
+    expect(out).toHaveLength(2)
+    expect(out.some((i) => i.placeholder)).toBe(false)
+    expect(groupIds(out)).toEqual(["a", "a"])
+    expect(out[0].question.group?.prompt).toContain("Page one text.")
+    expect(out[0].question.group?.prompt).toContain("Page two text.")
+  })
+})
+
 describe("finalizeScanGroups", () => {
   it("releases a bài the AI split into two runs", () => {
     const a: QuestionGroup = { id: "a", prompt: "Shared" }

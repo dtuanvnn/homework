@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { ScannedQuestion } from "@/lib/ai/scan"
 import type { QuestionGroup } from "@/lib/types"
-import { appendScanned, draftFigurePaths, fillPlaceholder, hasPlaceholder, withQuestions, withSignedFigures, type ReviewItem } from "./review-utils"
+import { appendScanned, draftFigurePaths, deletePassage, fillPlaceholder, hasPlaceholder, withQuestions, withSignedFigures, type ReviewItem } from "./review-utils"
 
 const scanned = (page: number, figurePage?: number): ScannedQuestion => ({
   question: { id: `q${page}`, type: "tra-loi-ngan", prompt: "1 + 1 = ?", answer: "2", points: 1, skills: [] },
@@ -88,5 +88,14 @@ describe("review bài operations", () => {
     const other: ReviewItem = { ...scanned(2), reviewed: false, question: { ...scanned(2).question, group: { id: "x", prompt: "" } } }
     const list = [waiting, other]
     expect(fillPlaceholder(list, "p")).toBe(list)
+  })
+})
+
+describe("deletePassage", () => {
+  it("removes every stand-in of a waiting passage", () => {
+    const g: QuestionGroup = { id: "g", prompt: "Passage" }
+    const stand = (id: string): ReviewItem => ({ question: { id, type: "tu-luan", prompt: "", rubric: "", points: 0, skills: [], group: g }, confidence: 1, page: 1, reviewed: false, placeholder: true })
+    const out = deletePassage([stand("p1"), stand("p2"), { ...scanned(2), reviewed: false }], "g")
+    expect(out.map((i) => i.question.id)).toEqual(["q2"])
   })
 })
