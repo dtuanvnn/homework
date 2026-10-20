@@ -58,11 +58,12 @@ export function vocabQuestion(word: string, prompt: string): QuestionContent {
 }
 
 /** Why a set's questions don't fit its format (Vietnamese), or null when they do. */
-export function checkSetFormat(set: { format: ExerciseFormat; subject: SubjectId }, questions: readonly { type: string }[]): string | null {
+export function checkSetFormat(set: { format: ExerciseFormat; subject: SubjectId }, questions: readonly { type: string; group?: unknown }[]): string | null {
   const words = questions.filter((q) => q.type === "tu-vung").length
   if (set.format === "cau-hoi") return words ? "Từ vựng chỉ dùng trong bộ Flashcard." : null
   if (set.subject !== "tieng-anh") return "Bộ Flashcard là môn Tiếng Anh."
   if (words !== questions.length) return "Bộ Flashcard chỉ gồm từ vựng."
+  if (questions.some((q) => q.group)) return "Bộ Flashcard không chia bài."
   if (words > MAX_WORDS) return `Bộ Flashcard có tối đa ${MAX_WORDS} từ.`
   return null
 }

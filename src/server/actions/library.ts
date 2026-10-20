@@ -6,6 +6,7 @@ import { z } from "zod"
 import { db, schema } from "@/db"
 import { figureOwner, figurePaths, unusedFigures } from "@/lib/figures"
 import { checkSetFormat } from "@/lib/flashcard"
+import { checkGroups, normalizeGroups } from "@/lib/question-groups"
 import { editedQuestionSchema } from "@/lib/question-schema"
 import type { Assignment, Attachment, ExerciseSet, Question } from "@/lib/types"
 import { runAction, type ActionResult } from "@/lib/action-result"
@@ -90,8 +91,10 @@ export async function requestSetUploads(setId: string, names: string[]): Promise
 export async function saveExerciseSet(payload: SavePayload): Promise<ActionResult<{ set: ExerciseSet; attachments: Attachment[] }>> {
   return runAction(async () => {
     const ctx = await assertAccess("parent")
-    const { set, questions: qs, keepAttachmentIds, newFiles } = savePayloadSchema.parse(payload)
-    const formatError = checkSetFormat(set, qs)
+    const parsed = savePayloadSchema.parse(payload)
+    const { set, keepAttachmentIds, newFiles } = parsed
+    const qs = normalizeGroups(parsed.questions)
+    const formatError = checkSetFormat(set, qs) ?? checkGroups(qs)
     if (formatError) throw new Error(formatError)
     const [existing] = await db.select({ householdId: exerciseSets.householdId }).from(exerciseSets).where(eq(exerciseSets.id, set.id))
     if (existing && existing.householdId !== ctx.householdId) throw new Error(NOT_FOUND)
@@ -199,20 +202,24 @@ async function removeUnreferenced(paths: string[]) {
 
 const imagePath = (column: AnyColumn) => sql<string>`${column}->'image'->>'path'`
 const solutionImagePath = (column: AnyColumn) => sql<string>`${column}->'solutionImage'->>'path'`
+const groupImagePath = (column: AnyColumn) => sql<string>`${column}->'group'->'image'->>'path'`
 
 /** Figure objects in a set's folder that no question, answer snapshot or attachment uses any more. */
 async function removeUnusedFigures(setId: string) {
   try {
     const candidates = unusedFigures(await listFolder("sets", setId), [])
     if (!candidates.length) return
-    const [inQuestions, inAnswers, inQuestionSolutions, inAnswerSolutions, inAttachments] = await Promise.all([
-      db.select({ path: imagePath(questions.content) }).from(questions).where(inArray(imagePath(questions.content), candidates)),
-      db.select({ path: imagePath(answers.question) }).from(answers).where(inArray(imagePath(answers.question), candidates)),
-      db.select({ path: solutionImagePath(questions.content) }).from(questions).where(inArray(solutionImagePath(questions.content), candidates)),
-      db.select({ path: solutionImagePath(answers.question) }).from(answers).where(inArray(solutionImagePath(answers.question), candidates)),
+    const referenced = (path: (column: AnyColumn) => ReturnType<typeof imagePath>) => [
+      db.select({ path: path(questions.content) }).from(questions).where(inArray(path(questions.content), candidates)),
+      db.select({ path: path(answers.question) }).from(answers).where(inArray(path(answers.question), candidates)),
+    ]
+    const found = await Promise.all([
+      ...referenced(imagePath),
+      ...referenced(solutionImagePath),
+      ...referenced(groupImagePath),
       db.select({ path: attachments.storagePath }).from(attachments).where(inArray(attachments.storagePath, candidates)),
     ])
-    const used = [...inQuestions, ...inAnswers, ...inQuestionSolutions, ...inAnswerSolutions, ...inAttachments].flatMap((r) => (r.path ? [r.path] : []))
+    const used = found.flat().flatMap((r) => (r.path ? [r.path] : []))
     await removeFromStorage(unusedFigures(candidates, used))
   } catch {
     // Best effort: a leftover figure only costs storage.
