@@ -21,6 +21,7 @@ async function stubSpeech(page: Page) {
   await page.addInitScript(() => {
     const said: string[] = []
     let cancels = 0
+    let speaking: Utterance | null = null
     class Utterance {
       text: string
       lang = ""
@@ -33,17 +34,24 @@ async function stubSpeech(page: Page) {
         this.text = text
       }
     }
-    const synth = {
+    const synth: { cancel: () => void; [key: string]: unknown } = {
       getVoices: () => [
         { lang: "en-US", name: "Test English" },
         { lang: "vi-VN", name: "Test Vietnamese" },
       ],
+      // Like browsers, cancelling (also done by each speak) ends the utterance being spoken.
       speak: (u: Utterance) => {
+        synth.cancel()
+        cancels -= 1
         said.push(u.text)
+        speaking = u
         u.onstart?.()
       },
       cancel: () => {
         cancels += 1
+        const u = speaking
+        speaking = null
+        u?.onend?.()
       },
       addEventListener: () => {},
       removeEventListener: () => {},
