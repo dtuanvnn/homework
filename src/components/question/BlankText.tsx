@@ -22,7 +22,7 @@ export default function BlankText({ pieces, slot }: { pieces: PassagePiece[]; sl
   return (
     <>
       {pieces.map((piece, i) => {
-        if (piece.kind === "text") return <RichText key={i} text={piece.text} />
+        if (piece.kind === "text") return piece.bold ? <strong key={i}><RichText text={piece.text} /></strong> : <RichText key={i} text={piece.text} />
         const s = slot(piece.index)
         const label = s.label ? `(${s.label}) ` : ""
         return (

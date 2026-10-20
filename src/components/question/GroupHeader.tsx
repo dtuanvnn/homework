@@ -1,8 +1,6 @@
 import { Layers } from "lucide-react"
 import BlankText, { type BlankSlotProps } from "@/components/question/BlankText"
-import QuestionPicture from "@/components/question/QuestionPicture"
-import RichText from "@/components/question/RichText"
-import { passagePieces } from "@/lib/blanks"
+import Passage from "@/components/question/Passage"
 import { formatPoints, formatScoreValue } from "@/lib/format"
 import type { QuestionGroup } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -35,12 +33,12 @@ export default function GroupHeader({
           {formatScoreValue(Math.round(awarded * 100) / 100)}/{formatPoints(max)}
         </span>
       </p>
-      {group.prompt && (
-        <p className="leading-relaxed break-words whitespace-pre-line text-slate-800">
-          {passage ? <BlankText pieces={passagePieces(group.prompt)} slot={passage} /> : <RichText text={group.prompt} />}
-        </p>
-      )}
-      <QuestionPicture question={group} className="max-h-72" />
+      <Passage
+        group={group}
+        textClassName="leading-relaxed text-slate-800"
+        pictureClassName="max-h-72"
+        renderPieces={passage ? (pieces) => <BlankText pieces={pieces} slot={passage} /> : undefined}
+      />
     </div>
   )
 }

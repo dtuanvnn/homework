@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { Layers, MoreVertical, Pencil } from 'lucide-react'
-import QuestionPicture from '@/components/question/QuestionPicture'
-import RichText from '@/components/question/RichText'
+import Passage from '@/components/question/Passage'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { formatPoints } from '@/lib/format'
@@ -56,12 +55,7 @@ export default function GroupCard({ group, title, count, points, onEdit, onUngro
       </div>
       {(group.prompt || group.image) && (
         <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 text-slate-800">
-          {group.prompt && (
-            <p className="break-words whitespace-pre-line">
-              <RichText text={group.prompt} />
-            </p>
-          )}
-          <QuestionPicture question={group} className="max-h-72" />
+          <Passage group={group} pictureClassName="max-h-72" />
         </div>
       )}
       <ol className="flex flex-col gap-3">{children}</ol>

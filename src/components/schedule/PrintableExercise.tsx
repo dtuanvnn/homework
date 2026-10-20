@@ -2,11 +2,11 @@ import { createPortal } from "react-dom"
 import { useEffect } from "react"
 import { CardTitle } from "@/components/ui/card"
 import { useRequiredStudent } from "@/components/layout/AppFrame"
-import { passagePieces } from "@/lib/blanks"
 import { groupBlocks } from "@/lib/question-groups"
 import { OPTION_LETTERS } from "@/lib/questions"
 import { isMultiAnswer } from "@/lib/choice"
 import type { ExerciseSet, Question } from "@/lib/types"
+import Passage from "@/components/question/Passage"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 
@@ -37,16 +37,24 @@ export default function PrintableExercise({
     return (
       <div className="mb-4 space-y-2">
         <p className="text-lg font-bold">{groupTitles.get(group.id)}</p>
-        {group.prompt && (
-          <p className="whitespace-pre-line">
-            {numbers
-              ? passagePieces(group.prompt).map((piece, k) =>
-                  piece.kind === "text" ? <RichText key={k} text={piece.text} /> : <span key={k}>({numbers.get(piece.index) ?? "?"}) ……………</span>,
-                )
-              : <RichText text={group.prompt} />}
-          </p>
-        )}
-        <QuestionPicture question={group} className="max-h-64" />
+        <Passage
+          group={group}
+          pictureClassName="max-h-64"
+          renderPieces={
+            numbers
+              ? (pieces) =>
+                  pieces.map((piece, k) =>
+                    piece.kind === "blank" ? (
+                      <span key={k}>({numbers.get(piece.index) ?? "?"}) ……………</span>
+                    ) : piece.bold ? (
+                      <strong key={k}><RichText text={piece.text} /></strong>
+                    ) : (
+                      <RichText key={k} text={piece.text} />
+                    ),
+                  )
+              : undefined
+          }
+        />
       </div>
     )
   }

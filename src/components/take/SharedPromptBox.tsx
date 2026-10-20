@@ -1,9 +1,7 @@
 import { useEffect, useRef } from "react"
 import { Layers } from "lucide-react"
 import BlankText from "@/components/question/BlankText"
-import QuestionPicture from "@/components/question/QuestionPicture"
-import RichText from "@/components/question/RichText"
-import { passagePieces } from "@/lib/blanks"
+import Passage from "@/components/question/Passage"
 import type { QuestionGroup } from "@/lib/types"
 
 /** A split passage's blanks: câu number and what the child wrote, keyed by blank index; `current` is being answered. */
@@ -33,22 +31,24 @@ export default function SharedPromptBox({ group, title, blanks }: { group: Quest
       </p>
       {(group.prompt || group.image) && (
         <div ref={scroller} className="max-h-[30vh] space-y-4 overflow-y-auto px-5 pt-2 pb-5 md:max-h-[40vh] md:px-6" tabIndex={0}>
-          {group.prompt && (
-            <p className="text-lg leading-relaxed font-medium break-words whitespace-pre-line text-slate-800 md:text-xl">
-              {blanks ? (
-                <BlankText
-                  pieces={passagePieces(group.prompt)}
-                  slot={(index) => {
-                    const s = blanks.slots.get(index)
-                    return { label: s ? String(s.number) : undefined, given: s?.given, current: index === blanks.current }
-                  }}
-                />
-              ) : (
-                <RichText text={group.prompt} />
-              )}
-            </p>
-          )}
-          <QuestionPicture question={group} className="mx-auto max-h-80" />
+          <Passage
+            group={group}
+            textClassName="text-lg leading-relaxed font-medium text-slate-800 md:text-xl"
+            pictureClassName="mx-auto max-h-80"
+            renderPieces={
+              blanks
+                ? (pieces) => (
+                    <BlankText
+                      pieces={pieces}
+                      slot={(index) => {
+                        const s = blanks.slots.get(index)
+                        return { label: s ? String(s.number) : undefined, given: s?.given, current: index === blanks.current }
+                      }}
+                    />
+                  )
+                : undefined
+            }
+          />
         </div>
       )}
     </section>
