@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { blankCount, blankMarks, passagePieces } from "./blanks"
+import { blankCount, blankMarks, passagePieces, showsAnswerLines } from "./blanks"
 import type { FillBlankQuestion } from "./types"
 
 describe("passagePieces", () => {
@@ -40,6 +40,21 @@ describe("blankMarks", () => {
   it("is neutral without an answer key", () => {
     expect(blankMarks({ ...q, answers: ["He", ""], answerStatus: "missing" }, ["he", "x"], null, true).map((m) => m.correct)).toEqual([null, null])
     expect(blankMarks({ ...q, answers: ["He", ""] }, ["he", "x"], null, true).map((m) => m.correct)).toEqual([true, null])
+  })
+})
+
+describe("math blanks", () => {
+  it("wraps math words and keys for RichText", () => {
+    const m: FillBlankQuestion = { id: "m", type: "dien-cho-trong", prompt: "___ + ___", answers: ["\\frac{3}{4}", "2"], points: 1, skills: [], math: true }
+    expect(blankMarks(m, ["1", "2"], null, true)[0]).toEqual({ given: "$1$", correct: false, answer: "$\\frac{3}{4}$" })
+  })
+})
+
+describe("showsAnswerLines", () => {
+  it("keeps the answer lines when blanks aren't all coloured", () => {
+    expect(showsAnswerLines(undefined)).toBe(true)
+    expect(showsAnswerLines([{ given: "a", correct: null }])).toBe(true)
+    expect(showsAnswerLines([{ given: "a", correct: true }])).toBe(false)
   })
 })
 

@@ -19,7 +19,7 @@ import {
   canRelease,
   canSplitBlanks,
   createGroup,
-  isBlankGroup,
+  hasBlanks,
   joinGroup,
   mergeBlanks,
   releaseQuestion,
@@ -152,9 +152,9 @@ export default function QuestionList({ questions, onChange, onEdit, onDelete, on
                 onEdit={() => onEditGroup?.(block.group.id, questions)}
                 // A split passage goes back to one question rather than N empty short answers.
                 onUngroup={() =>
-                  onChange(isBlankGroup(questions, block.group.id) ? mergeBlanks(questions, block.group.id) : ungroup(questions, block.group.id))
+                  onChange(hasBlanks(questions, block.group.id) ? mergeBlanks(questions, block.group.id) : ungroup(questions, block.group.id))
                 }
-                blanks={isBlankGroup(questions, block.group.id)}
+                blanks={hasBlanks(questions, block.group.id)}
                 onDelete={() => onDeleteGroup?.(block.group.id)}
               >
                 {block.items.map((x) => card(x.item, x.number - 1))}

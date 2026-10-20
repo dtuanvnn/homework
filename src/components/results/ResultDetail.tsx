@@ -23,7 +23,7 @@ import { groupBlocks } from "@/lib/question-groups"
 import { isLongPrompt } from "@/lib/questions"
 import GroupHeader from "@/components/question/GroupHeader"
 import BlankText, { type BlankSlotProps } from "@/components/question/BlankText"
-import { blankCount, passagePieces } from "@/lib/blanks"
+import { blankCount, passagePieces, showsAnswerLines } from "@/lib/blanks"
 import { explainMistakes } from "@/server/actions/ai-hints"
 import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
 import RichText from "@/components/question/RichText"
@@ -281,7 +281,7 @@ export default function ResultDetail({
                     )}
                   </p>
                   <QuestionPicture question={q} />
-                  {!q.blanks && (
+                  {showsAnswerLines(q.blanks) && (
                     <p className="text-lg text-slate-600">
                       Em trả lời:{" "}
                       <span className={cn("font-bold", q.correct ? "text-emerald-700" : "text-red-600 line-through decoration-2")}>
@@ -290,7 +290,7 @@ export default function ResultDetail({
                     </p>
                   )}
                   {q.handwriting && <HandwritingView handwriting={q.handwriting} label={`Bài viết của em, câu ${n}`} />}
-                  {!q.blanks && !q.correct && r.answersRevealed && q.correctAnswer && (
+                  {showsAnswerLines(q.blanks) && !q.correct && r.answersRevealed && q.correctAnswer && (
                     <p className="text-lg text-slate-600">
                       Đáp án đúng: <span className="rounded-lg bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700">
                         <RichText text={q.correctAnswer} />

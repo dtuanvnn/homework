@@ -9,6 +9,7 @@ import {
   canSplitBlanks,
   createGroup,
   deleteGroup,
+  hasBlanks,
   isBlankGroup,
   joinGroup,
   mergeBlanks,
@@ -233,7 +234,24 @@ describe("split passage blanks", () => {
     expect(status("ai", undefined)).toBe("ai")
     const noted = mergeBlanks([split[0], { ...split[1], prompt: "x" }, split[2]], gid)[0]
     expect(noted.solution).toBe("S\n(2) x")
-    expect(mergeBlanks([...split, { ...q("z"), group: split[0].group }], gid)).toHaveLength(4)
+  })
+
+  it("merging a bài with ordinary câu among its blanks puts them after the passage", () => {
+    const split = splitBlanks([keyed], "p")
+    const gid = split[0].group!.id
+    const mixed = [split[0], { ...q("z"), group: split[0].group }, split[1], split[2]]
+    expect(hasBlanks(mixed, gid)).toBe(true)
+    expect(isBlankGroup(mixed, gid)).toBe(false)
+    const out = mergeBlanks(mixed, gid)
+    expect(out.map((x) => x.type)).toEqual(["dien-cho-trong", "tu-luan"])
+    expect(out[0]).toMatchObject({ answers: keyed.answers, points: 9 })
+    expect(out[1].group).toBeUndefined()
+    expect(checkGroups(out)).toBeNull()
+  })
+
+  it("pads blanks without a key as missing even after AI solved the passage", () => {
+    const out = splitBlanks([{ ...keyed, answers: ["gentle"], answerStatus: "ai" }], "p")
+    expect(out.map((x) => x.answerStatus)).toEqual(["ai", "missing", "missing"])
   })
 
   it("refuses moves that break blank order but allows ordinary câu among them", () => {

@@ -1,5 +1,6 @@
 import { blankMatches, gradeQuestion } from "./grading"
 import { BLANK } from "./questions"
+import { answerAsRichText } from "./rich-text"
 import type { FillBlankQuestion } from "./types"
 
 /*
@@ -40,10 +41,17 @@ export function blankMarks(q: FillBlankQuestion, response: unknown, stored: Stor
   const neutral = q.answerStatus === "missing" || handGraded(q, response, stored)
   return q.answers.map((key, i) => {
     const text = typeof given[i] === "string" ? (given[i] as string).trim() : ""
-    if (neutral || !key.trim()) return { given: text, correct: null }
+    // Display strings: math blanks hold LaTeX without $, wrapped here for RichText.
+    const shown = text && answerAsRichText(q, text)
+    if (neutral || !key.trim()) return { given: shown, correct: null }
     const correct = blankMatches(q, i, text)
-    return { given: text, correct, ...(!correct && showKeys ? { answer: key } : {}) }
+    return { given: shown, correct, ...(!correct && showKeys ? { answer: answerAsRichText(q, key) } : {}) }
   })
+}
+
+/** Keep the "Em trả lời" / "Đáp án đúng" lines unless every blank is coloured in place. */
+export function showsAnswerLines(marks: BlankMark[] | undefined): boolean {
+  return !marks || blankCount(marks) === null
 }
 
 /** "k/N ô đúng", only when every blank is coloured. */

@@ -51,7 +51,8 @@ import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
 import AnswerStatusBadge from "@/components/question/AnswerStatusBadge"
 import GroupHeader from "@/components/question/GroupHeader"
 import BlankText, { type BlankSlotProps } from "@/components/question/BlankText"
-import { blankCount, blankMarks, passagePieces } from "@/lib/blanks"
+import { blankCount, blankMarks, passagePieces, showsAnswerLines } from "@/lib/blanks"
+import { answerAsRichText } from "@/lib/rich-text"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 
@@ -189,7 +190,7 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
         const q = item.question
         if (q.type !== "tra-loi-ngan" || !q.blank) return []
         const given = !paper && typeof item.response === "string" ? item.response.trim() : ""
-        return [[q.blank, { label: String(number), given: given || undefined, correct: paper ? null : (marks[item.id]?.isCorrect ?? null), answer: q.answer || undefined }]]
+        return [[q.blank, { label: String(number), given: given ? answerAsRichText(q, given) : undefined, correct: paper ? null : (marks[item.id]?.isCorrect ?? null), answer: q.answer ? answerAsRichText(q, q.answer) : undefined }]]
       }),
     )
     return slots.size ? (index: number) => slots.get(index) ?? {} : undefined
@@ -261,7 +262,7 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
         </p>
         <QuestionPicture question={q} />
 
-        {!blanks && (
+        {showsAnswerLines(blanks) && (
         <div className="grid gap-2 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-emerald-50/70 p-3">
             <p className="mb-1 text-xs font-semibold text-emerald-700">{essay ? "Gợi ý chấm" : "Đáp án đúng"}</p>

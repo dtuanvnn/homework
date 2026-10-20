@@ -144,7 +144,8 @@ export function splitBlanks(qs: Question[], questionId: string): Question[] {
   const count = countBlanks(q.prompt)
   const blanks = Array.from({ length: count }, (_, k): Question => {
     const answer = q.answers[k] ?? ""
-    const answerStatus = q.answerStatus ?? (answer.trim() ? undefined : "missing")
+    // A blank the key list doesn't reach has no key, whatever the passage's status.
+    const answerStatus = answer.trim() ? q.answerStatus : "missing"
     return {
       id: uid("ch"),
       type: "tra-loi-ngan",
@@ -170,12 +171,22 @@ export function isBlankGroup(qs: Question[], groupId: string): boolean {
   return members.length > 0 && members.every(isBlank)
 }
 
+/** The bài holds blank câu (a split passage, maybe with ordinary câu among them). */
+export function hasBlanks(qs: Question[], groupId: string): boolean {
+  return qs.some((q) => q.group?.id === groupId && isBlank(q))
+}
+
 const STATUS_ORDER = ["missing", "ai-check", "ai"] as const
 
-/** Inverse of splitBlanks: one fill-blank question in the bài's place. */
+/**
+ * Inverse of splitBlanks: one fill-blank question in the bài's place. Ordinary
+ * câu of the bài follow it on their own (lossless, like "Bỏ bài").
+ */
 export function mergeBlanks(qs: Question[], groupId: string): Question[] {
-  if (!isBlankGroup(qs, groupId)) return qs
-  const members = qs.filter((q) => q.group?.id === groupId) as (ShortAnswerQuestion & { blank: number })[]
+  if (!hasBlanks(qs, groupId)) return qs
+  const all = qs.filter((q) => q.group?.id === groupId)
+  const members = all.filter(isBlank)
+  const others = all.filter((q) => !isBlank(q)).map(release)
   const sorted = [...members].sort((a, b) => a.blank - b.blank)
   const group = members[0].group!
   const notes = sorted.filter((m) => m.prompt.trim()).map((m) => `(${m.blank}) ${m.prompt.trim()}`)
@@ -183,6 +194,7 @@ export function mergeBlanks(qs: Question[], groupId: string): Question[] {
   const solutionImage = members.find((m) => m.solutionImage)
   const answerStatus = STATUS_ORDER.find((s) => members.some((m) => m.answerStatus === s))
   const first = members[0]
+  const anchor = all[0]
   const merged: FillBlankQuestion = {
     id: uid("ch"),
     type: "dien-cho-trong",
@@ -197,7 +209,7 @@ export function mergeBlanks(qs: Question[], groupId: string): Question[] {
     ...(solution ? { solution } : {}),
     ...(solutionImage ? { solutionImage: solutionImage.solutionImage, ...(solutionImage.solutionImageUrl ? { solutionImageUrl: solutionImage.solutionImageUrl } : {}) } : {}),
   }
-  return qs.flatMap((q) => (q === first ? [merged] : q.group?.id === groupId ? [] : [q]))
+  return qs.flatMap((q) => (q === anchor ? [merged, ...others] : q.group?.id === groupId ? [] : [q]))
 }
 
 /** A reorder is allowed unless it moves a blank câu out of its bài or out of order. */

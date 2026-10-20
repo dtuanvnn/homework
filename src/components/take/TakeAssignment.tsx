@@ -10,6 +10,7 @@ import { SUBJECTS } from "@/lib/subjects"
 import { isInkEmpty } from "@/lib/ink"
 import { groupBlocks } from "@/lib/question-groups"
 import { isLongPrompt } from "@/lib/questions"
+import { answerAsRichText } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 import type { QuestionType, SubjectId } from "@/lib/types"
 import type { TakeQuestion } from "@/lib/views/student"
@@ -88,7 +89,7 @@ export default function TakeAssignment({
             questions.flatMap((x, i) => {
               const blank = blankOf(x)
               const given = answers[x.id]
-              return x.group?.id === q.group?.id && blank ? [[blank, { number: i + 1, given: typeof given === "string" && given.trim() ? given : undefined }] as const] : []
+              return x.group?.id === q.group?.id && blank ? [[blank, { number: i + 1, given: typeof given === "string" && given.trim() ? answerAsRichText({ math: x.type === "tra-loi-ngan" && x.math }, given) : undefined }] as const] : []
             }),
           ),
           current: blankOf(q),

@@ -250,6 +250,13 @@ describe("buildResultDetail", () => {
       expect(view?.review[0].blankSlot).toEqual({ index: 2, given: "calm", correct: false })
     })
 
+    it("wraps a math blank câu's word for RichText", () => {
+      const blankCau = { ...sa, prompt: "", math: true, blank: 1, group: { id: "g", prompt: "___" } } as Question
+      const first = graded(5)
+      const view = buildResultDetail({ attempt: { ...first, assignmentId: "a" }, assignment: assignment("a", { attempts: [first] }), answers: [row(blankCau, "\\frac{1}{2}", false)] }, now)
+      expect(view?.review[0].blankSlot?.given).toBe("$\\frac{1}{2}$")
+    })
+
     it("paper attempts carry no per-blank marks", () => {
       const blankCau = { ...sa, prompt: "", blank: 2, group: { id: "g", prompt: "___ ___" } } as Question
       const first = graded(5, { mode: "paper" })

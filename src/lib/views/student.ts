@@ -434,7 +434,7 @@ function blankFields(row: AnswerRecord, web: boolean, showKeys: boolean): Pick<R
   if (q.type === "tra-loi-ngan" && q.blank) {
     if (!web) return { blankSlot: { index: q.blank, correct: null } }
     const given = typeof row.response === "string" ? row.response.trim() : ""
-    return { blankSlot: { index: q.blank, ...(given ? { given } : {}), correct: row.isCorrect } }
+    return { blankSlot: { index: q.blank, ...(given ? { given: answerAsRichText(q, given) } : {}), correct: row.isCorrect } }
   }
   return {}
 }
