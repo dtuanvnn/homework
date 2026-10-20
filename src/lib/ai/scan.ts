@@ -3,6 +3,7 @@ import { MATH_NOTATION_RULES, aiQuestionSchema, toQuestion } from "@/lib/ai/ques
 import type { Difficulty, ExerciseKind, Question, QuestionGroup, SubjectId } from "@/lib/types"
 import { repairBox, type Box } from "@/lib/figure-crop"
 import { uid } from "@/lib/questions"
+import { finalizeScanGroups, joinPages } from "./scan-groups"
 
 /*
  * AI document scan ("Tải lên tài liệu" → "Quét bằng AI"): prompt pieces, the
@@ -248,15 +249,21 @@ export function toScanResult(res: ScanResponse, meta: ScanMeta, fileCount: numbe
   }
 }
 
-/** Joins the results of a document's batches, in file order, into one scan result. */
-export function mergeScanResults(parts: ScanResult[]): ScanResult {
+/**
+ * Joins the results of a document's batches, in file order, into one scan
+ * result: bài cut by a page break are joined and fill-in passages split
+ * (lib/ai/scan-groups.ts).
+ */
+export function mergeScanResults(parts: ScanPart[]): ScanResult {
   const withItems = parts.filter((p) => p.items.length)
   const scored = withItems.length ? withItems : parts
-  const lead = scored[0]
+  const { title, topic, description } = scored[0]
   return {
-    ...lead,
+    title,
+    topic,
+    description,
     difficulty: clampInt(scored.reduce((sum, p) => sum + p.difficulty, 0) / scored.length, 1, 5, 3) as Difficulty,
     estimatedMinutes: Math.min(240, scored.reduce((sum, p) => sum + p.estimatedMinutes, 0)),
-    items: parts.flatMap((p) => p.items),
+    items: finalizeScanGroups(joinPages(parts)),
   }
 }
