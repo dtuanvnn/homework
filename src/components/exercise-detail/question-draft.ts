@@ -181,6 +181,8 @@ export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Qu
     ...(d.answerStatus ? { answerStatus: d.answerStatus } : {}),
     ...(solution ? { solution } : {}),
     ...(d.solutionImage ? { solutionImage: d.solutionImage, solutionImageUrl: d.solutionImageUrl } : {}),
+    // The bài is edited on its own card, not in the câu's sheet.
+    ...(previous?.group ? { group: previous.group } : {}),
   }
   const math = d.math ? { math: true as const, ...(d.simplest ? { simplest: true as const } : {}) } : {}
   switch (d.type) {

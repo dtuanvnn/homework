@@ -614,7 +614,7 @@ export default function AIGenerate({
           )}
           <QuestionList
             questions={questions}
-            onReorder={setQuestions}
+            onChange={setQuestions}
             onEdit={setEditing}
             onDelete={(q) =>
               setQuestions((prev) => prev.filter((item) => item.id !== q.id))

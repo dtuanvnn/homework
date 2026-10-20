@@ -27,6 +27,12 @@ export function formatScoreValue(score: number): string {
   return score.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 }
 
+/** Points that may be an exact split of a bài: "1,5", or "≈0,67" for 2/3. */
+export function formatPoints(points: number): string {
+  const shown = formatScoreValue(points)
+  return Math.abs(Math.round(points * 100) / 100 - points) > 1e-9 ? `≈${shown}` : shown
+}
+
 /** "8,5/10" */
 export function formatScore(score: number, max = 10): string {
   return `${formatScoreValue(score)}/${max}`

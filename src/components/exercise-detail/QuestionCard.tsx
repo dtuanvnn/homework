@@ -1,14 +1,24 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Loader2, Pencil, Sparkles, Trash2 } from 'lucide-react'
+import { GripVertical, Loader2, MoreVertical, Pencil, Sparkles, Trash2 } from 'lucide-react'
 import AnswerStatusBadge from '@/components/question/AnswerStatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { formatScoreValue } from '@/lib/format'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { formatPoints } from '@/lib/format'
 import { QUESTION_TYPES } from '@/lib/questions'
 import { cn } from '@/lib/utils'
 import type { Question } from '@/lib/types'
 import QuestionContent from './QuestionContent'
+
+/** An entry of the card's "more" menu (bài actions). */
+export interface CardAction {
+  label: string
+  onSelect: () => void
+  disabled?: boolean
+  /** Why it's disabled. */
+  hint?: string
+}
 
 interface QuestionCardProps {
   question: Question
@@ -17,9 +27,10 @@ interface QuestionCardProps {
   onDelete: () => void
   onSolve?: () => void
   solving?: boolean
+  actions?: CardAction[]
 }
 
-export default function QuestionCard({ question, index, onEdit, onDelete, onSolve, solving }: QuestionCardProps) {
+export default function QuestionCard({ question, index, onEdit, onDelete, onSolve, solving, actions }: QuestionCardProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: question.id,
   })
@@ -73,6 +84,23 @@ export default function QuestionCard({ question, index, onEdit, onDelete, onSolv
           <Button variant="ghost" size="icon" className="text-slate-400 hover:bg-red-50 hover:text-red-600" onClick={onDelete} aria-label={`Xóa câu ${index + 1}`}>
             <Trash2 className="size-[18px]" />
           </Button>
+          {actions && actions.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-slate-400 hover:text-indigo-700" aria-label={`Thêm thao tác cho câu ${index + 1}`}>
+                  <MoreVertical className="size-[18px]" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                {actions.map((a) => (
+                  <DropdownMenuItem key={a.label} disabled={a.disabled} onSelect={a.onSelect} className="flex-col items-start gap-0.5">
+                    {a.label}
+                    {a.disabled && a.hint && <span className="text-xs text-slate-500">{a.hint}</span>}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -82,7 +110,7 @@ export default function QuestionCard({ question, index, onEdit, onDelete, onSolv
           {typeInfo.label}
         </Badge>
         <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
-          {formatScoreValue(question.points)} điểm
+          {formatPoints(question.points)} điểm
         </Badge>
         <AnswerStatusBadge status={question.answerStatus} />
         {question.skills.map((skill) => (

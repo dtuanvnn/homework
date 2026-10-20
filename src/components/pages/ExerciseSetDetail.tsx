@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, CheckCircle2, Loader2, Plus, Save, Send, Sparkles } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Layers, Loader2, Plus, Save, Send, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ExerciseMetaForm from '@/components/exercise-detail/ExerciseMetaForm'
+import GroupEditorSheet, { type GroupEdit } from '@/components/exercise-detail/GroupEditorSheet'
 import QuestionEditorSheet from '@/components/exercise-detail/QuestionEditorSheet'
 import QuestionList from '@/components/exercise-detail/QuestionList'
+import SuggestGroupsSheet from '@/components/exercise-detail/SuggestGroupsSheet'
 import SectionHeader from '@/components/shared/SectionHeader'
 import SubjectIcon from '@/components/shared/SubjectIcon'
 import { unwrap } from '@/lib/action-result'
 import { formatScoreValue, formatVietnameseDate } from '@/lib/format'
+import { checkGroups, groupBlocks } from '@/lib/question-groups'
+import { deleteGroup, setGroupPoints, suggestGroups, updateGroup } from '@/lib/question-groups-edit'
 import { totalPoints } from '@/lib/questions'
 import { cn } from '@/lib/utils'
 import { useLibrary } from '@/state/library-store'
@@ -70,6 +74,9 @@ export default function ExerciseSetDetail({
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<Question | null>(null)
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null)
+  /** Bài open in "Sửa bài". */
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
+  const [suggestion, setSuggestion] = useState<ReturnType<typeof suggestGroups> | null>(null)
 
   const dirty = snapshot(draft, questions, attachments) !== baseline
   const points = totalPoints(questions)
@@ -108,6 +115,11 @@ export default function ExerciseSetDetail({
     }
     if (status === 'san-sang' && questions.length === 0) {
       toast.error('Cần ít nhất 1 câu hỏi', { description: 'Thêm câu hỏi trước khi đánh dấu sẵn sàng.' })
+      return false
+    }
+    const groupError = checkGroups(questions)
+    if (groupError) {
+      toast.error(groupError)
       return false
     }
     const next = { ...draft, title: draft.title.trim(), status }
@@ -169,7 +181,7 @@ export default function ExerciseSetDetail({
       try {
         // The server drops the signed picture URLs; keep them so the pictures stay on screen.
         const answered = unwrap(await solveQuestion({ setId, subject: draft.subject, grade: draft.grade, question: q }))
-        const result = { ...answered, imageUrl: q.imageUrl, solutionImageUrl: q.solutionImageUrl }
+        const result = { ...answered, imageUrl: q.imageUrl, solutionImageUrl: q.solutionImageUrl, ...(q.group ? { group: q.group } : {}) }
         solved.set(q.id, result)
         setQuestions((prev) => prev.map((x) => (x.id === q.id ? result : x)))
       } catch (e) {
@@ -220,6 +232,23 @@ export default function ExerciseSetDetail({
         label: 'Hoàn tác',
         onClick: () => setQuestions((prev) => (prev.some((x) => x.id === q.id) ? prev : [...prev.slice(0, index), q, ...prev.slice(index)])),
       },
+    })
+  }
+
+  const handleDeleteGroup = (groupId: string) => {
+    const before = questions
+    const block = groupBlocks(before).find((b) => b.kind === 'group' && b.group.id === groupId)
+    setQuestions(deleteGroup(before, groupId))
+    toast(`Đã xoá ${block?.kind === 'group' ? block.title : 'bài'}`, { action: { label: 'Hoàn tác', onClick: () => setQuestions(before) } })
+  }
+
+  const editingGroup = editingGroupId ? groupBlocks(questions).find((b) => b.kind === 'group' && b.group.id === editingGroupId) : undefined
+  const handleSubmitGroup = ({ total, ...shared }: GroupEdit) => {
+    if (!editingGroupId) return
+    const id = editingGroupId
+    setQuestions((prev) => {
+      const next = updateGroup(prev, id, shared)
+      return total === null ? next : setGroupPoints(next, id, total)
     })
   }
 
@@ -323,6 +352,12 @@ export default function ExerciseSetDetail({
                   {solving.size ? `Đang giải… còn ${solving.size} câu` : `Giải đáp án (${keylessCount} câu)`}
                 </Button>
               )}
+              {questions.length >= 2 && draft.format !== 'flashcard' && (
+                <Button variant="outline" onClick={() => setSuggestion(suggestGroups(questions))}>
+                  <Layers />
+                  Tự chia bài
+                </Button>
+              )}
               <Button variant="outline" className="hidden md:inline-flex" onClick={openAdd}>
                 <Plus />
                 Thêm câu hỏi
@@ -339,9 +374,11 @@ export default function ExerciseSetDetail({
         ) : (
           <QuestionList
             questions={questions}
-            onReorder={setQuestions}
+            onChange={setQuestions}
             onEdit={openEdit}
             onDelete={handleDeleteQuestion}
+            onEditGroup={setEditingGroupId}
+            onDeleteGroup={handleDeleteGroup}
             onSolve={(q) => void solve([q])}
             solving={solving}
           />
@@ -396,6 +433,29 @@ export default function ExerciseSetDetail({
         skillSuggestions={skillSuggestions}
         setId={setId}
         sources={attachments.filter((a) => a.kind === 'image' && a.url).map((a, i) => ({ label: `trang ${i + 1}`, source: a.url!, url: a.url }))}
+      />
+
+      <GroupEditorSheet
+        open={editingGroup !== undefined}
+        onOpenChange={(open) => !open && setEditingGroupId(null)}
+        group={editingGroup?.kind === 'group' ? editingGroup.group : null}
+        title={editingGroup?.kind === 'group' ? editingGroup.title : ''}
+        count={editingGroup?.kind === 'group' ? editingGroup.items.length : 0}
+        points={editingGroup?.kind === 'group' ? totalPoints(editingGroup.items.map((x) => x.item)) : 0}
+        setId={setId}
+        sources={attachments.filter((a) => a.kind === 'image' && a.url).map((a, i) => ({ label: `trang ${i + 1}`, source: a.url!, url: a.url }))}
+        onSubmit={handleSubmitGroup}
+      />
+
+      <SuggestGroupsSheet
+        open={suggestion !== null}
+        onOpenChange={(open) => !open && setSuggestion(null)}
+        groups={suggestion?.groups ?? []}
+        onApply={() => {
+          if (!suggestion) return
+          setQuestions(suggestion.questions)
+          toast.success(`Đã chia ${suggestion.groups.length} bài`, { description: 'Nhớ lưu để giữ thay đổi.' })
+        }}
       />
 
       <Dialog open={pendingLeave !== null} onOpenChange={(open) => !open && setPendingLeave(null)}>

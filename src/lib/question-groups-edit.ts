@@ -31,6 +31,7 @@ export interface SuggestedGroup {
   to: number
   prompt: string
   image?: QuestionImage
+  imageUrl?: string
 }
 
 const LABEL = /^(Part|Bài|Exercise|Câu|Phần)\s+(\d+|[IVXLC]+)([a-z])?\s*[.:)]\s*/iu
@@ -56,7 +57,7 @@ export function suggestGroups(qs: Question[]): { questions: Question[]; groups: 
   }
   const groups = groupBlocks(out).flatMap((b) =>
     b.kind === "group" && created.has(b.group.id)
-      ? [{ title: b.title, from: b.items[0].number, to: b.items.at(-1)!.number, prompt: b.group.prompt, ...(b.group.image ? { image: b.group.image } : {}) }]
+      ? [{ title: b.title, from: b.items[0].number, to: b.items.at(-1)!.number, prompt: b.group.prompt, ...(b.group.image ? { image: b.group.image, imageUrl: b.group.imageUrl } : {}) }]
       : [],
   )
   return { questions: created.size ? out : qs, groups }

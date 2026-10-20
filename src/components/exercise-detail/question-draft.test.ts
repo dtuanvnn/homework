@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest"
 import type { Question } from "@/lib/types"
 import { changeDraftType, emptyDraft, fromDraft, parsePoints, patchDraft, toDraft, validateDraft } from "./question-draft"
 
+describe("fromDraft", () => {
+  it("keeps the câu's bài when it is edited", () => {
+    const q: Question = { id: "q1", type: "tu-luan", prompt: "Anna ___", points: 1, skills: [], rubric: "", group: { id: "g", label: "Part 4", prompt: "Read and write." } }
+    expect(fromDraft(toDraft(q), q.id, q).group).toEqual(q.group)
+  })
+})
+
 describe("changeDraftType", () => {
   const wordProblem = { ...emptyDraft("tra-loi-ngan"), prompt: "Một cửa hàng bán 285 kg gạo…\nHỏi cả hai buổi bán được bao nhiêu ki-lô-gam?", points: 2, shortAnswer: "605 kg" }
 
