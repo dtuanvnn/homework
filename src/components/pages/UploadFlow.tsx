@@ -7,7 +7,7 @@ import ProcessingStep, { type ScanPhase } from '@/components/upload/ProcessingSt
 import ReviewStep from '@/components/upload/ReviewStep'
 import UploadStep, { type UploadMeta } from '@/components/upload/UploadStep'
 import UploadStepper, { type UploadStepId } from '@/components/upload/UploadStepper'
-import { appendScanned, needsCheck, pageSource, pagesFromFiles, type ReviewItem, type SourcePage } from '@/components/upload/review-utils'
+import { appendScanned, draftFigurePaths, hasPlaceholder, needsCheck, pageSource, pagesFromFiles, type ReviewItem, type SourcePage, withSignedFigures } from '@/components/upload/review-utils'
 import { findInvalidQuestion } from '@/components/exercise-detail/question-draft'
 import { unwrap } from '@/lib/action-result'
 import type { ScanResult } from '@/lib/ai/scan'
@@ -61,7 +61,8 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
 
   const pages = useMemo(() => pagesFromFiles(files), [files])
   const flaggedCount = items.filter(needsCheck).length
-  const incompleteCount = items.filter((i) => findInvalidQuestion([i.question])).length
+  const incompleteCount = items.filter((i) => !i.placeholder && findInvalidQuestion([i.question])).length
+  const waitingPassages = hasPlaceholder(items)
   const hasProgress = files.length > 0
 
   useEffect(() => {
@@ -84,18 +85,12 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
     setFiles(draft.files)
     setScannedCount(draft.scannedCount ?? draft.files.length)
     setStep('review')
-    // Blob previews are gone; show the uploaded copies (pages and figures) instead.
-    // Scan drafts never carry bài (`group`), so their shared figures need no signing here.
-    const figurePaths = draft.items.flatMap((it) => (it.question.image ? [it.question.image.path] : []))
-    const paths = [...draft.files.flatMap((f) => (f.uploaded ? [f.uploaded.path] : [])), ...figurePaths]
+    // Blob previews are gone; show the uploaded copies (pages, câu and bài figures) instead.
+    const paths = [...draft.files.flatMap((f) => (f.uploaded ? [f.uploaded.path] : [])), ...draftFigurePaths(draft.items)]
     try {
       const urls = unwrap(await previewSetUploads(draft.setId, paths))
       setFiles((list) => list.map((f) => (f.uploaded && urls[f.uploaded.path] ? { ...f, url: urls[f.uploaded.path] } : f)))
-      setItems((list) =>
-        list.map((it) =>
-          it.question.image && urls[it.question.image.path] ? { ...it, question: { ...it.question, imageUrl: urls[it.question.image.path] } } : it,
-        ),
-      )
+      setItems((list) => withSignedFigures(list, urls))
     } catch {
       toast('Không tải được ảnh xem trước', { description: 'Các câu hỏi vẫn được giữ nguyên.' })
     }
@@ -106,29 +101,42 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
     setRestorable(null)
   }
 
-  /** Cuts out every figure the scan found (identical boxes once) and attaches it to its questions. */
+  /**
+   * Cuts out every figure the scan found (identical boxes once) and attaches it
+   * to its questions: a câu box to the câu, a bài box to the bài on all its câu.
+   */
   const cropFigures = async (scanned: ReviewItem[], sourcePages: SourcePage[], run: number) => {
-    const groups = new Map<string, { page: number; box: Box; ids: string[] }>()
-    for (const it of scanned) {
-      if (!it.figure) continue
-      const key = `${it.figure.page}:${it.figure.box.join(',')}`
-      const group = groups.get(key) ?? { page: it.figure.page, box: it.figure.box, ids: [] }
-      group.ids.push(it.question.id)
+    const groups = new Map<string, { page: number; box: Box; ids: string[]; baiIds: string[] }>()
+    const add = (figure: { page: number; box: Box }, it: ReviewItem, bai: boolean) => {
+      const key = `${figure.page}:${figure.box.join(',')}`
+      const group = groups.get(key) ?? { page: figure.page, box: figure.box, ids: [], baiIds: [] }
+      if (bai) group.baiIds.push(it.question.id)
+      else group.ids.push(it.question.id)
       groups.set(key, group)
+    }
+    for (const it of scanned) {
+      if (it.figure) add(it.figure, it, false)
+      if (it.groupFigure && it.question.group) add(it.groupFigure, it, true)
     }
     // Each crop decodes the full-size photo, so at most two run at once (iPad Safari memory).
     const queue = [...groups.values()]
     const cropNext = async (): Promise<void> => {
       const g = queue.shift()
       if (!g) return
+      const all = [...g.ids, ...g.baiIds]
       const apply = (patch: (it: ReviewItem) => ReviewItem) => {
-        if (run === scanRun.current) setItems((list) => list.map((it) => (g.ids.includes(it.question.id) ? patch(it) : it)))
+        if (run === scanRun.current) setItems((list) => list.map((it) => (all.includes(it.question.id) ? patch(it) : it)))
       }
       try {
         const source = pageSource(sourcePages[g.page - 1])
         if (!source) throw new Error('missing page')
         const { image, imageUrl, box } = await makeFigure(setId, source, g.box, { snap: true })
-        apply((it) => ({ ...it, figureState: undefined, figure: { page: g.page, box }, question: { ...it.question, image, imageUrl } }))
+        apply((it) => {
+          const done = { ...it, figureState: undefined }
+          if (g.ids.includes(it.question.id)) return { ...done, figure: { page: g.page, box }, question: { ...it.question, image, imageUrl } }
+          const group = it.question.group
+          return group ? { ...done, groupFigure: { page: g.page, box }, question: { ...it.question, group: { ...group, image, imageUrl } } } : done
+        })
       } catch (error) {
         console.error('Không cắt được hình minh họa', error)
         apply((it) => ({ ...it, figureState: 'error' }))
@@ -250,6 +258,11 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
       toast.error('Chưa có câu hỏi nào để lưu')
       return
     }
+    if (waitingPassages) {
+      toast.error('Đoạn văn chưa có câu hỏi', { description: 'Đưa câu hỏi vào bài hoặc xóa đoạn văn trước khi lưu.' })
+      document.querySelector('[data-placeholder]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
     if (!checkComplete()) return
     if (flaggedCount > 0) setConfirmSave(true)
     else void save()
@@ -294,11 +307,13 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
             <p
               className={cn(
                 'mb-2 flex items-center gap-1.5 text-sm font-medium md:mb-0',
-                incompleteCount ? 'text-red-700' : flaggedCount ? 'text-amber-700' : 'text-emerald-700',
+                incompleteCount || waitingPassages ? 'text-red-700' : flaggedCount ? 'text-amber-700' : 'text-emerald-700',
               )}
             >
-              {incompleteCount || flaggedCount ? <AlertTriangle className="size-4 shrink-0" /> : <CheckCircle2 className="size-4 shrink-0" />}
-              {incompleteCount
+              {incompleteCount || flaggedCount || waitingPassages ? <AlertTriangle className="size-4 shrink-0" /> : <CheckCircle2 className="size-4 shrink-0" />}
+              {waitingPassages
+                ? 'Đoạn văn chưa có câu hỏi – đưa câu vào bài hoặc xóa đoạn văn trước khi lưu'
+                : incompleteCount
                 ? `${incompleteCount} câu chưa đủ thông tin – sửa hoặc xóa trước khi lưu`
                 : flaggedCount
                   ? `Còn ${flaggedCount} câu cần kiểm tra`

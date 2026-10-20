@@ -20,10 +20,35 @@ export function appendScanned(existing: ReviewItem[], scanned: ScannedQuestion[]
       ...s,
       page: s.page + pageOffset,
       reviewed: false,
-      ...(s.figure ? { figure: { ...s.figure, page: s.figure.page + pageOffset }, figureState: 'cropping' as const } : {}),
+      ...(s.figure ? { figure: { ...s.figure, page: s.figure.page + pageOffset } } : {}),
+      ...(s.groupFigure ? { groupFigure: { ...s.groupFigure, page: s.groupFigure.page + pageOffset } } : {}),
+      ...(s.figure || s.groupFigure ? { figureState: 'cropping' as const } : {}),
     })),
   ]
 }
+
+/** Storage paths of every figure in a scan draft (câu and bài figures), each once. */
+export function draftFigurePaths(items: ReviewItem[]): string[] {
+  const paths = items.flatMap((it) => [it.question.group?.image?.path, it.question.image?.path]).filter((p): p is string => !!p)
+  return [...new Set(paths)]
+}
+
+/** Puts freshly signed URLs on the câu and bài figures of a restored draft. */
+export function withSignedFigures(items: ReviewItem[], urls: Record<string, string>): ReviewItem[] {
+  return items.map((it) => {
+    const q = it.question
+    const groupUrl = q.group?.image && urls[q.group.image.path]
+    const ownUrl = q.image && urls[q.image.path]
+    if (!groupUrl && !ownUrl) return it
+    return {
+      ...it,
+      question: { ...q, ...(ownUrl ? { imageUrl: ownUrl } : {}), ...(groupUrl && q.group ? { group: { ...q.group, imageUrl: groupUrl } } : {}) },
+    }
+  })
+}
+
+/** A passage the scan found without câu is still waiting for the parent. */
+export const hasPlaceholder = (items: ReviewItem[]) => items.some((it) => it.placeholder)
 
 export const LOW_CONFIDENCE = 0.75
 export const HIGH_CONFIDENCE = 0.85
