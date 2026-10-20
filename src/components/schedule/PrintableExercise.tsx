@@ -2,6 +2,7 @@ import { createPortal } from "react-dom"
 import { useEffect } from "react"
 import { CardTitle } from "@/components/ui/card"
 import { useRequiredStudent } from "@/components/layout/AppFrame"
+import { passagePieces } from "@/lib/blanks"
 import { groupBlocks } from "@/lib/question-groups"
 import { OPTION_LETTERS } from "@/lib/questions"
 import { isMultiAnswer } from "@/lib/choice"
@@ -23,6 +24,32 @@ export default function PrintableExercise({
 }) {
   const student = useRequiredStudent()
   const groupTitles = new Map(groupBlocks(questions).flatMap((b) => (b.kind === "group" ? [[b.group.id, b.title] as const] : [])))
+  // Split passages: blank index → câu number, per bài. The passage prints once with its numbered blanks.
+  const blankNumbers = new Map<string, Map<number, number>>()
+  questions.forEach((q, i) => {
+    if (q.type !== "tra-loi-ngan" || !q.blank || !q.group) return
+    const numbers = blankNumbers.get(q.group.id) ?? new Map<number, number>()
+    numbers.set(q.blank, i + 1)
+    blankNumbers.set(q.group.id, numbers)
+  })
+  const groupHeader = (group: NonNullable<Question["group"]>) => {
+    const numbers = blankNumbers.get(group.id)
+    return (
+      <div className="mb-4 space-y-2">
+        <p className="text-lg font-bold">{groupTitles.get(group.id)}</p>
+        {group.prompt && (
+          <p className="whitespace-pre-line">
+            {numbers
+              ? passagePieces(group.prompt).map((piece, k) =>
+                  piece.kind === "text" ? <RichText key={k} text={piece.text} /> : <span key={k}>({numbers.get(piece.index) ?? "?"}) ……………</span>,
+                )
+              : <RichText text={group.prompt} />}
+          </p>
+        )}
+        <QuestionPicture question={group} className="max-h-64" />
+      </div>
+    )
+  }
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       window.print()
@@ -36,19 +63,15 @@ export default function PrintableExercise({
       <p className="mt-3">Họ và tên: {student.name} · Lớp {set.grade} · Ngày: ……………</p>
       {note && <p className="mt-3">Ghi chú: {note}</p>}
       <ol className="mt-6 space-y-6">
-        {questions.map((q, i) => (
+        {questions.map((q, i) => {
+          const firstOfBai = !!q.group && questions[i - 1]?.group?.id !== q.group.id
+          // A blank câu is written into the passage: no line of its own.
+          if (q.type === "tra-loi-ngan" && q.blank && q.group) {
+            return firstOfBai ? <li key={q.id} className="break-inside-avoid">{groupHeader(q.group)}</li> : null
+          }
+          return (
           <li key={q.id} className="break-inside-avoid">
-            {q.group && questions[i - 1]?.group?.id !== q.group.id && (
-              <div className="mb-4 space-y-2">
-                <p className="text-lg font-bold">{groupTitles.get(q.group.id)}</p>
-                {q.group.prompt && (
-                  <p className="whitespace-pre-line">
-                    <RichText text={q.group.prompt} />
-                  </p>
-                )}
-                <QuestionPicture question={q.group} className="max-h-64" />
-              </div>
-            )}
+            {q.group && firstOfBai && groupHeader(q.group)}
             <p className="font-semibold whitespace-pre-line">
               Câu {i + 1}. <RichText text={q.prompt} />
             </p>
@@ -107,7 +130,8 @@ export default function PrintableExercise({
                 </div>
               )}
           </li>
-        ))}
+          )
+        })}
       </ol>
     </div>,
     document.body,
