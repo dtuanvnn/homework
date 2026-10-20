@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { ScannedQuestion } from "@/lib/ai/scan"
 import type { QuestionGroup } from "@/lib/types"
-import { appendScanned, draftFigurePaths, hasPlaceholder, withSignedFigures, type ReviewItem } from "./review-utils"
+import { appendScanned, draftFigurePaths, fillPlaceholder, hasPlaceholder, withQuestions, withSignedFigures, type ReviewItem } from "./review-utils"
 
 const scanned = (page: number, figurePage?: number): ScannedQuestion => ({
   question: { id: `q${page}`, type: "tra-loi-ngan", prompt: "1 + 1 = ?", answer: "2", points: 1, skills: [] },
@@ -58,5 +58,35 @@ describe("bài in scan drafts", () => {
   it("finds a passage still waiting for its câu", () => {
     expect(hasPlaceholder([member("a")])).toBe(false)
     expect(hasPlaceholder([{ ...member("a"), placeholder: true }])).toBe(true)
+  })
+})
+
+describe("review bài operations", () => {
+  const g: QuestionGroup = { id: "g", prompt: "Passage", layout: "doan-van" }
+  const it1: ReviewItem = { ...scanned(1, 1), reviewed: false, note: "mờ" }
+
+  it("withQuestions keeps the review details and applies the new bài", () => {
+    const [out] = withQuestions([it1], [{ ...it1.question, group: g }])
+    expect(out).toMatchObject({ page: 1, confidence: 0.9, note: "mờ", figure: { page: 1 } })
+    expect(out.question.group).toEqual(g)
+  })
+
+  it("withQuestions drops items whose câu are gone", () => {
+    expect(withQuestions([it1, { ...scanned(2), reviewed: false }], [it1.question])).toHaveLength(1)
+  })
+
+  it("fillPlaceholder moves the next standalone câu into the waiting passage", () => {
+    const waiting: ReviewItem = { question: { id: "p", type: "tu-luan", prompt: "", rubric: "", points: 0, skills: [], group: g }, confidence: 1, page: 1, reviewed: false, placeholder: true }
+    const out = fillPlaceholder([waiting, { ...scanned(2), reviewed: false }], "p")
+    expect(out).toHaveLength(1)
+    expect(out[0].question).toMatchObject({ id: "q2", group: g })
+    expect(out[0].placeholder).toBeUndefined()
+  })
+
+  it("fillPlaceholder does nothing when the next câu is already in a bài", () => {
+    const waiting: ReviewItem = { question: { id: "p", type: "tu-luan", prompt: "", rubric: "", points: 0, skills: [], group: g }, confidence: 1, page: 1, reviewed: false, placeholder: true }
+    const other: ReviewItem = { ...scanned(2), reviewed: false, question: { ...scanned(2).question, group: { id: "x", prompt: "" } } }
+    const list = [waiting, other]
+    expect(fillPlaceholder(list, "p")).toBe(list)
   })
 })

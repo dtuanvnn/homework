@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import QuestionEditorSheet from '@/components/exercise-detail/QuestionEditorSheet'
+import GroupEditorSheet, { type GroupEdit } from '@/components/exercise-detail/GroupEditorSheet'
+import { groupBlocks } from '@/lib/question-groups'
+import { canRelease, joinGroup, joinPreviousGroup, releaseQuestion, splitGroupAt, ungroup, updateGroup } from '@/lib/question-groups-edit'
 import { SUBJECTS } from '@/lib/subjects'
 import { TABLET_QUERY, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
@@ -13,10 +16,11 @@ import type { Question } from '@/lib/types'
 import { makeFigure } from '@/lib/figure-client'
 import type { Box } from '@/lib/figure-crop'
 import ExtractedQuestionCard from './ExtractedQuestionCard'
+import ReviewGroupCard from './ReviewGroupCard'
 import FigureCropDialog from './FigureCropDialog'
 import SourceViewer from './SourceViewer'
 import type { UploadMeta } from './UploadStep'
-import { mergeQuestions, needsCheck, pageSource, type ReviewItem, type SourcePage } from './review-utils'
+import { fillPlaceholder, mergeQuestions, needsCheck, pageSource, withQuestions, type ReviewItem, type SourcePage } from './review-utils'
 
 interface ReviewStepProps {
   pages: SourcePage[]
@@ -38,13 +42,44 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
     latestItems.current = items
   }, [items])
   const [figureFor, setFigureFor] = useState<ReviewItem | null>(null)
+  /** The bài whose shared figure is being cropped (FigureCropDialog is shared with câu figures). */
+  const [groupFigureFor, setGroupFigureFor] = useState<ReviewItem | null>(null)
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
   const [savingFigure, setSavingFigure] = useState(false)
-  const figurePage = figureFor ? (figureFor.figure?.page ?? figureFor.page) : 1
+  const cropping = figureFor ?? groupFigureFor
+  const figurePage = figureFor
+    ? (figureFor.figure?.page ?? figureFor.page)
+    : groupFigureFor
+      ? (groupFigureFor.groupFigure?.page ?? groupFigureFor.page)
+      : 1
 
   const flagged = items.filter(needsCheck)
   const subject = SUBJECTS[meta.subject]
 
+  const saveGroupFigure = async (box: Box) => {
+    const groupId = groupFigureFor?.question.group?.id
+    const source = pageSource(pages[figurePage - 1])
+    if (!groupId || !source) return
+    setSavingFigure(true)
+    try {
+      const { image, imageUrl } = await makeFigure(setId, source, box)
+      onItemsChange(
+        latestItems.current.map((it) =>
+          it.question.group?.id === groupId
+            ? { ...it, figureState: undefined, groupFigure: { page: figurePage, box }, question: { ...it.question, group: { ...it.question.group, image, imageUrl } } }
+            : it,
+        ),
+      )
+      setGroupFigureFor(null)
+    } catch {
+      toast.error('Không tải được hình', { description: 'Kiểm tra mạng rồi thử lại.' })
+    } finally {
+      setSavingFigure(false)
+    }
+  }
+
   const saveFigure = async (box: Box) => {
+    if (groupFigureFor) return saveGroupFigure(box)
     if (!figureFor) return
     const id = figureFor.question.id
     const source = pageSource(pages[figurePage - 1])
@@ -89,10 +124,17 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
 
   const handleDelete = (index: number) => withUndo(items.filter((_, i) => i !== index), `Đã xóa câu ${index + 1}`)
 
+  /** A bài move on the questions (lib/question-groups-edit.ts), with undo. */
+  const applyGroups = (next: Question[], message: string) => withUndo(withQuestions(items, next), message)
+  const questionsNow = () => items.map((it) => it.question)
+
   const handleMergeUp = (index: number) => {
     const upper = items[index - 1]
     const lower = items[index]
-    const mergedQuestion = mergeQuestions(upper.question, lower.question)
+    // The merged câu stays where the upper one was: in its bài, or standalone.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- replaced by the upper câu's bài
+    const { group: _group, ...plain } = mergeQuestions(upper.question, lower.question)
+    const mergedQuestion = (upper.question.group ? { ...plain, group: upper.question.group } : plain) as Question
     const image = upper.question.image ?? lower.question.image
     const merged: ReviewItem = {
       ...upper,
@@ -114,6 +156,16 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
     const dropFigure = before?.question.image && !q.image ? { figure: undefined, figureState: undefined } : {}
     update(q.id, { question: q, reviewed: true, ...dropFigure })
     toast.success('Đã cập nhật câu hỏi')
+  }
+
+  const editingBlock = editingGroupId ? groupBlocks(items.map((it) => it.question)).find((b) => b.kind === 'group' && b.group.id === editingGroupId) : undefined
+  const editingGroup = editingBlock?.kind === 'group' ? editingBlock : undefined
+  const submitGroup = (edit: GroupEdit) => {
+    if (!editingGroupId) return
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- points are set after saving
+    const { total: _total, ...shared } = edit
+    onItemsChange(withQuestions(latestItems.current, updateGroup(latestItems.current.map((it) => it.question), editingGroupId, shared)))
+    toast.success('Đã cập nhật bài')
   }
 
   const showSource = (page: number) => {
@@ -141,23 +193,77 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
     />
   )
 
+  // Câu numbers skip a passage still waiting for its câu.
+  const numbers = new Map<string, number>()
+  items.forEach((it) => {
+    if (!it.placeholder) numbers.set(it.question.id, numbers.size + 1)
+  })
+  const card = (item: ReviewItem, i: number) => {
+    const q = item.question
+    const prev = items[i - 1]
+    const next = items[i + 1]
+    const groupActions: { label: string; onSelect: () => void }[] = []
+    if (q.group) {
+      if (prev?.question.group?.id === q.group.id && !prev.placeholder)
+        groupActions.push({ label: 'Tách thành bài riêng', onSelect: () => applyGroups(splitGroupAt(questionsNow(), q.id), 'Đã tách thành bài riêng') })
+      if (canRelease(questionsNow(), q.id)) groupActions.push({ label: 'Đưa ra khỏi bài', onSelect: () => applyGroups(releaseQuestion(questionsNow(), q.id), 'Đã đưa câu ra khỏi bài') })
+    } else {
+      if (prev?.question.group && !prev.placeholder)
+        groupActions.push({ label: 'Đưa vào bài trên', onSelect: () => applyGroups(joinGroup(questionsNow(), q.id, 'up'), 'Đã đưa câu vào bài') })
+      if (next?.question.group && !next.placeholder)
+        groupActions.push({ label: 'Đưa vào bài dưới', onSelect: () => applyGroups(joinGroup(questionsNow(), q.id, 'down'), 'Đã đưa câu vào bài') })
+    }
+    const canMerge = i > 0 && !prev?.placeholder
+    return (
+      <ExtractedQuestionCard
+        key={q.id}
+        domId={`review-${q.id}`}
+        item={item}
+        index={(numbers.get(q.id) ?? i + 1) - 1}
+        onEdit={() => setEditing(item)}
+        onDelete={() => handleDelete(i)}
+        onMergeUp={canMerge ? () => handleMergeUp(i) : undefined}
+        onConfirm={() => update(q.id, { reviewed: true })}
+        onShowSource={() => showSource(item.page)}
+        onAdjustFigure={() => setFigureFor(item)}
+        onRemoveFigure={() => removeFigure(q.id)}
+        groupActions={groupActions}
+      />
+    )
+  }
+
+  const blocks = groupBlocks(items.map((it) => it.question))
   const questionList = items.length ? (
     <ol className="flex flex-col gap-3">
-      {items.map((item, i) => (
-        <ExtractedQuestionCard
-          key={item.question.id}
-          domId={`review-${item.question.id}`}
-          item={item}
-          index={i}
-          onEdit={() => setEditing(item)}
-          onDelete={() => handleDelete(i)}
-          onMergeUp={i > 0 ? () => handleMergeUp(i) : undefined}
-          onConfirm={() => update(item.question.id, { reviewed: true })}
-          onShowSource={() => showSource(item.page)}
-          onAdjustFigure={() => setFigureFor(item)}
-          onRemoveFigure={() => removeFigure(item.question.id)}
-        />
-      ))}
+      {blocks.map((block, b) => {
+        if (block.kind === 'single') return card(items[block.number - 1], block.number - 1)
+        const first = block.items[0].number - 1
+        const members = block.items.map((x) => items[x.number - 1])
+        const waiting = members.every((m) => m.placeholder)
+        const above = blocks[b - 1]
+        const below = items[block.items[block.items.length - 1].number]
+        return (
+          <ReviewGroupCard
+            key={block.group.id}
+            group={block.group}
+            title={block.title}
+            waiting={waiting}
+            cropping={members.some((m) => m.figureState === 'cropping')}
+            onEdit={() => setEditingGroupId(block.group.id)}
+            onAdjustFigure={() => setGroupFigureFor(items[first])}
+            onJoinAbove={
+              above?.kind === 'group' && !waiting
+                ? () => applyGroups(joinPreviousGroup(questionsNow(), block.group.id), `Đã gộp ${block.title} vào bài trên`)
+                : undefined
+            }
+            onUngroup={() => applyGroups(ungroup(questionsNow(), block.group.id), `Đã bỏ ${block.title}`)}
+            onFillFromBelow={waiting && below && !below.question.group ? () => withUndo(fillPlaceholder(items, items[first].question.id), 'Đã đưa câu vào bài') : undefined}
+            onDeletePassage={() => withUndo(items.filter((it) => it !== items[first]), 'Đã xóa đoạn văn')}
+          >
+            {block.items.map((x) => card(items[x.number - 1], x.number - 1))}
+          </ReviewGroupCard>
+        )
+      })}
     </ol>
   ) : (
     <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white/60 px-6 py-10 text-center text-sm text-slate-500">
@@ -178,7 +284,7 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
             {subject.name} {meta.grade}
           </span>
           <span className="inline-flex h-8 items-center rounded-full bg-slate-100 px-3 text-sm font-semibold text-slate-600">
-            {items.length} câu · {pages.length} trang
+            {numbers.size} câu · {pages.length} trang
           </span>
           {flagged.length > 0 && (
             <button
@@ -208,7 +314,7 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
             <TabsTrigger value="questions">
               <ListChecks />
               Câu hỏi đã quét
-              <span className="rounded-full bg-slate-200/80 px-1.5 text-xs">{items.length}</span>
+              <span className="rounded-full bg-slate-200/80 px-1.5 text-xs">{numbers.size}</span>
             </TabsTrigger>
           </TabsList>
           <TabsContent value="source">{viewer}</TabsContent>
@@ -226,12 +332,40 @@ export default function ReviewStep({ pages, items, onItemsChange, meta, title, o
         sources={pages.flatMap((p) => { const s = pageSource(p); return s ? [{ label: `trang ${p.index}`, source: s, url: p.file.url }] : [] })}
       />
 
+      <GroupEditorSheet
+        open={editingGroup !== undefined}
+        onOpenChange={(open) => !open && setEditingGroupId(null)}
+        group={editingGroup?.group ?? null}
+        title={editingGroup?.title ?? ''}
+        count={editingGroup?.items.length ?? 0}
+        points={0}
+        setId={setId}
+        sources={pages.flatMap((p) => {
+          const s = pageSource(p)
+          return s ? [{ label: `trang ${p.index}`, source: s, url: p.file.url }] : []
+        })}
+        previewOnly
+        onSubmit={submitGroup}
+      />
+
       <FigureCropDialog
-        open={figureFor !== null}
-        onOpenChange={(open) => !open && setFigureFor(null)}
+        open={cropping !== null}
+        onOpenChange={(open) => {
+          if (open) return
+          setFigureFor(null)
+          setGroupFigureFor(null)
+        }}
         pageUrl={pages[figurePage - 1]?.file.url}
-        initialBox={figureFor?.figure?.box}
-        title={figureFor?.question.image ? 'Chỉnh khung hình' : 'Thêm hình minh họa'}
+        initialBox={figureFor ? figureFor.figure?.box : groupFigureFor?.groupFigure?.box}
+        title={
+          groupFigureFor
+            ? groupFigureFor.question.group?.image
+              ? 'Chỉnh khung hình chung'
+              : 'Thêm hình chung'
+            : figureFor?.question.image
+              ? 'Chỉnh khung hình'
+              : 'Thêm hình minh họa'
+        }
         saving={savingFigure}
         onSave={(box) => void saveFigure(box)}
       />

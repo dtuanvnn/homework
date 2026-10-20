@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Crop, FileSearch, ImageOff, ImagePlus, Loader2, Merge, Pencil, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, Crop, FileSearch, ImageOff, ImagePlus, Layers, Loader2, Merge, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import QuestionContent from '@/components/exercise-detail/QuestionContent'
@@ -44,9 +44,11 @@ interface ExtractedQuestionCardProps {
   onShowSource: () => void
   onAdjustFigure: () => void
   onRemoveFigure: () => void
+  /** Bài moves for this câu ("Tách thành bài riêng", "Đưa ra khỏi bài", "Đưa vào bài trên"…). */
+  groupActions?: { label: string; onSelect: () => void }[]
 }
 
-export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDelete, onMergeUp, onConfirm, onShowSource, onAdjustFigure, onRemoveFigure }: ExtractedQuestionCardProps) {
+export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDelete, onMergeUp, onConfirm, onShowSource, onAdjustFigure, onRemoveFigure, groupActions = [] }: ExtractedQuestionCardProps) {
   const q = item.question
   const typeInfo = QUESTION_TYPES[q.type]
   const flagged = needsCheck(item)
@@ -154,7 +156,13 @@ export default function ExtractedQuestionCard({ domId, item, index, onEdit, onDe
             Gộp với câu trên
           </Button>
         )}
-        {q.image || item.figure || item.figureState ? (
+        {groupActions.map((action) => (
+          <Button key={action.label} variant="ghost" size="sm" className="h-11 text-indigo-700" onClick={action.onSelect}>
+            <Layers />
+            {action.label}
+          </Button>
+        ))}
+        {q.image || item.figure || (item.figureState && !item.groupFigure) ? (
           <>
             <Button variant="ghost" size="sm" className="h-11 text-slate-600" onClick={onAdjustFigure}>
               <Crop />

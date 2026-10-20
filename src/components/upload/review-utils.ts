@@ -47,6 +47,25 @@ export function withSignedFigures(items: ReviewItem[], urls: Record<string, stri
   })
 }
 
+/** Bài operations work on questions (lib/question-groups-edit.ts); this puts the result back on the review items. */
+export function withQuestions(items: ReviewItem[], questions: Question[]): ReviewItem[] {
+  const byId = new Map(questions.map((q) => [q.id, q]))
+  return items.flatMap((it) => {
+    const q = byId.get(it.question.id)
+    return q ? [q === it.question ? it : { ...it, question: q }] : []
+  })
+}
+
+/** "Đưa câu dưới vào bài": the standalone câu below a waiting passage joins it, and the stand-in goes. */
+export function fillPlaceholder(items: ReviewItem[], placeholderId: string): ReviewItem[] {
+  const i = items.findIndex((it) => it.question.id === placeholderId && it.placeholder)
+  const next = items[i + 1]
+  const group = items[i]?.question.group
+  if (i < 0 || !group || !next || next.placeholder || next.question.group) return items
+  const joined: ReviewItem = { ...next, reviewed: true, question: { ...next.question, group }, ...(items[i].groupFigure ? { groupFigure: items[i].groupFigure } : {}) }
+  return [...items.slice(0, i), joined, ...items.slice(i + 2)]
+}
+
 /** A passage the scan found without câu is still waiting for the parent. */
 export const hasPlaceholder = (items: ReviewItem[]) => items.some((it) => it.placeholder)
 
