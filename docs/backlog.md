@@ -11,7 +11,8 @@ Phụ thuộc: bài viết tay lưu dạng nét bút (`EssayValue.ink`, `lib/ink
 
 ## Bài có nhiều câu hỏi con (kèm bài đọc)
 
-> **Đợt 1 đã xong (2026-10-20):** chia bài trên bộ đề có sẵn (Tự chia bài, gộp/tách tay, đề chung + hình chung, điểm bài chia đều chính xác), hiển thị bài ở làm bài / chấm / kết quả / bản in, AI nhận đề chung. Spec `docs/superpowers/specs/2026-10-20-grouped-questions-design.md`. Còn lại bên dưới: tách chỗ trống trong đoạn văn thành câu con, AI quét tự gom bài và nối qua trang, bài đọc (hội thoại, loa, "Đã đọc"), Reports theo bài.
+> **Đợt 1 đã xong (2026-10-20):** chia bài trên bộ đề có sẵn (Tự chia bài, gộp/tách tay, đề chung + hình chung, điểm bài chia đều chính xác), hiển thị bài ở làm bài / chấm / kết quả / bản in, AI nhận đề chung. Spec `docs/superpowers/specs/2026-10-20-grouped-questions-design.md`. 
+> **Đợt 2 đã xong (2026-10-20):** tách chỗ trống của đoạn văn thành câu con (Tách / Gộp chỗ trống, Tự chia bài tách đoạn có từ 3 chỗ trống), đoạn văn tô chỗ đang làm, kết quả và màn chấm báo đúng/sai từng ô (cả câu nhiều chỗ trống không tách). Spec `docs/superpowers/specs/2026-10-20-split-blanks-design.md`. Còn lại bên dưới: AI quét tự gom bài và nối qua trang, bài đọc (hội thoại, loa, "Đã đọc"), Reports theo bài.
 
 **Vấn đề.** Đề thật hay có dạng "Bài 3. Đọc đoạn văn sau và trả lời: …" hoặc "Bài 2. Tính: a) … b) …". Hiện mỗi câu là một `Question` phẳng; khi quét, `lib/ai/scan.ts` tách từng ý thành câu riêng và **chép lại đoạn văn / đề chung vào prompt của từng câu**. Kết quả: đoạn văn lặp nhiều lần khi làm bài, con không thấy các ý thuộc cùng một bài, điểm và kết quả không gom theo bài.
 
