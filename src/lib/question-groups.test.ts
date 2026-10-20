@@ -49,3 +49,29 @@ it("questionFigures puts the shared figure first and de-duplicates", () => {
   expect(questionFigures({ image: own, group: g("x", { image: img }) })).toEqual([img, own])
   expect(questionFigures({})).toEqual([])
 })
+
+describe("split passage (blank câu)", () => {
+  const passage: QuestionGroup = { id: "g", prompt: "They are ___ and ___. Lions ___." }
+  const b = (k: number) => ({ group: passage, blank: k })
+
+  it("accepts blank câu 1..N in order, plus ordinary câu", () => {
+    expect(checkGroups([b(1), b(2), { group: passage }, b(3)])).toBeNull()
+  })
+
+  it("refuses a blank câu outside a bài", () => {
+    expect(checkGroups([{ blank: 1 }])).toBe("Câu điền chỗ trống phải nằm trong một bài.")
+  })
+
+  it("refuses blank câu that don't match the ___ in the shared prompt", () => {
+    expect(checkGroups([b(1), b(2)])).toBe("Số chỗ trống trong đề chung phải bằng số câu điền chỗ trống.")
+    expect(checkGroups([b(1), b(3), b(2)])).toBe("Các câu điền chỗ trống phải theo đúng thứ tự.")
+  })
+
+  it("leaves bài without blank câu alone even if the prompt has ___", () => {
+    expect(checkGroups([{ group: passage }])).toBeNull()
+  })
+
+  it("fullPrompt marks which blank a blank câu answers", () => {
+    expect(fullPrompt({ prompt: "", group: { id: "g", label: "Part 2", prompt: "A ___ b ___." }, blank: 2 })).toBe("Part 2\nA ___ b [___].\nChỗ trống số 2")
+  })
+})

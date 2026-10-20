@@ -56,7 +56,16 @@ export const questionContentSchema = z.discriminatedUnion("type", [
   z.object({ ...base, ...mathFlags, type: z.literal("dien-cho-trong"), answers: z.array(z.string()).min(1) }),
   // Without an answer key yet ("missing") the answer is an empty placeholder.
   z
-    .object({ ...base, ...mathFlags, type: z.literal("tra-loi-ngan"), answer: z.string() })
+    .object({
+      ...base,
+      ...mathFlags,
+      // A blank câu of a split passage needs no text of its own (the passage is the bài's prompt).
+      prompt: z.string().trim(),
+      type: z.literal("tra-loi-ngan"),
+      answer: z.string(),
+      blank: z.number().int().positive().optional(),
+    })
+    .refine((q) => q.blank !== undefined || q.prompt !== "", { path: ["prompt"], message: "Câu hỏi cần có nội dung" })
     .refine((q) => q.answerStatus === "missing" || q.answer.trim() !== "", { path: ["answer"], message: "Câu hỏi cần có đáp án" }),
   z.object({
     ...base,

@@ -62,4 +62,13 @@ describe("question schema", () => {
     expect(questionContentSchema.parse({ ...q, group: { id: "g1", label: "", prompt: "" } }).group).toEqual({ id: "g1", prompt: "" })
     expect(questionContentSchema.safeParse({ ...q, group: { id: "g1", label: "x".repeat(41), prompt: "" } }).success).toBe(false)
   })
+
+  it("keeps blank on a short answer and refuses blank 0", () => {
+    const sa = (blank: number) => questionContentSchema.safeParse({ type: "tra-loi-ngan", prompt: "", answer: "calm", points: 1, skills: [], blank, group: { id: "g", prompt: "___ ___" } })
+    const ok = sa(2)
+    expect(ok.success && "blank" in ok.data ? ok.data.blank : undefined).toBe(2)
+    expect(sa(0).success).toBe(false)
+    // Only a blank câu may have no text of its own.
+    expect(questionContentSchema.safeParse({ type: "tra-loi-ngan", prompt: " ", answer: "calm", points: 1, skills: [] }).success).toBe(false)
+  })
 })

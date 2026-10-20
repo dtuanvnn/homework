@@ -299,6 +299,13 @@ describe("buildResultDetail", () => {
 })
 
 describe("toTakeQuestion", () => {
+  it("keeps a blank câu's index and bài but strips its answer", () => {
+    const group = { id: "g", prompt: "They are ___." }
+    const take = toTakeQuestion({ ...sa, prompt: "", blank: 1, group } as Question)
+    expect(take).toMatchObject({ blank: 1, group })
+    expect(take).not.toHaveProperty("answer")
+  })
+
   it("keeps the câu's bài (shared prompt and figure) for the take screen", () => {
     const group = { id: "g", label: "Part 3", prompt: "Complete the sentences." }
     expect(toTakeQuestion({ ...sa, group } as Question)).toMatchObject({ group })

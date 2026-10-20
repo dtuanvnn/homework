@@ -1,12 +1,15 @@
+import { BLANK, countBlanks } from "./questions"
 import type { QuestionGroup, QuestionImage } from "./types"
 
 /*
  * Bài: consecutive questions sharing `group.id`. Every câu con stores the same
  * group (label, shared prompt, shared figure), so snapshots, offline packs and
  * AI requests carry it. Câu keep their set position as number everywhere.
+ * A split passage is a bài whose prompt keeps its "___" and whose blank câu
+ * (`blank: k`) answer them in order.
  */
 
-type Groupable = { group?: QuestionGroup }
+type Groupable = { group?: QuestionGroup; blank?: number }
 
 export type Block<T> =
   | { kind: "single"; item: T; number: number }
@@ -48,6 +51,23 @@ export function checkGroups(items: Groupable[]): string | null {
     }
     current = group
   }
+  return checkBlanks(items)
+}
+
+/** Blank câu sit in a bài and answer its prompt's "___" one by one, in order. */
+function checkBlanks(items: Groupable[]): string | null {
+  const blanks = new Map<string, { group: QuestionGroup; seen: number[] }>()
+  for (const { group, blank } of items) {
+    if (blank === undefined) continue
+    if (!group) return "Câu điền chỗ trống phải nằm trong một bài."
+    const entry = blanks.get(group.id) ?? { group, seen: [] }
+    entry.seen.push(blank)
+    blanks.set(group.id, entry)
+  }
+  for (const { group, seen } of blanks.values()) {
+    if (seen.some((b, i) => b !== i + 1)) return "Các câu điền chỗ trống phải theo đúng thứ tự."
+    if (seen.length !== countBlanks(group.prompt)) return "Số chỗ trống trong đề chung phải bằng số câu điền chỗ trống."
+  }
   return null
 }
 
@@ -65,10 +85,20 @@ export function normalizeGroups<T extends Groupable>(items: T[]): T[] {
   })
 }
 
-/** The câu's prompt preceded by its bài's label and shared prompt (for AI requests and answer-leak checks). */
-export function fullPrompt(q: { prompt: string; group?: QuestionGroup }): string {
+/**
+ * The câu's prompt preceded by its bài's label and shared prompt (for AI requests
+ * and answer-leak checks). A blank câu marks its "___" as "[___]" and names it.
+ */
+export function fullPrompt(q: { prompt: string; group?: QuestionGroup; blank?: number }): string {
   if (!q.group) return q.prompt
-  return [q.group.label, q.group.prompt, q.prompt].filter((part) => part?.trim()).join("\n")
+  const shared = q.blank ? markBlank(q.group.prompt, q.blank) : q.group.prompt
+  const own = q.blank ? [q.prompt, `Chỗ trống số ${q.blank}`] : [q.prompt]
+  return [q.group.label, shared, ...own].filter((part) => part?.trim()).join("\n")
+}
+
+function markBlank(prompt: string, blank: number): string {
+  const parts = prompt.split(BLANK)
+  return parts.map((p, i) => (i === 0 ? p : `${i === blank ? `[${BLANK}]` : BLANK}${p}`)).join("")
 }
 
 /** The bài's shared figure, then the câu's own, without duplicates. */

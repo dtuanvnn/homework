@@ -214,6 +214,8 @@ export interface FillBlankQuestion extends QuestionBase, MathAnswer {
 export interface ShortAnswerQuestion extends QuestionBase, MathAnswer {
   type: "tra-loi-ngan"
   answer: string
+  /** Split passage: 1-based index of the "___" in group.prompt this câu answers. */
+  blank?: number
 }
 
 export interface MatchingPair {
