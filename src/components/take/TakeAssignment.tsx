@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Grid3x3, Send, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { SUBJECTS } from "@/lib/subjects"
+import { speechLangFor } from "@/lib/speech"
 import { isInkEmpty } from "@/lib/ink"
 import { groupBlocks } from "@/lib/question-groups"
 import { isLongPrompt } from "@/lib/questions"
@@ -162,7 +163,7 @@ export default function TakeAssignment({
       {/* Body */}
       <main className="flex-1 overflow-x-hidden overflow-y-auto">
         <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-10">
-          {!reviewing && q.group && <SharedPromptBox key={q.group.id} group={q.group} title={groupTitles.get(q.group.id) ?? ""} blanks={passage} />}
+          {!reviewing && q.group && <SharedPromptBox key={q.group.id} group={q.group} title={groupTitles.get(q.group.id) ?? ""} blanks={passage} speech={speechLangFor(subject)} />}
           <AnimatePresence mode="wait" custom={dir} initial={false}>
           {reviewing ? (
             <motion.div key="review" custom={dir} variants={questionSlide(reduced)} initial="initial" animate="animate" exit="exit" className="flex flex-col items-center gap-6 text-center">

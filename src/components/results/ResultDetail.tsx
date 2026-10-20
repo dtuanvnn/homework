@@ -18,6 +18,7 @@ import { ArrowRight, ArrowUp, Home, Lightbulb, Loader2, Lock, MessageCircle, Rot
 import { Button } from "@/components/ui/button"
 import type { ResultView } from "@/lib/views/student"
 import { SUBJECTS } from "@/lib/subjects"
+import { speechLangFor } from "@/lib/speech"
 import { cn } from "@/lib/utils"
 import { groupBlocks } from "@/lib/question-groups"
 import { isLongPrompt } from "@/lib/questions"
@@ -242,7 +243,7 @@ export default function ResultDetail({
               <Fragment key={q.id}>
               {bai && q.group && (
                 <motion.li variants={listItem(reduced)}>
-                  <GroupHeader group={q.group} title={bai.title} awarded={bai.awarded} max={bai.max} passage={bai.passage} />
+                  <GroupHeader group={q.group} title={bai.title} awarded={bai.awarded} max={bai.max} passage={bai.passage} speech={speechLangFor(r.subject)} />
                 </motion.li>
               )}
               <motion.li
