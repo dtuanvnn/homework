@@ -1,7 +1,8 @@
 import { z } from "zod"
 import { MATH_NOTATION_RULES, aiQuestionSchema, toQuestion } from "@/lib/ai/question-format"
-import type { Difficulty, ExerciseKind, Question, SubjectId } from "@/lib/types"
-import type { Box } from "@/lib/figure-crop"
+import type { Difficulty, ExerciseKind, Question, QuestionGroup, SubjectId } from "@/lib/types"
+import { repairBox, type Box } from "@/lib/figure-crop"
+import { uid } from "@/lib/questions"
 
 /*
  * AI document scan ("Tải lên tài liệu" → "Quét bằng AI"): prompt pieces, the
@@ -35,6 +36,14 @@ export interface ScannedQuestion {
   page: number
   note?: string
   figure?: { page: number; box: Box }
+  /** The figure of the câu's bài, the same on every câu of it; cropped into `group.image`. */
+  groupFigure?: { page: number; box: Box }
+  /**
+   * Stand-in for a passage that has no câu yet (cut off before its questions):
+   * an empty tu-luan holding the bài. Joined away across pages or resolved by
+   * the parent in review; never saved.
+   */
+  placeholder?: true
 }
 
 export interface ScanResult {
@@ -46,13 +55,38 @@ export interface ScanResult {
   items: ScannedQuestion[]
 }
 
+/**
+ * One page's result plus what joining pages needs: the bài the page starts
+ * with when it continues the previous page, and the page's last bài.
+ */
+export interface ScanPart extends ScanResult {
+  lead?: { groupId: string; continues: boolean; label?: string; midParagraph: boolean }
+  tail?: { groupId: string; empty: boolean }
+}
+
+export const scanGroupSchema = z.object({
+  key: z.string().describe("Id of this bài, unique on this page; câu of the bài give it as groupKey"),
+  label: z.string().nullable().describe('The bài\'s label as printed ("Bài 3", "Part 2", "Exercise 1"), or null'),
+  layout: z
+    .enum(["doan-van", "hoi-thoai"])
+    .nullable()
+    .describe("doan-van for a reading passage, story, letter or poem; hoi-thoai for a dialogue; null for a plain shared instruction"),
+  prompt: z.string().describe("The shared part shown once above the bài's câu: instruction, title, passage or dialogue, with the layout marks"),
+  figure: z.object({ box: z.array(z.number()) }).nullable().describe("Box of the picture shared by the bài's câu, or null"),
+  continues: z.boolean().nullable().describe("True only for a bài at the top of this page that started on an earlier page"),
+  midParagraph: z.boolean().nullable().describe("With continues: this page's text starts in the middle of a paragraph cut by the page break"),
+})
+
 export const scanResponseSchema = z.object({
   title: z.string().describe("Short Vietnamese title for the exercise set, e.g. \"Ôn tập phép nhân – Tuần 6\""),
   topic: z.string().describe("Main topic in a few Vietnamese words, e.g. \"Bảng nhân 6, 7\""),
   description: z.string().describe("One or two Vietnamese sentences describing the set for the parent"),
   difficulty: z.number().int().describe("1 (very easy) to 5 (very hard) for a child of this grade"),
   estimatedMinutes: z.number().int().describe("Minutes the child needs to finish every question"),
-  questions: z.array(aiQuestionSchema).describe("Every exercise in the document, in document order"),
+  groups: z.array(scanGroupSchema).describe("The bài on these pages, in document order; empty when no exercise has a shared part"),
+  questions: z
+    .array(aiQuestionSchema.extend({ groupKey: z.string().nullable().describe("key of the bài this question belongs to, or null") }))
+    .describe("Every exercise in the document, in document order"),
 })
 
 export type ScanResponse = z.infer<typeof scanResponseSchema>
@@ -73,13 +107,17 @@ const SCAN_INTRO = `You turn photos and PDFs of Vietnamese primary-school homewo
 
 Transcribe every exercise in the document into questions:
 - Keep the document's wording and language exactly (Vietnamese or English), with every diacritic. Do not translate, simplify or fix the content; drop only the numbering ("Câu 1.", "Bài 2:", "a)").
-- Split multi-part exercises into one question per part when each part has its own answer; repeat shared context (e.g. the word problem's facts or the instruction) in each part's prompt so it stands alone.
+- Split multi-part exercises into one question per part when each part has its own answer.
+- Bài: when several answerable parts share an instruction, a passage, a dialogue, word-problem facts or a picture, write that shared part ONCE as a bài in groups and give each of those questions the bài's key as groupKey. Each question's prompt then holds only its own part (e.g. "How do capybaras look different from rats and mice?"), never the shared text again. Keep the bài label as printed in label ("Bài 3", "Part 2"); still drop the numbering of the questions. A question with nothing shared has groupKey null.
+- A bài's prompt for a reading passage, story, letter or poem (layout doan-van) or a dialogue (layout hoi-thoai) follows the paper with these marks, one item per line: "# " before the title; the instruction line wrapped in ** (e.g. "**Read the text, then answer the questions.**"); each paragraph on ONE line (join the lines the page merely wrapped); in a dialogue each turn on its own line as "Name: words" (keep a dash "– " turn as printed). Use **…** inside a line only for words printed in bold. A plain shared instruction (e.g. "Tính:", "Khoanh vào chữ đặt trước câu trả lời đúng") is a bài with layout null and no marks.
+- A fill-in passage (a text with numbered gaps): the bài holds the instruction and title; the passage itself, with each gap written as ___, is ONE dien-cho-trong question in that bài.
+- Pages are scanned separately. A bài that began on an earlier page is given again on this page with continues true; set midParagraph when its text here starts in the middle of a paragraph.
 - Keep the layout of reading passages, poems, letters and dialogues: put a line break (\\n) wherever the document starts a new line or paragraph, and give each dialogue turn its own line, keeping its dash ("– ") or speaker name.
 - Choose the question type that matches how the child answers. tra-loi-ngan is only for an answer that is one short value checked exactly (a number with its unit, a word, a phrase, one short sentence) — e.g. "Điền đáp số", "Viết kết quả". When the child must write out working or a full answer — word problems in a "Tự luận"/"Bài giải" part, "Đặt tính rồi tính", "Tìm x" with steps, "Trình bày", explaining, writing sentences, paragraphs or essays — use tu-luan.
 - Skip headers, names/date lines, general instructions and example items that are not questions.
 - Report low confidence and a short note when text is hard to read, cut off or ambiguous. Never invent questions that are not in the document.
 ${MATH_NOTATION_RULES}
-- When the child needs a picture, diagram, drawn table or chart to answer (geometry figures, objects to count, clocks, charts), fill figure with its box on that page: [x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels (lengths, letters, numbers), leaving out the question text and the answer choices below it. Parts of one exercise that share a picture repeat the same box. Use null when no picture is needed.
+- When the child needs a picture, diagram, drawn table or chart to answer (geometry figures, objects to count, clocks, charts), fill figure with its box on that page: [x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels (lengths, letters, numbers), leaving out the question text and the answer choices below it. A picture shared by a bài's questions goes in the bài's figure, not in each question. Use null when no picture is needed.
 - page is the number N of the "Tệp N" label above the file the question comes from.`
 
 const TRANSCRIBE_ONLY = `Answers:
@@ -131,7 +169,7 @@ export function scanBatches(fileCount: number): ScanBatch[] {
 export function scanRequestText(meta: ScanMeta, fileCount: number, batch?: ScanBatch): string {
   const files =
     batch && batch.end - batch.start < fileCount
-      ? `This request holds ${batch.end - batch.start > 1 ? `files ${batch.start + 1}–${batch.end}` : `file ${batch.end}`} of a ${fileCount}-file document, preceded by its "Tệp N" label; the other files are scanned separately. Transcribe all exercises in this part into questions; when an exercise starts on an earlier file, transcribe the part shown here.`
+      ? `This request holds ${batch.end - batch.start > 1 ? `files ${batch.start + 1}–${batch.end}` : `file ${batch.end}`} of a ${fileCount}-file document, preceded by its "Tệp N" label; the other files are scanned separately. Transcribe all exercises in this part into questions. When the first bài on this page started on an earlier file, still give it as a bài with continues true (with its label if printed here) and only the shared text shown on this page as its prompt (may be empty); set midParagraph when that text starts in the middle of a paragraph. When a passage is cut off at the bottom before its questions, still give it as the last bài.`
       : `${fileCount} file${fileCount > 1 ? "s" : ""} follow${fileCount > 1 ? "" : "s"}, each preceded by its "Tệp N" label. Transcribe all exercises into questions.`
   return [`Subject: ${SUBJECT_NAMES[meta.subject]}. Grade ${meta.grade} (Vietnamese primary school). The parent says this is ${KIND_NAMES[meta.kind]}.`, files].join("\n")
 }
@@ -139,21 +177,62 @@ export function scanRequestText(meta: ScanMeta, fileCount: number, batch?: ScanB
 const clampInt = (n: number, min: number, max: number, fallback: number) =>
   Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback
 
+interface PageGroup {
+  group: QuestionGroup
+  figure?: Box
+  source: ScanResponse["groups"][number]
+}
+
+const sameBox = (a: Box, b: Box) => a.every((n, i) => n === b[i])
+
 /** Maps Claude's response to what the review step shows; `newId` makes question ids. */
-export function toScanResult(res: ScanResponse, meta: ScanMeta, fileCount: number, newId: () => string): ScanResult {
+export function toScanResult(res: ScanResponse, meta: ScanMeta, fileCount: number, newId: () => string): ScanPart {
+  const clampPage = (page: number) => Math.min(Math.max(1, fileCount), page)
+  const groups = new Map<string, PageGroup>()
+  for (const g of res.groups) {
+    if (groups.has(g.key)) continue
+    const label = g.label?.trim()
+    const box = g.figure ? repairBox(g.figure.box) : null
+    groups.set(g.key, {
+      group: { id: uid("bai"), ...(label ? { label: label.slice(0, 40) } : {}), prompt: g.prompt.trim(), ...(g.layout ? { layout: g.layout } : {}) },
+      ...(box ? { figure: box } : {}),
+      source: g,
+    })
+  }
   const items = res.questions
     .filter((q) => q.prompt.trim() || q.type === "sap-xep" || q.type === "noi")
     .map((q): ScannedQuestion => {
       const converted = toQuestion(q, newId(), { answers: meta.withSolutions ? "document" : "none" })
       const note = converted.notes.join(" · ")
+      const page = clampPage(converted.page)
+      const bai = q.groupKey ? groups.get(q.groupKey) : undefined
+      const figure = converted.figure && !(bai?.figure && sameBox(bai.figure, converted.figure.box)) ? converted.figure : undefined
       return {
-        question: converted.question,
+        question: bai ? { ...converted.question, group: bai.group } : converted.question,
         confidence: converted.confidence,
-        page: Math.min(Math.max(1, fileCount), converted.page),
+        page,
         ...(note ? { note } : {}),
-        ...(converted.figure ? { figure: { page: Math.min(Math.max(1, fileCount), converted.figure.page), box: converted.figure.box } } : {}),
+        ...(figure ? { figure: { page: clampPage(figure.page), box: figure.box } } : {}),
+        ...(bai?.figure ? { groupFigure: { page, box: bai.figure } } : {}),
       }
     })
+  const used = new Set(items.flatMap((i) => (i.question.group ? [i.question.group.id] : [])))
+  // A passage cut off before its questions can only be the page's last bài; it waits for the next page.
+  const last = [...groups.values()].at(-1)
+  if (last && !used.has(last.group.id)) {
+    const page = clampPage(items.at(-1)?.page ?? 1)
+    items.push({
+      question: { id: newId(), type: "tu-luan", prompt: "", rubric: "", points: 0, skills: [], group: last.group },
+      confidence: 1,
+      page,
+      placeholder: true,
+      ...(last.figure ? { groupFigure: { page, box: last.figure } } : {}),
+    })
+  }
+  const firstGroup = items[0]?.question.group
+  const lead = firstGroup ? [...groups.values()].find((g) => g.group.id === firstGroup.id) : undefined
+  const tailGroup = [...items].reverse().find((i) => i.question.group)?.question.group
+  const tailItems = tailGroup ? items.filter((i) => i.question.group?.id === tailGroup.id) : []
   const topic = res.topic.trim() || items[0]?.question.skills[0] || ""
   return {
     title: res.title.trim().slice(0, 200) || `Phiếu bài tập lớp ${meta.grade}`,
@@ -162,6 +241,10 @@ export function toScanResult(res: ScanResponse, meta: ScanMeta, fileCount: numbe
     difficulty: clampInt(res.difficulty, 1, 5, 3) as Difficulty,
     estimatedMinutes: clampInt(res.estimatedMinutes, 5, 240, Math.max(10, items.length * 3)),
     items,
+    ...(lead?.source.continues
+      ? { lead: { groupId: lead.group.id, continues: true, ...(lead.group.label ? { label: lead.group.label } : {}), midParagraph: !!lead.source.midParagraph } }
+      : {}),
+    ...(tailGroup ? { tail: { groupId: tailGroup.id, empty: tailItems.every((i) => i.placeholder) } } : {}),
   }
 }
 

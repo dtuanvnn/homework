@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { AiQuestion } from "./question-format"
 import { REPAIRED_CONFIDENCE } from "./question-format"
+import { GIANT_RAT_BOX, giantRatScan } from "@/lib/fixtures/giant-rat-scan"
 import {
   mergeScanResults,
   SCAN_BATCH_FILES,
@@ -39,9 +40,11 @@ const blank: AiQuestion = {
   figure: null,
   solution: null,
 }
-const q = (patch: Partial<AiQuestion>): AiQuestion => ({ ...blank, ...patch })
+type ScanQuestion = ScanResponse["questions"][number]
+const q = (patch: Partial<ScanQuestion>): ScanQuestion => ({ ...blank, groupKey: null, ...patch })
 
 const response = (patch: Partial<ScanResponse>): ScanResponse => ({
+  groups: [],
   title: "Ôn tập phép nhân",
   topic: "Bảng nhân 6",
   description: "Phiếu luyện tập bảng nhân 6.",
@@ -198,5 +201,98 @@ describe("mergeScanResults", () => {
   it("asks for LaTeX formulas and figure boxes", () => {
     expect(scanSystemPrompt()).toContain("$\\frac{3}{4} + \\frac{1}{8}$")
     expect(scanSystemPrompt()).toContain("fill figure")
+  })
+})
+
+describe("scan groups bài", () => {
+  const group = (patch: Partial<ScanResponse["groups"][number]>): ScanResponse["groups"][number] => ({
+    key: "g",
+    label: null,
+    layout: null,
+    prompt: "Shared",
+    figure: null,
+    continues: null,
+    midParagraph: null,
+    ...patch,
+  })
+
+  it("maps the A Giant Rat page to one formatted bài", () => {
+    const r = toScanResult(giantRatScan, { subject: "tieng-anh", grade: 3, kind: "chu-de" }, 1, ids())
+    expect(r.items).toHaveLength(5)
+    const id = r.items[0].question.group?.id
+    expect(id).toBeTruthy()
+    expect(r.items.every((i) => i.question.group?.id === id)).toBe(true)
+    expect(r.items[0].question.group).toMatchObject({ layout: "doan-van" })
+    expect(r.items[0].question.group?.prompt.startsWith("**Read the text")).toBe(true)
+    expect(r.items[0].question.group?.label).toBeUndefined()
+    expect(r.items[0].question.prompt).toBe("How do capybaras look different from rats and mice?")
+    expect(r.items.every((i) => i.groupFigure?.page === 1 && i.groupFigure.box.join() === GIANT_RAT_BOX.join())).toBe(true)
+  })
+
+  it("drops a câu figure that repeats its bài figure", () => {
+    const r = toScanResult(giantRatScan, meta, 1, ids())
+    expect(r.items[2].figure).toBeUndefined()
+  })
+
+  it("leaves a câu standalone when its groupKey matches no group", () => {
+    const r = toScanResult(response({ groups: [group({ key: "a" })], questions: [q({ prompt: "1 + 1 = ?", groupKey: "zzz" })] }), meta, 1, ids())
+    expect(r.items[0].question.group).toBeUndefined()
+  })
+
+  it("keeps the printed label and a bài without layout", () => {
+    const r = toScanResult(
+      response({ groups: [group({ key: "a", label: "Bài 2", prompt: "Tính:" })], questions: [q({ prompt: "2 + 3", groupKey: "a" }), q({ prompt: "4 + 5", groupKey: "a" })] }),
+      meta,
+      1,
+      ids(),
+    )
+    expect(r.items[0].question.group).toMatchObject({ label: "Bài 2", prompt: "Tính:" })
+    expect(r.items[0].question.group?.layout).toBeUndefined()
+  })
+
+  it("describes the bài continuing from the previous page and the last bài of the page", () => {
+    const r = toScanResult(
+      response({
+        groups: [group({ key: "a", continues: true, midParagraph: true, label: "Part 2", prompt: "rest of it." }), group({ key: "b", prompt: "Next passage" })],
+        questions: [q({ prompt: "Q1", groupKey: "a" }), q({ prompt: "Q2", groupKey: "b" })],
+      }),
+      meta,
+      1,
+      ids(),
+    )
+    expect(r.lead).toEqual({ groupId: r.items[0].question.group?.id, continues: true, label: "Part 2", midParagraph: true })
+    expect(r.tail).toEqual({ groupId: r.items[1].question.group?.id, empty: false })
+  })
+
+  it("has no lead when a standalone câu comes first", () => {
+    const r = toScanResult(
+      response({ groups: [group({ key: "a", continues: true })], questions: [q({ prompt: "Q0" }), q({ prompt: "Q1", groupKey: "a" })] }),
+      meta,
+      1,
+      ids(),
+    )
+    expect(r.lead).toBeUndefined()
+  })
+
+  it("keeps a passage cut before its questions as a placeholder at the end of the page", () => {
+    const r = toScanResult(
+      response({ groups: [group({ key: "a" }), group({ key: "b", prompt: "A passage", layout: "doan-van" }), group({ key: "c" })], questions: [q({ prompt: "Q1", groupKey: "a" })] }),
+      meta,
+      1,
+      ids(),
+    )
+    // "b" has no câu and is not last: dropped. "c" is last: kept as a placeholder.
+    expect(r.items).toHaveLength(2)
+    expect(r.items[1].placeholder).toBe(true)
+    expect(r.items[1].question.prompt).toBe("")
+    expect(r.items[1].question.points).toBe(0)
+    expect(r.tail).toEqual({ groupId: r.items[1].question.group?.id, empty: true })
+  })
+
+  it("asks for bài instead of repeated context", () => {
+    const prompt = scanSystemPrompt()
+    expect(prompt).not.toContain("repeat shared context")
+    for (const word of ["groupKey", "continues", "midParagraph", "# ", "**"]) expect(prompt).toContain(word)
+    expect(scanRequestText(meta, 2, { start: 1, end: 2 })).toContain("continues")
   })
 })
