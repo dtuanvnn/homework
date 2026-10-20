@@ -41,7 +41,7 @@ export const giantRatScan: ScanResponse = {
   groups: [
     {
       key: "rat",
-      label: null,
+      label: "",
       layout: "doan-van",
       prompt: [
         "**Read the text, then answer the questions in FULL sentences.**",
@@ -50,9 +50,9 @@ export const giantRatScan: ScanResponse = {
         "Like most rodents, the capybara's front teeth never stop growing. The capybara makes them shorter by eating hard plants, but hard plants are hard to digest. So the capybara digests its food twice. How? By eating its poop. This way, the capybara gets more out of its food.",
         "The capybara lives near fresh water and loves swimming. It has webbed toes to swim around in water. Its eyes and ears are high on its head, so they can stay above water. This way, the capybara can watch for predators even in water.",
       ].join("\n"),
-      figure: { box: GIANT_RAT_BOX },
-      continues: null,
-      midParagraph: null,
+      box: GIANT_RAT_BOX,
+      continues: false,
+      midParagraph: false,
     },
   ],
   questions: [

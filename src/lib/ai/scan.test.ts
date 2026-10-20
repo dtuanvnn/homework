@@ -41,7 +41,7 @@ const blank: AiQuestion = {
   solution: null,
 }
 type ScanQuestion = ScanResponse["questions"][number]
-const q = (patch: Partial<ScanQuestion>): ScanQuestion => ({ ...blank, groupKey: null, ...patch })
+const q = (patch: Partial<ScanQuestion>): ScanQuestion => ({ ...blank, groupKey: "", ...patch })
 
 const response = (patch: Partial<ScanResponse>): ScanResponse => ({
   groups: [],
@@ -207,12 +207,12 @@ describe("mergeScanResults", () => {
 describe("scan groups bài", () => {
   const group = (patch: Partial<ScanResponse["groups"][number]>): ScanResponse["groups"][number] => ({
     key: "g",
-    label: null,
-    layout: null,
+    label: "",
+    layout: "none",
     prompt: "Shared",
-    figure: null,
-    continues: null,
-    midParagraph: null,
+    box: [],
+    continues: false,
+    midParagraph: false,
     ...patch,
   })
 

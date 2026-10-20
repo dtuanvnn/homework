@@ -67,15 +67,14 @@ export interface ScanPart extends ScanResult {
 
 export const scanGroupSchema = z.object({
   key: z.string().describe("Id of this bài, unique on this page; câu of the bài give it as groupKey"),
-  label: z.string().nullable().describe('The bài\'s label as printed ("Bài 3", "Part 2", "Exercise 1"), or null'),
+  label: z.string().describe('The bài\'s label as printed ("Bài 3", "Part 2", "Exercise 1"), or "" when none is printed'),
   layout: z
-    .enum(["doan-van", "hoi-thoai"])
-    .nullable()
-    .describe("doan-van for a reading passage, story, letter or poem; hoi-thoai for a dialogue; null for a plain shared instruction"),
+    .enum(["doan-van", "hoi-thoai", "none"])
+    .describe("doan-van for a reading passage, story, letter or poem; hoi-thoai for a dialogue; none for a plain shared instruction"),
   prompt: z.string().describe("The shared part shown once above the bài's câu: instruction, title, passage or dialogue, with the layout marks"),
-  figure: z.object({ box: z.array(z.number()) }).nullable().describe("Box of the picture shared by the bài's câu, or null"),
-  continues: z.boolean().nullable().describe("True only for a bài at the top of this page that started on an earlier page"),
-  midParagraph: z.boolean().nullable().describe("With continues: this page's text starts in the middle of a paragraph cut by the page break"),
+  box: z.array(z.number()).describe("[x0, y0, x1, y1] (0–1000) of the picture shared by the bài's câu, or [] when there is none"),
+  continues: z.boolean().describe("True only for a bài at the top of this page that started on an earlier page"),
+  midParagraph: z.boolean().describe("With continues: this page's text starts in the middle of a paragraph cut by the page break"),
 })
 
 export const scanResponseSchema = z.object({
@@ -86,7 +85,7 @@ export const scanResponseSchema = z.object({
   estimatedMinutes: z.number().int().describe("Minutes the child needs to finish every question"),
   groups: z.array(scanGroupSchema).describe("The bài on these pages, in document order; empty when no exercise has a shared part"),
   questions: z
-    .array(aiQuestionSchema.extend({ groupKey: z.string().nullable().describe("key of the bài this question belongs to, or null") }))
+    .array(aiQuestionSchema.extend({ groupKey: z.string().describe('key of the bài this question belongs to, or "" when it stands alone') }))
     .describe("Every exercise in the document, in document order"),
 })
 
@@ -109,8 +108,8 @@ const SCAN_INTRO = `You turn photos and PDFs of Vietnamese primary-school homewo
 Transcribe every exercise in the document into questions:
 - Keep the document's wording and language exactly (Vietnamese or English), with every diacritic. Do not translate, simplify or fix the content; drop only the numbering ("Câu 1.", "Bài 2:", "a)").
 - Split multi-part exercises into one question per part when each part has its own answer.
-- Bài: when several answerable parts share an instruction, a passage, a dialogue, word-problem facts or a picture, write that shared part ONCE as a bài in groups and give each of those questions the bài's key as groupKey. Each question's prompt then holds only its own part (e.g. "How do capybaras look different from rats and mice?"), never the shared text again. Keep the bài label as printed in label ("Bài 3", "Part 2"); still drop the numbering of the questions. A question with nothing shared has groupKey null.
-- A bài's prompt for a reading passage, story, letter or poem (layout doan-van) or a dialogue (layout hoi-thoai) follows the paper with these marks, one item per line: "# " before the title; the instruction line wrapped in ** (e.g. "**Read the text, then answer the questions.**"); each paragraph on ONE line (join the lines the page merely wrapped); in a dialogue each turn on its own line as "Name: words" (keep a dash "– " turn as printed). Use **…** inside a line only for words printed in bold. A plain shared instruction (e.g. "Tính:", "Khoanh vào chữ đặt trước câu trả lời đúng") is a bài with layout null and no marks.
+- Bài: when several answerable parts share an instruction, a passage, a dialogue, word-problem facts or a picture, write that shared part ONCE as a bài in groups and give each of those questions the bài's key as groupKey. Each question's prompt then holds only its own part (e.g. "How do capybaras look different from rats and mice?"), never the shared text again. Keep the bài label as printed in label ("Bài 3", "Part 2"); still drop the numbering of the questions. A question with nothing shared has groupKey "".
+- A bài's prompt for a reading passage, story, letter or poem (layout doan-van) or a dialogue (layout hoi-thoai) follows the paper with these marks, one item per line: "# " before the title; the instruction line wrapped in ** (e.g. "**Read the text, then answer the questions.**"); each paragraph on ONE line (join the lines the page merely wrapped); in a dialogue each turn on its own line as "Name: words" (keep a dash "– " turn as printed). Use **…** inside a line only for words printed in bold. A plain shared instruction (e.g. "Tính:", "Khoanh vào chữ đặt trước câu trả lời đúng") is a bài with layout none and no marks.
 - A fill-in passage (a text with numbered gaps): the bài holds the instruction and title; the passage itself, with each gap written as ___, is ONE dien-cho-trong question in that bài.
 - Pages are scanned separately. A bài that began on an earlier page is given again on this page with continues true; set midParagraph when its text here starts in the middle of a paragraph.
 - Keep the layout of reading passages, poems, letters and dialogues: put a line break (\\n) wherever the document starts a new line or paragraph, and give each dialogue turn its own line, keeping its dash ("– ") or speaker name.
@@ -118,7 +117,7 @@ Transcribe every exercise in the document into questions:
 - Skip headers, names/date lines, general instructions and example items that are not questions.
 - Report low confidence and a short note when text is hard to read, cut off or ambiguous. Never invent questions that are not in the document.
 ${MATH_NOTATION_RULES}
-- When the child needs a picture, diagram, drawn table or chart to answer (geometry figures, objects to count, clocks, charts), fill figure with its box on that page: [x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels (lengths, letters, numbers), leaving out the question text and the answer choices below it. A picture shared by a bài's questions goes in the bài's figure, not in each question. Use null when no picture is needed.
+- When the child needs a picture, diagram, drawn table or chart to answer (geometry figures, objects to count, clocks, charts), fill figure with its box on that page: [x0, y0, x1, y1] from 0 to 1000 of the page's width and height, tight around the drawing and its labels (lengths, letters, numbers), leaving out the question text and the answer choices below it. A picture shared by a bài's questions goes in the bài's box (same 0–1000 box), not in each question. Use null when no picture is needed.
 - page is the number N of the "Tệp N" label above the file the question comes from.`
 
 const TRANSCRIBE_ONLY = `Answers:
@@ -193,9 +192,9 @@ export function toScanResult(res: ScanResponse, meta: ScanMeta, fileCount: numbe
   for (const g of res.groups) {
     if (groups.has(g.key)) continue
     const label = g.label?.trim()
-    const box = g.figure ? repairBox(g.figure.box) : null
+    const box = g.box.length ? repairBox(g.box) : null
     groups.set(g.key, {
-      group: { id: uid("bai"), ...(label ? { label: label.slice(0, 40) } : {}), prompt: g.prompt.trim(), ...(g.layout ? { layout: g.layout } : {}) },
+      group: { id: uid("bai"), ...(label ? { label: label.slice(0, 40) } : {}), prompt: g.prompt.trim(), ...(g.layout !== "none" ? { layout: g.layout } : {}) },
       ...(box ? { figure: box } : {}),
       source: g,
     })
