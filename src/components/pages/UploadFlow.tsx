@@ -85,6 +85,7 @@ export default function UploadFlow({ onClose, onOpenSet, registerLeaveGuard }: U
     setScannedCount(draft.scannedCount ?? draft.files.length)
     setStep('review')
     // Blob previews are gone; show the uploaded copies (pages and figures) instead.
+    // Scan drafts never carry bài (`group`), so their shared figures need no signing here.
     const figurePaths = draft.items.flatMap((it) => (it.question.image ? [it.question.image.path] : []))
     const paths = [...draft.files.flatMap((f) => (f.uploaded ? [f.uploaded.path] : [])), ...figurePaths]
     try {

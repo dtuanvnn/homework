@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Question } from "@/lib/types"
-import { applySolution, solveRequestText, type SolveResponse } from "./solve"
+import { applySolution, mergeSolution, solveRequestText, type SolveResponse } from "./solve"
 
 const base = { prompt: "Chọn đáp án đúng", points: 1, skills: [] }
 const empty: SolveResponse = {
@@ -57,7 +57,29 @@ describe("applySolution", () => {
   })
 })
 
+describe("mergeSolution", () => {
+  it("adds only the answer to the câu as it is now (edits made while solving survive)", () => {
+    const group = { id: "g", label: "Part 1", prompt: "Replace the bold words." }
+    const before: Question = { ...base, id: "q", type: "tra-loi-ngan", prompt: "Replace the bold words.\nPandas are **kind**.", answer: "", answerStatus: "missing" }
+    const solved: Question = { ...before, answer: "gentle", answerStatus: "ai", solution: "kind = gentle" }
+    const now: Question = { ...before, prompt: "Pandas are **kind**.", group, points: 1 / 3 }
+    expect(mergeSolution(now, solved)).toEqual({ ...now, answer: "gentle", answerStatus: "ai", solution: "kind = gentle" })
+  })
+
+  it("drops the answer when the parent changed the câu's type meanwhile", () => {
+    const now: Question = { ...base, id: "q", type: "tu-luan", rubric: "" }
+    const solved: Question = { ...base, id: "q", type: "tra-loi-ngan", answer: "24", answerStatus: "ai" }
+    expect(mergeSolution(now, solved)).toBe(now)
+  })
+})
+
 describe("solveRequestText", () => {
+  it("puts the bài's shared prompt before the câu", () => {
+    const group = { id: "g", label: "Part 3", prompt: "Complete the sentences with the correct pronoun." }
+    const text = solveRequestText({ ...base, id: "q", type: "tu-luan", rubric: "", prompt: "David ___", group }, { subject: "tieng-anh", grade: 3 })
+    expect(text).toContain("Question: Part 3\nComplete the sentences with the correct pronoun.\nDavid ___")
+  })
+
   it("shows the question as the child sees it, with what to fill in", () => {
     const text = solveRequestText({ ...base, id: "q", type: "trac-nghiem", options: ["3", "4"], correctIndex: 0 }, { subject: "toan", grade: 3 })
     expect(text).toContain("Grade 3")

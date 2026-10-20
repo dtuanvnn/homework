@@ -9,23 +9,46 @@ import {
   type Announcements,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers'
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { toast } from 'sonner'
+import { groupBlocks } from '@/lib/question-groups'
+import {
+  applyDrop,
+  canApplyMove,
+  canRelease,
+  canSplitBlanks,
+  createGroup,
+  hasBlanks,
+  joinGroup,
+  mergeBlanks,
+  releaseQuestion,
+  splitBlanks,
+  ungroup,
+} from '@/lib/question-groups-edit'
+import { countBlanks, totalPoints } from '@/lib/questions'
 import type { Question } from '@/lib/types'
-import QuestionCard from './QuestionCard'
+import GroupCard from './GroupCard'
+import QuestionCard, { type CardAction } from './QuestionCard'
+
+const isBlankCau = (q: Question) => q.type === 'tra-loi-ngan' && q.blank !== undefined
 
 interface QuestionListProps {
   questions: Question[]
-  onReorder: (questions: Question[]) => void
+  /** Reordering and bài changes (joining, leaving, ungrouping). */
+  onChange: (questions: Question[]) => void
   onEdit: (question: Question) => void
   onDelete: (question: Question) => void
+  /** "Sửa bài": also opened right after a new bài is formed. Without it, no bài actions are offered. */
+  onEditGroup?: (groupId: string, questions: Question[]) => void
+  onDeleteGroup?: (groupId: string) => void
   /** "Giải câu này" with AI; omitted where solving isn't offered. */
   onSolve?: (question: Question) => void
   /** Questions being solved right now. */
   solving?: ReadonlySet<string>
 }
 
-export default function QuestionList({ questions, onReorder, onEdit, onDelete, onSolve, solving }: QuestionListProps) {
+export default function QuestionList({ questions, onChange, onEdit, onDelete, onEditGroup, onDeleteGroup, onSolve, solving }: QuestionListProps) {
   // Stable id so dnd-kit's aria-describedby matches between server and client render.
   const dndId = useId()
   const sensors = useSensors(
@@ -45,15 +68,67 @@ export default function QuestionList({ questions, onReorder, onEdit, onDelete, o
     if (!over || active.id === over.id) return
     const from = questions.findIndex((q) => q.id === active.id)
     const to = questions.findIndex((q) => q.id === over.id)
-    onReorder(arrayMove(questions, from, to))
+    const next = applyDrop(arrayMove(questions, from, to), String(active.id))
+    if (!canApplyMove(next)) {
+      toast('Các câu điền chỗ trống phải giữ đúng thứ tự trong bài.')
+      return
+    }
+    onChange(next)
   }
+
+  /** Applies a change that may form a new bài; a new, empty bài opens "Sửa bài". */
+  const changeAndEdit = (next: Question[], questionId: string) => {
+    onChange(next)
+    const group = next.find((q) => q.id === questionId)?.group
+    if (group && !group.prompt && !group.image && !group.label) onEditGroup?.(group.id, next)
+  }
+
+  const actionsFor = (q: Question, i: number): CardAction[] => {
+    if (!onEditGroup) return []
+    const splittable = q.type === 'dien-cho-trong' && countBlanks(q.prompt) >= 2
+    const split: CardAction[] = splittable
+      ? [{ label: 'Tách chỗ trống', onSelect: () => onChange(splitBlanks(questions, q.id)), disabled: !canSplitBlanks(questions, q.id), hint: 'Tách khỏi bài trước' }]
+      : []
+    if (q.group) {
+      const blank = isBlankCau(q)
+      return [
+        ...split,
+        {
+          label: 'Tách khỏi bài',
+          onSelect: () => onChange(releaseQuestion(questions, q.id)),
+          disabled: blank || !canRelease(questions, q.id),
+          hint: blank ? 'Dùng Gộp chỗ trống' : 'Kéo câu ra khỏi bài trước',
+        },
+      ]
+    }
+    return [
+      ...split,
+      { label: 'Tạo bài từ câu này', onSelect: () => changeAndEdit(createGroup(questions, q.id), q.id) },
+      ...(i > 0 ? [{ label: 'Đưa vào bài trên', onSelect: () => changeAndEdit(joinGroup(questions, q.id, 'up'), q.id) }] : []),
+      ...(i < questions.length - 1 ? [{ label: 'Đưa vào bài dưới', onSelect: () => changeAndEdit(joinGroup(questions, q.id, 'down'), q.id) }] : []),
+    ]
+  }
+
+  const card = (q: Question, i: number) => (
+    <QuestionCard
+      key={q.id}
+      question={q}
+      index={i}
+      onEdit={() => onEdit(q)}
+      onDelete={() => onDelete(q)}
+      onSolve={onSolve && (() => onSolve(q))}
+      solving={solving?.has(q.id)}
+      actions={actionsFor(q, i)}
+      canDelete={!isBlankCau(q)}
+    />
+  )
 
   return (
     <DndContext
       id={dndId}
       sensors={sensors}
       collisionDetection={closestCenter}
-      modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+      modifiers={[restrictToVerticalAxis]}
       onDragEnd={handleDragEnd}
       accessibility={{
         announcements,
@@ -64,17 +139,28 @@ export default function QuestionList({ questions, onReorder, onEdit, onDelete, o
     >
       <SortableContext items={questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
         <ol className="relative flex flex-col gap-3">
-          {questions.map((q, i) => (
-            <QuestionCard
-              key={q.id}
-              question={q}
-              index={i}
-              onEdit={() => onEdit(q)}
-              onDelete={() => onDelete(q)}
-              onSolve={onSolve && (() => onSolve(q))}
-              solving={solving?.has(q.id)}
-            />
-          ))}
+          {groupBlocks(questions).map((block) =>
+            block.kind === 'single' ? (
+              card(block.item, block.number - 1)
+            ) : (
+              <GroupCard
+                key={block.group.id}
+                group={block.group}
+                title={block.title}
+                count={block.items.length}
+                points={totalPoints(block.items.map((x) => x.item))}
+                onEdit={() => onEditGroup?.(block.group.id, questions)}
+                // A split passage goes back to one question rather than N empty short answers.
+                onUngroup={() =>
+                  onChange(hasBlanks(questions, block.group.id) ? mergeBlanks(questions, block.group.id) : ungroup(questions, block.group.id))
+                }
+                blanks={hasBlanks(questions, block.group.id)}
+                onDelete={() => onDeleteGroup?.(block.group.id)}
+              >
+                {block.items.map((x) => card(x.item, x.number - 1))}
+              </GroupCard>
+            ),
+          )}
         </ol>
       </SortableContext>
     </DndContext>

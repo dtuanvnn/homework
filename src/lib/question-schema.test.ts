@@ -54,4 +54,21 @@ describe("question schema", () => {
     expect(questionContentSchema.safeParse({ ...q, answerStatus: "missing" }).success).toBe(true)
     expect(questionContentSchema.parse({ ...q, answer: "42", answerStatus: "ai", solution: "6 × 7 = 42" })).toMatchObject({ answerStatus: "ai", solution: "6 × 7 = 42" })
   })
+
+  it("keeps a bài group and drops its signed URL", () => {
+    const q = { id: "q1", type: "tra-loi-ngan", prompt: "David ___", points: 1, skills: [], answer: "He" }
+    const parsed = editedQuestionSchema.parse({ ...q, group: { id: "g1", label: " Part 3 ", prompt: "Complete.", image: { path: FIG, width: 4, height: 3 }, imageUrl: "https://x/y" } })
+    expect(parsed.group).toEqual({ id: "g1", label: "Part 3", prompt: "Complete.", image: { path: FIG, width: 4, height: 3 } })
+    expect(questionContentSchema.parse({ ...q, group: { id: "g1", label: "", prompt: "" } }).group).toEqual({ id: "g1", prompt: "" })
+    expect(questionContentSchema.safeParse({ ...q, group: { id: "g1", label: "x".repeat(41), prompt: "" } }).success).toBe(false)
+  })
+
+  it("keeps blank on a short answer and refuses blank 0", () => {
+    const sa = (blank: number) => questionContentSchema.safeParse({ type: "tra-loi-ngan", prompt: "", answer: "calm", points: 1, skills: [], blank, group: { id: "g", prompt: "___ ___" } })
+    const ok = sa(2)
+    expect(ok.success && "blank" in ok.data ? ok.data.blank : undefined).toBe(2)
+    expect(sa(0).success).toBe(false)
+    // Only a blank câu may have no text of its own.
+    expect(questionContentSchema.safeParse({ type: "tra-loi-ngan", prompt: " ", answer: "calm", points: 1, skills: [] }).success).toBe(false)
+  })
 })

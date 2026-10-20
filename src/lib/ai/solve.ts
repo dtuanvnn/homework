@@ -3,6 +3,7 @@ import { MATH_NOTATION_RULES, optionIndexes } from "@/lib/ai/question-format"
 import { choiceKey } from "@/lib/choice"
 import { evaluateMath } from "@/lib/math-answer"
 import { OPTION_LETTERS } from "@/lib/questions"
+import { fullPrompt } from "@/lib/question-groups"
 import type { Question, SubjectId } from "@/lib/types"
 
 /*
@@ -52,7 +53,7 @@ const stripDollars = (s: string) => s.trim().replace(/^\$+|\$+$/g, "").trim()
 
 /** The question as the child sees it, plus which answer field to fill. */
 export function solveRequestText(q: Question, meta: { subject: SubjectId; grade: number }): string {
-  const lines = [`Subject: ${SUBJECT_NAMES[meta.subject]}. Grade ${meta.grade} (Vietnamese primary school).`, "", `Question: ${q.prompt}`]
+  const lines = [`Subject: ${SUBJECT_NAMES[meta.subject]}. Grade ${meta.grade} (Vietnamese primary school).`, "", `Question: ${fullPrompt(q)}`]
   switch (q.type) {
     case "trac-nghiem":
       lines.push(...q.options.map((o, i) => `${OPTION_LETTERS[i]}. ${o}`), "", "Type trac-nghiem (multiple choice): fill correctIndexes with every correct option (usually one).")
@@ -85,6 +86,18 @@ export function solveRequestText(q: Question, meta: { subject: SubjectId; grade:
 }
 
 const sameItems = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join("\n") === [...b].sort().join("\n")
+
+/**
+ * A solved câu's answer (key, status, solution) applied to the câu as it is now:
+ * the parent may have edited its prompt, points or bài while the AI worked.
+ * A câu whose type changed meanwhile keeps no answer.
+ */
+export function mergeSolution(current: Question, solved: Question): Question {
+  if (current.type !== solved.type) return current
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id, prompt, points, skills, image, imageUrl, group, solutionImage, solutionImageUrl, ...answer } = solved
+  return { ...current, ...answer } as Question
+}
 
 /** The question with the AI's answer key and solution, or null when the answer doesn't fit the question. */
 export function applySolution(q: Question, res: SolveResponse): Question | null {

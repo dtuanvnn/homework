@@ -68,6 +68,10 @@ describe("gradeQuestion", () => {
     it("gives partial credit per blank", () => {
       expect(gradeQuestion(blanks, ["cao vời vợi", "486"])).toEqual({ isCorrect: false, pointsAwarded: 1 })
     })
+
+    it("keeps exact points for a câu worth a third of a bài", () => {
+      expect(gradeQuestion({ ...blanks, points: 1 / 3 }, ["cao vời vợi", "486"]).pointsAwarded).toBe(1 / 6)
+    })
   })
 
   describe("short answer", () => {
@@ -166,6 +170,11 @@ describe("math questions", () => {
 })
 
 describe("scoreOutOf10", () => {
+  it("gives exactly 10 when every câu of a split bài is right", () => {
+    expect(scoreOutOf10(1 / 3 + 1 / 3 + 1 / 3 + 9, 10)).toBe(10)
+    expect(scoreOutOf10(0.1 + 0.2, 0.3)).toBe(10)
+  })
+
   it("rounds to the nearest quarter point", () => {
     expect(scoreOutOf10(7, 9)).toBe(7.75)
     expect(scoreOutOf10(10, 10)).toBe(10)

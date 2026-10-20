@@ -24,6 +24,10 @@ describe("roundToStep", () => {
     expect(roundToStep(2.2, 3)).toBe(2)
     expect(roundToStep(2.3, 3)).toBe(2.5)
   })
+  it("rounds a split-bài câu to halves of its exact points", () => {
+    expect(roundToStep(0.3, 1 / 3)).toBe(1 / 3)
+    expect(roundToStep(0.15, 1 / 3)).toBe(1 / 6)
+  })
   it("clamps to 0 … max and survives junk", () => {
     expect(roundToStep(5, 2)).toBe(2)
     expect(roundToStep(-1, 2)).toBe(0)
@@ -37,6 +41,12 @@ it("isPassing needs half the points", () => {
 })
 
 describe("prompt builders", () => {
+  it("includes the bài's shared prompt for essays and paper work", () => {
+    const grouped = { ...essay, group: { id: "g", label: "Part 4", prompt: "Read and write." } }
+    expect(essayQuestionText(grouped, 21, "")).toContain("Đề bài: Part 4\nRead and write.\n")
+    expect(paperQuestionText(grouped, 21)).toContain("Đề bài: Part 4\nRead and write.\n")
+  })
+
   it("essay text has prompt, rubric, points and typed answer", () => {
     const text = essayQuestionText(essay, 4, "Con mèo nhà em")
     expect(text).toContain("Câu 4 (tự luận, tối đa 2 điểm)")

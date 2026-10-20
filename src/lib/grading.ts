@@ -69,7 +69,8 @@ function shortAnswerMatches(expected: string, given: string): boolean {
 
 function proportional(points: number, correct: number, total: number): QuestionGrade {
   if (total === 0) return WRONG
-  return { isCorrect: correct === total, pointsAwarded: Math.round(((points * correct) / total) * 100) / 100 }
+  // Exact (no 0.01 rounding): câu of a split bài may be worth 1/3 point; only the score is rounded.
+  return { isCorrect: correct === total, pointsAwarded: (points * correct) / total }
 }
 
 const allOrNothing = (points: number, ok: boolean): QuestionGrade => (ok ? { isCorrect: true, pointsAwarded: points } : WRONG)
@@ -81,6 +82,12 @@ function answerMatches(q: { math?: boolean; simplest?: boolean }, expected: stri
 }
 
 const sameText = (expected: string, given: string) => normalizeText(given) === normalizeText(expected)
+
+/** Whether the child's word fills blank `index` (0-based) of a fill-blank question correctly. */
+export function blankMatches(q: Extract<Question, { type: "dien-cho-trong" }>, index: number, given: string): boolean {
+  const expected = q.answers[index]
+  return expected !== undefined && given.trim() !== "" && answerMatches(q, expected, given, sameText)
+}
 
 export function gradeQuestion(q: Question, response: Response | undefined | null): QuestionGrade {
   if (q.type === "tu-luan") return NEEDS_PARENT
@@ -109,7 +116,7 @@ export function gradeQuestion(q: Question, response: Response | undefined | null
     case "dien-cho-trong": {
       if (!Array.isArray(response)) return WRONG
       const given = response as string[]
-      const correct = q.answers.filter((a, i) => typeof given[i] === "string" && given[i].trim() !== "" && answerMatches(q, a, given[i], sameText)).length
+      const correct = q.answers.filter((_, i) => typeof given[i] === "string" && blankMatches(q, i, given[i])).length
       return proportional(q.points, correct, q.answers.length)
     }
     case "noi": {

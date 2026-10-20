@@ -167,6 +167,22 @@ interface QuestionBase {
   solutionImage?: QuestionImage
   /** Read side only: signed URL of `solutionImage`. Never stored. */
   solutionImageUrl?: string
+  group?: QuestionGroup
+}
+
+/**
+ * A bài: consecutive questions sharing `id` show `label`, `prompt` and `image`
+ * once above them. Stored on every câu con as identical copies (lib/question-groups.ts).
+ */
+export interface QuestionGroup {
+  id: string
+  /** As printed on the paper ("Part 3"); absent ⇒ "Bài n". */
+  label?: string
+  /** Shared instruction or passage; may be empty. May contain LaTeX. */
+  prompt: string
+  image?: QuestionImage
+  /** Read side only: signed URL of `image`. Never stored. */
+  imageUrl?: string
 }
 
 /** With `math`, answers are LaTeX (no $) graded by value; `simplest` also requires lowest terms. */
@@ -198,6 +214,8 @@ export interface FillBlankQuestion extends QuestionBase, MathAnswer {
 export interface ShortAnswerQuestion extends QuestionBase, MathAnswer {
   type: "tra-loi-ngan"
   answer: string
+  /** Split passage: 1-based index of the "___" in group.prompt this câu answers. */
+  blank?: number
 }
 
 export interface MatchingPair {

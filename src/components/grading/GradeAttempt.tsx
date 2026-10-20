@@ -29,6 +29,7 @@ import { gradePaperWithAI, suggestAllEssayGrades, suggestEssayGrade } from "@/se
 import { LOW_CONFIDENCE, type AiMark, type AiPaperMark } from "@/lib/ai/grading"
 import { unwrap } from "@/lib/action-result"
 import { scoreOutOf10 } from "@/lib/grading"
+import { groupBlocks } from "@/lib/question-groups"
 import { QUESTION_TYPES } from "@/lib/questions"
 import { SUBJECTS } from "@/lib/subjects"
 import { cn } from "@/lib/utils"
@@ -48,6 +49,10 @@ import { AiAssistCard, AiReadout } from "./AiAssist"
 import { fmt, scoreTone, submittedLabel } from "./format"
 import { SolutionBox } from "@/components/exercise-detail/QuestionContent"
 import AnswerStatusBadge from "@/components/question/AnswerStatusBadge"
+import GroupHeader from "@/components/question/GroupHeader"
+import BlankText, { type BlankSlotProps } from "@/components/question/BlankText"
+import { blankCount, blankMarks, passagePieces, showsAnswerLines } from "@/lib/blanks"
+import { answerAsRichText } from "@/lib/rich-text"
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 
@@ -178,9 +183,26 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
     }
   }
 
+  /** A split passage's blanks: the child's word coloured by the câu's current mark, the key after a wrong one. */
+  const passageFor = (items: { item: GradingAnswer; number: number }[]) => {
+    const slots = new Map(
+      items.flatMap(({ item, number }): [number, BlankSlotProps][] => {
+        const q = item.question
+        if (q.type !== "tra-loi-ngan" || !q.blank) return []
+        const given = !paper && typeof item.response === "string" ? item.response.trim() : ""
+        return [[q.blank, { label: String(number), given: given ? answerAsRichText(q, given) : undefined, correct: paper ? null : (marks[item.id]?.isCorrect ?? null), answer: q.answer ? answerAsRichText(q, q.answer) : undefined }]]
+      }),
+    )
+    return slots.size ? (index: number) => slots.get(index) ?? {} : undefined
+  }
+
   const questionCard = (a: GradingAnswer, n: number) => {
     const q = a.question
     const m = marks[a.id]
+    // Unsplit fill-blank question: each blank coloured in place (neutral once the parent changes the mark).
+    const blanks = !paper && q.type === "dien-cho-trong" && q.answers.length >= 2 ? blankMarks(q, a.response, m, true) : undefined
+    const count = blanks && blankCount(blanks)
+    const blankNo = q.type === "tra-loi-ngan" ? q.blank : undefined
     const initial = markOf(a)
     const changed = initial.isCorrect !== null && (m.isCorrect !== initial.isCorrect || m.pointsAwarded !== initial.pointsAwarded)
     const auto = !paper && q.type !== "tu-luan"
@@ -198,7 +220,10 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
         className={cn("scroll-mt-24 gap-3 p-4 md:p-5", ungraded ? "border-amber-200" : m.isCorrect ? "border-emerald-100" : "border-red-100")}
       >
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-semibold text-slate-500">Câu {n}</span>
+          <span className="font-semibold text-slate-500">
+            Câu {n}
+            {count && ` · ${count.right}/${count.total} ô đúng`}
+          </span>
           <Badge variant="outline" className="gap-1 border-slate-200 bg-slate-50 text-slate-600">
             <TypeIcon className="size-3" />
             {QUESTION_TYPES[q.type].label}
@@ -220,10 +245,24 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
           )}
         </div>
         <p className="font-medium leading-relaxed break-words whitespace-pre-line text-slate-900 md:text-lg">
-          <RichText text={q.prompt} />
+          {blanks ? (
+            <BlankText pieces={passagePieces(q.prompt)} slot={(index) => blanks[index - 1] ?? {}} />
+          ) : blankNo ? (
+            <>
+              Chỗ trống ({n})
+              {q.prompt && (
+                <span className="block">
+                  <RichText text={q.prompt} />
+                </span>
+              )}
+            </>
+          ) : (
+            <RichText text={q.prompt} />
+          )}
         </p>
         <QuestionPicture question={q} />
 
+        {showsAnswerLines(blanks) && (
         <div className="grid gap-2 text-sm sm:grid-cols-2">
           <div className="rounded-xl bg-emerald-50/70 p-3">
             <p className="mb-1 text-xs font-semibold text-emerald-700">{essay ? "Gợi ý chấm" : "Đáp án đúng"}</p>
@@ -248,6 +287,7 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
             )}
           </div>
         </div>
+        )}
         {!paper && handwriting && <HandwritingView handwriting={handwriting} label={`Bài viết tay câu ${n}`} />}
         <SolutionBox question={q} />
 
@@ -412,7 +452,22 @@ export default function GradeAttempt({ detail: d, now }: { detail: GradingDetail
       <div className={cn("grid grid-cols-1 gap-5", paper && "lg:grid-cols-2 lg:items-start")}>
         {paper && <ScanViewer scans={d.scans} className="min-w-0 h-[60vh] lg:sticky lg:top-4 lg:h-[calc(100vh-8rem)]" />}
         <div className="flex min-w-0 flex-col gap-3">
-          {d.answers.map((a, i) => questionCard(a, i + 1))}
+          {groupBlocks(d.answers.map((a) => ({ ...a, group: a.question.group }))).map((b) =>
+            b.kind === "single" ? (
+              questionCard(b.item, b.number)
+            ) : (
+              <section key={b.group.id} className="flex flex-col gap-3" aria-label={b.title}>
+                <GroupHeader
+                  group={b.group}
+                  title={b.title}
+                  awarded={b.items.reduce((sum, x) => sum + (marks[x.item.id]?.pointsAwarded ?? 0), 0)}
+                  max={b.items.reduce((sum, x) => sum + x.item.question.points, 0)}
+                  passage={passageFor(b.items)}
+                />
+                {b.items.map((x) => questionCard(x.item, x.number))}
+              </section>
+            ),
+          )}
 
           <Card className="gap-4 p-4 md:p-5">
             <div className="space-y-2">

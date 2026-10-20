@@ -105,6 +105,19 @@ describe("points", () => {
     expect(stepPoints(2, 3, 1)).toBe(2.5)
   })
 
+  it("steps a split-bài câu by halves of its exact points", () => {
+    expect(pointStep(1 / 3)).toBe(1 / 6)
+    expect(stepPoints(null, 1 / 3, 1)).toBe(1 / 6)
+    expect(stepPoints(1 / 6, 1 / 3, 1)).toBe(1 / 3)
+    expect(stepPoints(0.5, 2, 1)).toBe(0.75)
+  })
+
+  it("totals exact thirds without rounding", () => {
+    const qs = Array.from({ length: 3 }, () => ({ question: { points: 1 / 3 } as Question }))
+    const marks = qs.map((_, i) => ({ isCorrect: i < 2, pointsAwarded: i < 2 ? 1 / 3 : 0 }))
+    expect(markedTotals(qs, marks).awarded).toBe(2 / 3)
+  })
+
   it("totals marks and counts what is left", () => {
     const qs = [{ question: { points: 1 } as Question }, { question: { points: 2 } as Question }]
     expect(markedTotals(qs, [{ isCorrect: true, pointsAwarded: 1 }, { isCorrect: null, pointsAwarded: null }])).toEqual({ total: 3, awarded: 1, remaining: 1 })

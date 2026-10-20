@@ -49,11 +49,20 @@ async function download(studentId: string): Promise<void> {
 
   for (const entry of put) {
     let complete = true
+    // Every câu of a bài carries the same shared figure: download it once.
+    const saving = new Map<string, Promise<boolean>>()
+    const save = (path: string, url: string | undefined) => {
+      if (!saving.has(path)) saving.set(path, saveImage(path, url))
+      return saving.get(path)!
+    }
     const questions = await Promise.all(
       entry.questions.map(async (q) => {
         const { imageUrl, ...rest } = q as typeof q & { imageUrl?: string }
-        if (q.image && !(await saveImage(q.image.path, imageUrl))) complete = false
-        return rest as typeof q
+        if (q.image && !(await save(q.image.path, imageUrl))) complete = false
+        if (!q.group) return rest as typeof q
+        const { imageUrl: groupImageUrl, ...group } = q.group
+        if (group.image && !(await save(group.image.path, groupImageUrl))) complete = false
+        return { ...rest, group } as typeof q
       }),
     )
     const saved: PackEntry = { ...entry, questions, studentId, complete }

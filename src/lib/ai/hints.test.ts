@@ -7,6 +7,18 @@ const mc: Question = { id: "q2", type: "trac-nghiem", prompt: "7 × 8 = ?", poin
 const fill: Question = { id: "q3", type: "dien-cho-trong", prompt: "My family and I ___ (have) a great time.", points: 1, skills: [], answers: ["are having"] }
 
 describe("leaksAnswer", () => {
+  it("allows words the bài's shared prompt already shows", () => {
+    const word: Question = { ...sa, id: "w", prompt: "Pandas are usually **kind and soft** animals.", answer: "gentle" }
+    expect(leaksAnswer("Chọn từ gentle trong khung.", word)).toBe(true)
+    const grouped: Question = { ...word, group: { id: "g", prompt: "Replace the bold words using the word in the box (strong, gentle, calm):" } }
+    expect(leaksAnswer("Chọn từ gentle trong khung.", grouped)).toBe(false)
+  })
+
+  it("shows the bài's shared prompt in the hint request", () => {
+    const grouped: Question = { ...sa, group: { id: "g", label: "Bài 2", prompt: "Giải bài toán sau." } }
+    expect(hintsPrompt([{ id: "a1", question: grouped, response: "600 kg" }], "toan", 3)).toContain("Bài 2\nGiải bài toán sau.")
+  })
+
   it("catches the answer, or its number alone", () => {
     expect(leaksAnswer("Đáp án là 605 kg nhé.", sa)).toBe(true)
     expect(leaksAnswer("Kết quả là 605.", sa)).toBe(true)

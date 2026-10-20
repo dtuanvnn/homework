@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { SUBJECTS } from "@/lib/subjects"
 import { isInkEmpty } from "@/lib/ink"
+import { groupBlocks } from "@/lib/question-groups"
 import { isLongPrompt } from "@/lib/questions"
+import { answerAsRichText } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 import type { QuestionType, SubjectId } from "@/lib/types"
 import type { TakeQuestion } from "@/lib/views/student"
@@ -16,8 +18,12 @@ import { Essay, FillBlank, Matching, MultipleChoice, Ordering, ShortAnswer, True
 import RichText from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 import { clockLabel } from "@/lib/timer"
+import SharedPromptBox, { type PassageBlanks } from "./SharedPromptBox"
 import { SaveStatus, TakeClock, TakeDialogs, TakeOverlays } from "./TakeChrome"
 import { useTakeSession, type Answers, type TakeSessionProps } from "./use-take-session"
+
+/** Which "___" of its bài's passage a câu answers (split passage), if any. */
+const blankOf = (q: TakeQuestion) => (q.type === "tra-loi-ngan" ? q.blank : undefined)
 
 export type { Answers, TakeTimer } from "./use-take-session"
 
@@ -74,6 +80,22 @@ export default function TakeAssignment({
   const reviewing = index === questions.length
   const q = questions[index]
   const pct = (answeredCount / questions.length) * 100
+  const groupTitles = new Map(groupBlocks(questions).flatMap((b) => (b.kind === "group" ? [[b.group.id, b.title] as const] : [])))
+  // A split passage: each blank shows its câu number and what the child wrote; the current one is highlighted.
+  const passage: PassageBlanks | undefined =
+    q?.group && questions.some((x) => x.group?.id === q.group?.id && blankOf(x))
+      ? {
+          slots: new Map(
+            questions.flatMap((x, i) => {
+              const blank = blankOf(x)
+              const given = answers[x.id]
+              return x.group?.id === q.group?.id && blank ? [[blank, { number: i + 1, given: typeof given === "string" && given.trim() ? answerAsRichText({ math: x.type === "tra-loi-ngan" && x.math }, given) : undefined }] as const] : []
+            }),
+          ),
+          current: blankOf(q),
+        }
+      : undefined
+  const heading = q && blankOf(q) && !q.prompt.trim() ? `Chỗ trống (${index + 1})` : q?.prompt
 
   // Pop a star on the progress bar whenever another question becomes answered.
   const prevAnswered = useRef(answeredCount)
@@ -140,6 +162,7 @@ export default function TakeAssignment({
       {/* Body */}
       <main className="flex-1 overflow-x-hidden overflow-y-auto">
         <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-10">
+          {!reviewing && q.group && <SharedPromptBox key={q.group.id} group={q.group} title={groupTitles.get(q.group.id) ?? ""} blanks={passage} />}
           <AnimatePresence mode="wait" custom={dir} initial={false}>
           {reviewing ? (
             <motion.div key="review" custom={dir} variants={questionSlide(reduced)} initial="initial" animate="animate" exit="exit" className="flex flex-col items-center gap-6 text-center">
@@ -165,13 +188,14 @@ export default function TakeAssignment({
                   {TYPE_LABEL[q.type]} · {q.points.toLocaleString("vi-VN")} điểm
                 </span>
                 {q.type !== "dien-cho-trong" &&
-                  (isLongPrompt(q.prompt) ? (
+                  heading !== undefined &&
+                  (isLongPrompt(heading) ? (
                     <h2 className="rounded-3xl bg-white p-5 text-xl leading-relaxed font-semibold break-words whitespace-pre-line text-slate-900 md:p-6 md:text-2xl md:leading-relaxed">
-                      <RichText text={q.prompt} />
+                      <RichText text={heading} />
                     </h2>
                   ) : (
                     <h2 className="text-3xl leading-snug font-extrabold break-words whitespace-pre-line text-slate-900 md:text-4xl">
-                      <RichText text={q.prompt} />
+                      <RichText text={heading} />
                     </h2>
                   ))}
                 {q.type === "dien-cho-trong" && <h2 className="text-xl font-bold text-slate-600">Em điền từ thích hợp vào chỗ trống:</h2>}
@@ -238,7 +262,17 @@ export default function TakeAssignment({
 function QuestionGrid({ questions, answers, current, onPick, toneBg }: { questions: TakeQuestion[]; answers: Answers; current: number; onPick: (i: number) => void; toneBg: string }) {
   return (
     <div className="grid w-full max-w-md grid-cols-5 gap-2.5 mx-auto">
-      {questions.map((q, i) => {
+      {groupBlocks(questions).flatMap((b) => (b.kind === "single" ? [b] : [{ title: b.title, start: b.items[0].number - 1 }, ...b.items])).map((cell) => {
+        // A bài's title spans the row above its câu.
+        if ("title" in cell) {
+          return (
+            <p key={`bai-${cell.start}`} className="col-span-5 mt-1 text-left text-sm font-bold text-slate-500">
+              {cell.title}
+            </p>
+          )
+        }
+        const i = cell.number - 1
+        const q = cell.item
         const done = isAnswered(q, answers[q.id])
         return (
           <button

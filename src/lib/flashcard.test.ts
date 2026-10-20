@@ -52,6 +52,11 @@ describe("checkSetFormat", () => {
     expect(checkSetFormat({ format: "cau-hoi", subject: "toan" }, [{ type: "trac-nghiem" }])).toBeNull()
   })
 
+  it("refuses bài in a flashcard set", () => {
+    const grouped = [...words(2), { type: "tu-vung", group: { id: "g", prompt: "" } }]
+    expect(checkSetFormat({ format: "flashcard", subject: "tieng-anh" }, grouped)).toBe("Bộ Flashcard không chia bài.")
+  })
+
   it("refuses mixed or misplaced question types", () => {
     expect(checkSetFormat({ format: "flashcard", subject: "tieng-anh" }, [...words(2), { type: "trac-nghiem" }])).toMatch(/chỉ gồm từ vựng/)
     expect(checkSetFormat({ format: "cau-hoi", subject: "tieng-anh" }, words(1))).toMatch(/Flashcard/)
