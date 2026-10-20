@@ -152,7 +152,8 @@ export function splitBlanks(qs: Question[], questionId: string): Question[] {
       prompt: "",
       answer,
       blank: k + 1,
-      points: q.points / count,
+      // Every blank câu is worth 1 point, like any câu (the parent can change it).
+      points: 1,
       skills: q.skills,
       group,
       ...(q.math !== undefined ? { math: q.math } : {}),
