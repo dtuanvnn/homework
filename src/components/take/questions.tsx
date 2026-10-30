@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Check, Keyboard, ListChecks, PenLine } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { InkEditor } from "@/components/ink/InkEditor"
-import { useRequiredStudent } from "@/components/layout/AppFrame"
+import { useStudent } from "@/components/layout/AppFrame"
+import { play } from "@/hooks/useSound"
 import { Textarea } from "@/components/ui/textarea"
 import type { EssayValue } from "@/lib/grading"
 import { isInkEmpty, newInk, paperFor } from "@/lib/ink"
@@ -10,7 +11,8 @@ import { isLongPrompt } from "@/lib/questions"
 import { cn } from "@/lib/utils"
 import type { SubjectStyle } from "@/lib/subjects"
 import type { TakeQuestion } from "@/lib/views/student"
-import RichText from "@/components/question/RichText"
+import RichText, { RichTextRun, TextEmphasis } from "@/components/question/RichText"
+import { passagePieces } from "@/lib/blanks"
 import MathAnswerInput from "./MathAnswerInput"
 
 type Q<T extends TakeQuestion["type"]> = Extract<TakeQuestion, { type: T }>
@@ -38,27 +40,37 @@ function useChoiceMotion() {
 }
 
 export function MultipleChoice({ q, value, onChange, tone }: Props<Q<"trac-nghiem">, number | number[]>) {
-  const choice = useChoiceMotion()
   const picked = Array.isArray(value) ? value : typeof value === "number" ? [value] : []
   const toggle = (i: number) => onChange(q.multi ? (picked.includes(i) ? picked.filter((x) => x !== i) : [...picked, i].sort((a, b) => a - b)) : i)
+  return <ChoiceOptions options={q.options} multi={q.multi} picked={picked} onToggle={toggle} tone={tone} />
+}
+
+function ChoiceOptions({ options, multi, picked, onToggle, tone }: {
+  options: string[]
+  multi?: boolean
+  picked: number[]
+  onToggle: (index: number) => void
+  tone: SubjectStyle
+}) {
+  const choice = useChoiceMotion()
   return (
     <div className="space-y-3">
-      {q.multi && (
+      {multi && (
         <p className={cn("flex items-center gap-2 text-lg font-bold", tone.text)}>
           <ListChecks className="size-5 shrink-0" aria-hidden />
           Chọn tất cả đáp án đúng
         </p>
       )}
-      <div className="grid gap-3 sm:grid-cols-2" role={q.multi ? "group" : "radiogroup"}>
-        {q.options.map((o, i) => {
+      <div className="grid gap-3 sm:grid-cols-2" role={multi ? "group" : "radiogroup"}>
+        {options.map((o, i) => {
           const on = picked.includes(i)
           return (
             <motion.button
               key={i}
               type="button"
-              role={q.multi ? "checkbox" : "radio"}
+              role={multi ? "checkbox" : "radio"}
               aria-checked={on}
-              onClick={() => toggle(i)}
+              onClick={() => onToggle(i)}
               {...choice(on)}
               className={cn(
                 "flex min-h-20 items-center gap-4 rounded-3xl border-2 p-4 text-left text-2xl font-bold transition-colors duration-200",
@@ -69,7 +81,7 @@ export function MultipleChoice({ q, value, onChange, tone }: Props<Q<"trac-nghie
                 {LETTERS[i]}
               </span>
               <RichText text={o} className="flex-1" />
-              {q.multi && (
+              {multi && (
                 <span
                   className={cn(
                     "flex size-8 shrink-0 items-center justify-center rounded-lg border-2",
@@ -117,7 +129,7 @@ export function TrueFalse({ value, onChange }: Props<Q<"dung-sai">, boolean>) {
 }
 
 export function FillBlank({ q, value = [], onChange, tone }: Props<Q<"dien-cho-trong">, string[]>) {
-  const parts = q.prompt.split("___")
+  const pieces = passagePieces(q.prompt)
   return (
     <p
       className={cn(
@@ -125,37 +137,39 @@ export function FillBlank({ q, value = [], onChange, tone }: Props<Q<"dien-cho-t
         isLongPrompt(q.prompt) ? "text-xl leading-[2.4] md:text-2xl md:leading-[2.4]" : "text-2xl leading-[2.4] md:text-3xl md:leading-[2.4]",
       )}
     >
-      {parts.map((p, i) => (
-        <span key={i}>
-          <RichText text={p} />
-          {i < parts.length - 1 &&
-            (q.math ? (
+      {pieces.map((piece, i) => {
+        if (piece.kind === "text") return <RichTextRun key={i} {...piece} />
+        const index = piece.index - 1
+        return (
+          <TextEmphasis key={i} {...piece}>
+            {q.math ? (
               <MathAnswerInput
                 size="inline"
-                ariaLabel={`Chỗ trống ${i + 1}`}
-                value={value[i] ?? ""}
+                ariaLabel={`Chỗ trống ${piece.index}`}
+                value={value[index] ?? ""}
                 onChange={(latex) => {
                   const next = [...value]
-                  next[i] = latex
+                  next[index] = latex
                   onChange(next)
                 }}
                 tone={tone}
               />
             ) : (
               <input
-                aria-label={`Chỗ trống ${i + 1}`}
-                value={value[i] ?? ""}
+                aria-label={`Chỗ trống ${piece.index}`}
+                value={value[index] ?? ""}
                 onChange={(e) => {
                   const next = [...value]
-                  next[i] = e.target.value
+                  next[index] = e.target.value
                   onChange(next)
                 }}
-                style={{ width: `${Math.max(6, (value[i]?.length ?? 0) + 2)}ch` }}
+                style={{ width: `${Math.max(6, (value[index]?.length ?? 0) + 2)}ch` }}
                 className={cn("mx-1 inline-block h-14 rounded-xl border-2 border-dashed bg-slate-50 px-3 text-center align-middle font-bold outline-none focus:border-solid", tone.border, tone.text, "focus:bg-white")}
               />
-            ))}
-        </span>
-      ))}
+            )}
+          </TextEmphasis>
+        )
+      })}
     </p>
   )
 }
@@ -412,11 +426,25 @@ export function Ordering({ q, value = [], onChange, tone }: Props<Q<"sap-xep">, 
 
 export type { EssayValue }
 
-export function Essay({ value = { text: "" }, onChange, tone }: Props<Q<"tu-luan">, EssayValue>) {
-  const student = useRequiredStudent()
+export function Essay({ q, value = { text: "" }, onChange, tone }: Props<Q<"tu-luan">, EssayValue>) {
+  const student = useStudent()
+  // The static offline screen has no student context; keep saved paper or use ruled paper.
+  const paper = value.ink?.paper ?? (student ? paperFor(student.grade) : "ke-ngang")
   const [hand, setHand] = useState(Boolean(value.drawing || !isInkEmpty(value.ink)) && !value.text)
   return (
     <div className="space-y-3">
+      {q.options?.length ? (
+        <fieldset className="space-y-3">
+          <legend className="mb-3 text-lg font-bold text-slate-700">1. Chọn cụm từ đúng</legend>
+          <ChoiceOptions
+            options={q.options}
+            picked={typeof value.choice === "number" ? [value.choice] : []}
+            onToggle={(choice) => { play("select"); onChange({ ...value, choice }) }}
+            tone={tone}
+          />
+          <p className="pt-2 text-lg font-bold text-slate-700">2. Viết lại câu hoàn chỉnh</p>
+        </fieldset>
+      ) : null}
       <div className="inline-flex rounded-2xl bg-slate-100 p-1">
         {[
           { on: false, label: "Gõ chữ", icon: Keyboard },
@@ -442,7 +470,7 @@ export function Essay({ value = { text: "" }, onChange, tone }: Props<Q<"tu-luan
             <img src={value.drawing} alt="Bài viết tay cũ" className="w-full rounded-3xl border-2 border-slate-200 bg-white" />
             <button
               type="button"
-              onClick={() => onChange({ text: value.text, ink: newInk(paperFor(student.grade)) })}
+              onClick={() => onChange({ text: value.text, choice: value.choice, ink: newInk(paper) })}
               className="inline-flex h-12 items-center gap-2 rounded-xl border-2 border-indigo-200 bg-indigo-50 px-5 text-lg font-bold text-indigo-700"
             >
               <PenLine className="size-5" />
@@ -450,7 +478,7 @@ export function Essay({ value = { text: "" }, onChange, tone }: Props<Q<"tu-luan
             </button>
           </div>
         ) : (
-          <InkEditor ink={value.ink ?? newInk(paperFor(student.grade))} onChange={(ink) => onChange({ text: value.text, ink })} />
+          <InkEditor ink={value.ink ?? newInk(paper)} onChange={(ink) => onChange({ text: value.text, choice: value.choice, ink })} />
         )
       ) : (
         <div className="relative">

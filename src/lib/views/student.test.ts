@@ -18,6 +18,23 @@ import {
 } from "./student"
 
 const now = new Date("2026-10-15T15:00:00+07:00") // Thursday
+const chooseEssay = { id: "choose", type: "tu-luan" as const, prompt: "Mark --- They", points: 1, skills: [], rubric: "They didn't invite Mark.", options: ["didn't invite", "didn't invited"] }
+
+describe("choose-and-rewrite student view", () => {
+  it("sends the choices without the rubric or solution to the child", () => {
+    const q = toTakeQuestion({ ...chooseEssay, solution: "They didn't invite Mark." })
+    expect(q).toMatchObject({ options: ["didn't invite", "didn't invited"] })
+    expect(q).not.toHaveProperty("rubric")
+    expect(q).not.toHaveProperty("solution")
+  })
+
+  it("shows both the selected option and the rewritten sentence", () => {
+    expect(answerText(chooseEssay, { text: "They didn't invite Mark.", choice: 0 })).toBe("Đã chọn: didn't invite\nThey didn't invite Mark.")
+    expect(answerText(chooseEssay, { text: "", choice: 1 })).toBe("Đã chọn: didn't invited\n(chưa trả lời)")
+    expect(answerText(chooseEssay, { text: "They didn't invite Mark.", choice: 8 })).toBe("Chưa chọn phương án\nThey didn't invite Mark.")
+  })
+})
+
 const at = (day: number, hour: number) => new Date(Date.UTC(2026, 9, 15 + day, hour - 7))
 
 const set: ExerciseSet = {

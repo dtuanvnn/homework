@@ -4,6 +4,17 @@ import { editedQuestionSchema, questionContentSchema } from "./question-schema"
 const FIG = "sets/11111111-2222-3333-4444-555555555555/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee-figure.jpg"
 
 describe("question schema", () => {
+  it("keeps optional choices on an essay without requiring an automatic answer key", () => {
+    const essay = { type: "tu-luan", prompt: "Mark --- They", points: 1, skills: [], rubric: "" }
+    expect(questionContentSchema.parse({ ...essay, options: [" didn't invite ", "didn't invited"] })).toMatchObject({
+      options: ["didn't invite", "didn't invited"],
+    })
+    expect(questionContentSchema.parse(essay)).not.toHaveProperty("options")
+    for (const options of [[], ["one"], ["one", " "], Array(7).fill("word")]) {
+      expect(questionContentSchema.safeParse({ ...essay, options }).success).toBe(false)
+    }
+  })
+
   it("accepts several distinct, in-range correct options", () => {
     const mc = (correctIndexes: number[]) =>
       questionContentSchema.safeParse({ type: "trac-nghiem", prompt: "?", points: 1, skills: [], options: ["a", "b", "c"], correctIndex: 0, correctIndexes }).success

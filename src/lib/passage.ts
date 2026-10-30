@@ -1,5 +1,5 @@
 import { passagePieces, type PassagePiece } from "./blanks"
-import { splitRichText } from "./rich-text"
+import { plainRichText } from "./rich-text"
 import type { PassageLayout } from "./types"
 
 /*
@@ -17,25 +17,26 @@ import type { PassageLayout } from "./types"
 export interface PassageBlock {
   kind: "instruction" | "title" | "paragraph" | "turn"
   speaker?: string
+  speakerPieces?: PassagePiece[]
   pieces: PassagePiece[]
 }
 
 const TURN = /^([^:$_]{1,30}):\s+(.*)$/u
 const WHOLE_BOLD = /^\*\*(.+)\*\*$/u
 
-/** Text with "**…**" pairs as bold pieces and blanks numbered after `offset`; an unpaired "**" stays literal. */
-function inline(text: string, offset: number): PassagePiece[] {
-  const parts = text.split("**")
-  if (parts.length % 2 === 0) parts.splice(-2, 2, `${parts.at(-2)}**${parts.at(-1)}`)
-  let blanks = offset
-  return parts.flatMap((part, i) => {
-    const pieces = passagePieces(part, blanks).map((p) => (i % 2 === 1 && p.kind === "text" ? { ...p, bold: true } : p))
-    blanks += pieces.filter((p) => p.kind === "blank").length
-    return pieces
+const blankCount = (pieces: PassagePiece[]) => pieces.filter((p) => p.kind === "blank").length
+
+function slicePieces(pieces: PassagePiece[], from: number, to = Infinity): PassagePiece[] {
+  let position = 0
+  return pieces.flatMap((piece): PassagePiece[] => {
+    const length = piece.kind === "blank" ? 3 : piece.text.length + (piece.math ? 2 : 0)
+    const start = position
+    position += length
+    if (position <= from || start >= to) return []
+    if (piece.kind === "blank" || piece.math) return [piece]
+    return [{ ...piece, text: piece.text.slice(Math.max(0, from - start), to - start) }]
   })
 }
-
-const blankCount = (pieces: PassagePiece[]) => pieces.filter((p) => p.kind === "blank").length
 
 export function parsePassage(prompt: string, layout: PassageLayout): PassageBlock[] {
   const blocks: PassageBlock[] = []
@@ -45,11 +46,20 @@ export function parsePassage(prompt: string, layout: PassageLayout): PassageBloc
     if (!line) continue
     let block: PassageBlock
     const bold = WHOLE_BOLD.exec(line)
-    const turn = layout === "hoi-thoai" ? TURN.exec(line) : null
-    if (line.startsWith("# ")) block = { kind: "title", pieces: inline(line.slice(2).trim(), offset) }
-    else if (bold && !bold[1].includes("**")) block = { kind: "instruction", pieces: inline(bold[1], offset) }
-    else if (turn) block = { kind: "turn", speaker: turn[1].trim(), pieces: inline(turn[2], offset) }
-    else block = { kind: "paragraph", pieces: inline(line, offset) }
+    const plainLine = plainRichText(line)
+    const turn = layout === "hoi-thoai" ? TURN.exec(plainLine) : null
+    if (line.startsWith("# ")) block = { kind: "title", pieces: passagePieces(line.slice(2).trim(), offset) }
+    else if (bold && !bold[1].includes("**")) block = { kind: "instruction", pieces: passagePieces(bold[1], offset) }
+    else if (turn) {
+      const pieces = passagePieces(line, offset)
+      block = {
+        kind: "turn",
+        speaker: turn[1].trim(),
+        speakerPieces: slicePieces(pieces, 0, turn[1].length),
+        pieces: slicePieces(pieces, plainLine.length - turn[2].length),
+      }
+    }
+    else block = { kind: "paragraph", pieces: passagePieces(line, offset) }
     offset += blankCount(block.pieces)
     blocks.push(block)
   }
@@ -65,9 +75,7 @@ export function speechText(block: PassageBlock): string {
     .map((p) =>
       p.kind === "blank"
         ? ", "
-        : splitRichText(p.text)
-            .map((s) => (s.kind === "text" ? s.text : ""))
-            .join(""),
+        : p.math ? "" : p.text,
     )
     .join("")
     .replace(/\s+/g, " ")

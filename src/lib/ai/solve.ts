@@ -79,6 +79,7 @@ export function solveRequestText(q: Question, meta: { subject: SubjectId; grade:
       lines.push(`Parts: ${q.shuffled.map((i) => q.tokens[i]).join(" / ")}`, "", "Type sap-xep (put in order): fill tokens with the parts in the correct order.")
       break
     case "tu-luan":
+      if (q.options?.length) lines.push(`Phrase alternatives: ${q.options.join(" | ")}. The child must choose a phrase AND write the complete sentence; include both in the rubric.`)
       lines.push("", "Type tu-luan (the child writes out the answer; the parent grades it): fill rubric.")
       break
   }
@@ -94,6 +95,10 @@ const sameItems = (a: string[], b: string[]) => a.length === b.length && [...a].
  */
 export function mergeSolution(current: Question, solved: Question): Question {
   if (current.type !== solved.type) return current
+  if (current.type === "tu-luan" && solved.type === "tu-luan") {
+    if (JSON.stringify(current.options) !== JSON.stringify(solved.options)) return current
+    return { ...current, rubric: solved.rubric, answerStatus: solved.answerStatus, solution: solved.solution }
+  }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { id, prompt, points, skills, image, imageUrl, group, solutionImage, solutionImageUrl, ...answer } = solved
   return { ...current, ...answer } as Question

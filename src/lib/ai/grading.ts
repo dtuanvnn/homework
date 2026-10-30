@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { essayChoice } from "@/lib/grading"
 import { OPTION_LETTERS } from "@/lib/questions"
 import type { Question } from "@/lib/types"
 import { correctAnswerText, pointStep } from "@/lib/views/grading"
@@ -117,11 +118,17 @@ function questionHeader(q: Question, n: number) {
 }
 
 /** One essay question for ESSAY_SYSTEM: prompt, rubric, points and the child's typed text. */
-export function essayQuestionText(q: Question, n: number, typed: string): string {
+export function essayQuestionText(q: Question, n: number, typed: string, choice?: number): string {
   const rubric = q.type === "tu-luan" && q.rubric.trim() ? q.rubric.trim() : "(không có – tự đánh giá theo đề bài)"
+  const picked = q.type === "tu-luan" ? essayChoice(q, { text: typed, choice }) : undefined
   return [
     `${questionHeader(q, n)}`,
     `Đề bài: ${fullPrompt(q)}`,
+    ...(q.type === "tu-luan" && q.options?.length ? [
+      `Các lựa chọn: ${q.options.join(" | ")}`,
+      picked !== undefined ? `Con đã chọn: ${picked}` : "Con chưa chọn phương án",
+      "Chấm cả lựa chọn và câu viết lại, không chỉ phần chọn.",
+    ] : []),
     `Gợi ý chấm: ${rubric}`,
     `Bài làm của con (gõ phím): ${typed.trim() || "(không gõ chữ)"}`,
   ].join("\n")
@@ -144,6 +151,7 @@ export function paperQuestionText(q: Question, n: number): string {
       lines.push(`Đáp án: ${answerKey(q)}`)
       break
     case "tu-luan":
+      if (q.options?.length) lines.push(`Các lựa chọn: ${q.options.join(" | ")}`, "Chấm cả lựa chọn và câu viết lại.")
       lines.push(`Gợi ý chấm: ${q.rubric.trim() || "(không có – tự đánh giá theo đề bài)"}`)
       break
     default:

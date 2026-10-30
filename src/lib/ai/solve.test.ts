@@ -58,6 +58,16 @@ describe("applySolution", () => {
 })
 
 describe("mergeSolution", () => {
+  it("rejects a choose-and-rewrite key when the alternatives changed during solving", () => {
+    const original = { ...base, id: "q", type: "tu-luan" as const, rubric: "", options: ["didn't invite", "didn't invited"] }
+    const solved = { ...original, rubric: "They didn't invite Mark.", answerStatus: "ai" as const }
+    for (const options of [["invited", "invite"], ["didn't invited", "didn't invite"], undefined]) {
+      const current = { ...original, options }
+      expect(mergeSolution(current, solved)).toBe(current)
+    }
+    expect(mergeSolution(original, solved)).toMatchObject({ rubric: "They didn't invite Mark.", options: original.options })
+  })
+
   it("adds only the answer to the câu as it is now (edits made while solving survive)", () => {
     const group = { id: "g", label: "Part 1", prompt: "Replace the bold words." }
     const before: Question = { ...base, id: "q", type: "tra-loi-ngan", prompt: "Replace the bold words.\nPandas are **kind**.", answer: "", answerStatus: "missing" }
@@ -74,6 +84,12 @@ describe("mergeSolution", () => {
 })
 
 describe("solveRequestText", () => {
+  it("includes an essay's printed options", () => {
+    const q = { ...base, id: "q", type: "tu-luan" as const, rubric: "", options: ["didn't invite", "didn't invited"] }
+    const text = solveRequestText(q, { subject: "tieng-anh", grade: 4 })
+    expect(text).toContain("didn't invite | didn't invited")
+  })
+
   it("puts the bài's shared prompt before the câu", () => {
     const group = { id: "g", label: "Part 3", prompt: "Complete the sentences with the correct pronoun." }
     const text = solveRequestText({ ...base, id: "q", type: "tu-luan", rubric: "", prompt: "David ___", group }, { subject: "tieng-anh", grade: 3 })

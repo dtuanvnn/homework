@@ -1,0 +1,43 @@
+import { expect, test } from "@playwright/test"
+import { open, trackPageErrors } from "./helpers"
+
+test("parent formats selected letters and previews emphasis without changing a saved set", async ({ page }) => {
+  const errors = trackPageErrors(page)
+  await open(page, "/parent/library")
+  await page.getByRole("button", { name: "Phân số và hình vẽ", exact: true }).click()
+  await page.getByRole("button", { name: "Sửa câu 1", exact: true }).filter({ visible: true }).first().click()
+  const sheet = page.getByRole("dialog", { name: "Sửa câu hỏi" })
+  const prompt = sheet.locator("#q-prompt")
+  const before = await prompt.inputValue()
+  await prompt.fill("choose **word** ==now== $x+1$")
+  await prompt.evaluate((el: HTMLTextAreaElement) => {
+    el.focus()
+    el.setSelectionRange(2, 4)
+  })
+  const toolbar = sheet.getByRole("group", { name: "Định dạng văn bản", exact: true }).first()
+  await toolbar.getByRole("button", { name: "Gạch chân", exact: true }).click()
+  await expect(prompt).toHaveValue("ch<u>oo</u>se **word** ==now== $x+1$")
+  const preview = sheet.getByLabel("Xem trước công thức").first()
+  await expect(preview.locator("u")).toHaveText("oo")
+  await expect(preview.locator("strong")).toHaveText("word")
+  await expect(preview.locator("mark")).toHaveText("now")
+  await expect(preview.locator(".katex")).toBeVisible()
+
+  await expect.poll(() => prompt.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd])).toEqual([5, 7])
+  await toolbar.getByRole("button", { name: "In đậm", exact: true }).click()
+  await expect(prompt).toHaveValue("ch<u>**oo**</u>se **word** ==now== $x+1$")
+  await expect(preview.locator("u strong")).toHaveText("oo")
+  await expect.poll(() => prompt.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd])).toEqual([7, 9])
+  await toolbar.getByRole("button", { name: "In đậm", exact: true }).click()
+  await expect(prompt).toHaveValue("ch<u>oo</u>se **word** ==now== $x+1$")
+  await expect.poll(() => prompt.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd])).toEqual([5, 7])
+  await toolbar.getByRole("button", { name: "Gạch chân", exact: true }).click()
+  await expect(prompt).toHaveValue("choose **word** ==now== $x+1$")
+  await expect(preview.locator("u")).toHaveCount(0)
+
+  await sheet.getByRole("button", { name: "Đóng", exact: true }).click()
+  await page.getByRole("button", { name: "Sửa câu 1", exact: true }).filter({ visible: true }).first().click()
+  await expect(sheet.locator("#q-prompt")).toHaveValue(before)
+  await sheet.getByRole("button", { name: "Đóng", exact: true }).click()
+  expect(errors).toEqual([])
+})

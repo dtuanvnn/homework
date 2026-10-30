@@ -13,6 +13,26 @@ describe("passagePieces", () => {
     ])
     expect(passagePieces("___")).toEqual([{ kind: "blank", index: 1 }])
   })
+
+  it("keeps nested formatting across a blank without changing its number", () => {
+    expect(passagePieces("**Read <u>this ___ word</u>** ==now==", 2)).toEqual([
+      { kind: "text", text: "Read ", bold: true },
+      { kind: "text", text: "this ", bold: true, underline: true },
+      { kind: "blank", index: 3, bold: true, underline: true },
+      { kind: "text", text: " word", bold: true, underline: true },
+      { kind: "text", text: " " },
+      { kind: "text", text: "now", highlight: true },
+    ])
+  })
+
+  it("preserves existing answer blanks inside formulas", () => {
+    expect(passagePieces("$___ + 2 = 5$ ___")).toEqual([
+      { kind: "blank", index: 1 },
+      { kind: "text", text: " + 2 = 5", math: true },
+      { kind: "text", text: " " },
+      { kind: "blank", index: 2 },
+    ])
+  })
 })
 
 describe("blankMarks", () => {

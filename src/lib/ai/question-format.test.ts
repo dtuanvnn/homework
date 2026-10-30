@@ -25,6 +25,17 @@ const blank: AiQuestion = {
 const ai = (patch: Partial<AiQuestion>): AiQuestion => ({ ...blank, ...patch })
 
 describe("toQuestion", () => {
+  it.each(["none", "document", "solve"] as const)("keeps choose-and-rewrite options with answer source %s", (answers) => {
+    const r = toQuestion(ai({
+      type: "tu-luan", prompt: "Mark --- They", options: [" didn't invite ", "didn't invited"],
+      rubric: answers === "none" ? null : "They didn't invite Mark.",
+    }), "q1", { answers })
+    expect(r.question).toMatchObject({ type: "tu-luan", prompt: "Mark --- They", options: ["didn't invite", "didn't invited"] })
+    expect(r.notes).toEqual([])
+    expect(r.confidence).toBe(0.9)
+    expect(r.question).not.toHaveProperty("correctIndex")
+  })
+
   it("converts a complete multiple-choice question and keeps its confidence", () => {
     const r = toQuestion(ai({ type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndexes: [1], skills: ["Bảng nhân 7"] }), "q1")
     expect(r.question).toEqual({ id: "q1", type: "trac-nghiem", prompt: "7 × 8 = ?", options: ["54", "56"], correctIndex: 1, points: 1, skills: ["Bảng nhân 7"] })

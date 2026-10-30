@@ -74,7 +74,12 @@ export const questionContentSchema = z.discriminatedUnion("type", [
     pairs: z.array(z.object({ left: z.string().min(1), right: z.string().min(1), picture: z.string().optional() })).min(2),
   }),
   z.object({ ...base, type: z.literal("sap-xep"), tokens: z.array(z.string().min(1)).min(2), shuffled: z.array(z.number().int().min(0)) }),
-  z.object({ ...base, type: z.literal("tu-luan"), rubric: z.string() }),
+  z.object({
+    ...base,
+    type: z.literal("tu-luan"),
+    rubric: z.string(),
+    options: z.array(z.string().trim().min(1, "Phương án cần có nội dung")).min(2, "Cần ít nhất 2 phương án").max(6, "Tối đa 6 phương án").optional(),
+  }),
   z.object({
     ...base,
     type: z.literal("tu-vung"),

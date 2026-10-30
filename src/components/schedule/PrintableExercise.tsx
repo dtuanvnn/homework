@@ -7,7 +7,7 @@ import { OPTION_LETTERS } from "@/lib/questions"
 import { isMultiAnswer } from "@/lib/choice"
 import type { ExerciseSet, Question } from "@/lib/types"
 import Passage from "@/components/question/Passage"
-import RichText from "@/components/question/RichText"
+import RichText, { RichTextRun, TextEmphasis } from "@/components/question/RichText"
 import QuestionPicture from "@/components/question/QuestionPicture"
 
 /** A student worksheet: deliberately omits answers and grading rubrics. */
@@ -45,11 +45,9 @@ export default function PrintableExercise({
               ? (pieces) =>
                   pieces.map((piece, k) =>
                     piece.kind === "blank" ? (
-                      <span key={k}>({numbers.get(piece.index) ?? "?"}) ……………</span>
-                    ) : piece.bold ? (
-                      <strong key={k}><RichText text={piece.text} /></strong>
+                      <TextEmphasis key={k} {...piece}>({numbers.get(piece.index) ?? "?"}) ……………</TextEmphasis>
                     ) : (
-                      <RichText key={k} text={piece.text} />
+                      <RichTextRun key={k} {...piece} />
                     ),
                   )
               : undefined
@@ -87,7 +85,7 @@ export default function PrintableExercise({
             {q.type === "trac-nghiem" && isMultiAnswer(q) && (
               <p className="mt-1 text-sm italic">(Chọn tất cả đáp án đúng)</p>
             )}
-            {q.type === "trac-nghiem" && (
+            {(q.type === "trac-nghiem" || q.type === "tu-luan") && q.options?.length ? (
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {q.options.map((opt, index) => (
                   <p key={index}>
@@ -95,7 +93,7 @@ export default function PrintableExercise({
                   </p>
                 ))}
               </div>
-            )}
+            ) : null}
             {q.type === "dung-sai" && (
               <p className="mt-2">□ Đúng &nbsp; □ Sai</p>
             )}

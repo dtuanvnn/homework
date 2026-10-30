@@ -3,13 +3,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Textarea } from '@/components/ui/textarea'
 import { formatPoints, formatScoreValue } from '@/lib/format'
 import type { PassageLayout, QuestionGroup } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import Passage from '@/components/question/Passage'
 import FigureField, { type FigureSource } from './FigureField'
-import FormulaPreview from './FormulaPreview'
+import { FormattedTextarea } from './FormattedTextField'
 import { parsePoints } from './question-draft'
 
 export interface GroupEdit {
@@ -89,11 +88,12 @@ export default function GroupEditorSheet({ open, onOpenChange, group, title, cou
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="group-prompt">Đề chung</Label>
-            <Textarea
+            <FormattedTextarea
               id="group-prompt"
               rows={prompt.includes('\n') || prompt.length > 160 ? 8 : 4}
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={setPrompt}
+              preview={!layout}
               placeholder="VD: Đọc đoạn văn sau và trả lời các câu hỏi."
             />
             {layout ? (
@@ -107,9 +107,7 @@ export default function GroupEditorSheet({ open, onOpenChange, group, title, cou
                   </div>
                 )}
               </>
-            ) : (
-              <FormulaPreview text={prompt} />
-            )}
+            ) : null}
           </div>
           <div className="flex flex-col gap-2">
             <Label id="group-layout">Trình bày</Label>

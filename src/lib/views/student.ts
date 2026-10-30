@@ -8,7 +8,7 @@ import { blankMarks, type BlankMark } from "@/lib/blanks"
 import { chosenOptions, correctOptions, isMultiAnswer } from "@/lib/choice"
 import { addDays, startOfDay, startOfWeek } from "@/lib/dates"
 import { formatDayMonth, formatShortDate, formatTime, formatVietnameseDate, formatWeekday } from "@/lib/format"
-import type { EssayValue, Response } from "@/lib/grading"
+import { essayChoice, type EssayValue, type Response } from "@/lib/grading"
 import type { Ink } from "@/lib/ink"
 import { attemptStars } from "@/lib/rewards/stars"
 import { streakRuns } from "@/lib/rewards/streak"
@@ -338,9 +338,11 @@ export function answerText(q: Question, response: Response | null | undefined, m
     case "tu-luan": {
       const essay = response as EssayValue
       const text = typeof essay.text === "string" ? essay.text.trim() : ""
-      if (essayInk(essay)) return text ? `${text} (kèm bài viết tay)` : "(bài viết tay)"
-      if (essay.drawing) return text ? `${text} (kèm hình vẽ)` : "(bài viết tay)"
-      return text || NO_ANSWER
+      const written = essayInk(essay)
+        ? (text ? `${text} (kèm bài viết tay)` : "(bài viết tay)")
+        : essay.drawing ? (text ? `${text} (kèm hình vẽ)` : "(bài viết tay)") : text || NO_ANSWER
+      const picked = essayChoice(q, response)
+      return [q.options?.length ? (picked !== undefined ? `Đã chọn: ${picked}` : "Chưa chọn phương án") : "", written].filter(Boolean).join("\n")
     }
     case "tu-vung":
       return essayInk(response) ? "(bài viết tay)" : NO_ANSWER

@@ -193,6 +193,13 @@ export default function ExerciseSetDetail({
       return next()
     }
     await Promise.all(Array.from({ length: SOLVE_CONCURRENCY }, next))
+    for (const [id, answered] of solved) {
+      const current = latestQuestions.current.find((q) => q.id === id)
+      if (!current || mergeSolution(current, answered) === current) {
+        solved.delete(id)
+        errors.push('Câu hỏi hoặc phương án đã thay đổi khi AI đang giải. Hãy giải lại câu này.')
+      }
+    }
     if (errors.length) toast.error(`Chưa giải được ${errors.length} câu`, { description: errors[0] })
     if (!solved.size) return
     // State may not hold the last results yet: apply them to the latest list before saving.

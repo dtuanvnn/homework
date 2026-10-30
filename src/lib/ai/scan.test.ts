@@ -97,6 +97,20 @@ describe("scan prompt pieces", () => {
 })
 
 describe("toScanResult", () => {
+  it("transcribes a choose-and-unscramble item as one essay with unselected choices", () => {
+    const r = toScanResult(response({
+      questions: [q({
+        type: "tu-luan", prompt: "Mark --- They", options: ["didn't invite", "didn't invited"],
+        rubric: null, tokens: null,
+      })],
+    }), { ...meta, subject: "tieng-anh" }, 1, ids())
+    expect(r.items).toHaveLength(1)
+    expect(r.items[0].question).toMatchObject({
+      type: "tu-luan", prompt: "Mark --- They", options: ["didn't invite", "didn't invited"], rubric: "", answerStatus: "missing",
+    })
+    expect(r.items[0].question).not.toHaveProperty("correctIndex")
+  })
+
   it("maps questions to review items with ids, confidence and page", () => {
     const r = toScanResult(
       response({

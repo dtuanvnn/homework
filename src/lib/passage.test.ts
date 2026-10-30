@@ -25,6 +25,14 @@ describe("parsePassage", () => {
     expect(texts(blocks[0])).toBe("Hi, Tom.")
   })
 
+  it("keeps emphasis spanning a dialogue speaker and body", () => {
+    const [block] = parsePassage("<u>Mai: Hello.</u>", "hoi-thoai")
+    expect(block.kind).toBe("turn")
+    expect(block.speaker).toBe("Mai")
+    expect(block.pieces).toEqual([{ kind: "text", text: "Hello.", underline: true }])
+    expect(speechText(block)).toBe("Mai. Hello.")
+  })
+
   it("does not take LaTeX or long prefixes as speakers", () => {
     expect(parsePassage("$a:b$ là tỉ số", "hoi-thoai")[0].kind).toBe("paragraph")
     expect(parsePassage(`${"x".repeat(31)}: hello`, "hoi-thoai")[0].kind).toBe("paragraph")
@@ -62,5 +70,10 @@ describe("speech", () => {
   it("does not read instructions", () => {
     const blocks = parsePassage(RAT, "doan-van")
     expect(blocks.map(readable)).toEqual([false, true, true, true, true])
+  })
+
+  it("reads formatted words without speaking markup, and skips formatted math", () => {
+    const [p] = parsePassage("Mai: Ch<u>oo</u>se **==one==** ___ **$x$**.", "hoi-thoai")
+    expect(speechText(p)).toBe("Mai. Choose one, .")
   })
 })

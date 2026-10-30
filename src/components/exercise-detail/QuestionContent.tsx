@@ -1,9 +1,10 @@
 import { ArrowRight, Check, X } from 'lucide-react'
 import { correctOptions, isMultiAnswer } from '@/lib/choice'
-import { BLANK, OPTION_LETTERS } from '@/lib/questions'
+import { OPTION_LETTERS } from '@/lib/questions'
+import { passagePieces } from '@/lib/blanks'
 import { cn } from '@/lib/utils'
 import type { Question, QuestionImage } from '@/lib/types'
-import RichText from '@/components/question/RichText'
+import RichText, { RichTextRun, TextEmphasis } from '@/components/question/RichText'
 import QuestionPicture from '@/components/question/QuestionPicture'
 import { mathText } from '@/lib/rich-text'
 
@@ -100,18 +101,15 @@ function QuestionBody({ question: q }: { question: Question }) {
       )
 
     case 'dien-cho-trong': {
-      const parts = q.prompt.split(BLANK)
+      const pieces = passagePieces(q.prompt)
       return (
         <p className="text-base leading-relaxed font-medium break-words whitespace-pre-line text-slate-900">
-          {parts.map((part, i) => (
-            <span key={i}>
-              <RichText text={part} />
-              {i < parts.length - 1 && (
+          {pieces.map((piece, i) => piece.kind === 'text' ? <RichTextRun key={i} {...piece} /> : (
+            <TextEmphasis key={i} {...piece}>
                 <span className="mx-1 inline-block rounded-md border-b-2 border-emerald-500 bg-emerald-50 px-2 font-semibold text-emerald-700">
-                  {q.answers[i] && !keyless ? <RichText text={q.math ? mathText(q.answers[i]) : q.answers[i]} /> : '…'}
+                  {q.answers[piece.index - 1] && !keyless ? <RichText text={q.math ? mathText(q.answers[piece.index - 1]) : q.answers[piece.index - 1]} /> : '…'}
                 </span>
-              )}
-            </span>
+            </TextEmphasis>
           ))}
         </p>
       )
@@ -184,6 +182,18 @@ function QuestionBody({ question: q }: { question: Question }) {
       return (
         <div className="flex flex-col gap-3">
           <Prompt text={q.prompt} />
+          {q.options?.length ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-500">Chọn cụm từ rồi viết lại câu · tự luận</p>
+              <ul className="grid grid-cols-2 gap-2">
+                {q.options.map((option, i) => (
+                  <li key={i} className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                    <span className="mr-2 font-bold">{OPTION_LETTERS[i]}.</span><RichText text={option} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {q.rubric.trim() && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-900">
               <div className="mb-1.5 font-semibold text-emerald-800">Gợi ý chấm</div>

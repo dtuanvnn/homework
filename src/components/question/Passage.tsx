@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { Volume2 } from "lucide-react"
 import QuestionPicture from "@/components/question/QuestionPicture"
-import RichText from "@/components/question/RichText"
+import { RichTextRun, TextEmphasis } from "@/components/question/RichText"
 import { passagePieces, type PassagePiece } from "@/lib/blanks"
 import { parsePassage, readable } from "@/lib/passage"
 import type { QuestionGroup } from "@/lib/types"
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 
 const plainPieces = (pieces: PassagePiece[]) =>
   pieces.map((p, i) =>
-    p.kind === "blank" ? <span key={i}>___</span> : p.bold ? <strong key={i}><RichText text={p.text} /></strong> : <RichText key={i} text={p.text} />,
+    p.kind === "blank" ? <TextEmphasis key={i} {...p}>___</TextEmphasis> : <RichTextRun key={i} {...p} />,
   )
 
 /**
@@ -68,7 +68,7 @@ export default function Passage({
           if (block.kind === "turn") {
             return (
               <div key={i} data-block={i} className={cn("grid grid-cols-[auto_1fr] gap-x-2", highlight)}>
-                <span className="font-bold text-indigo-800">{block.speaker}:</span>
+                <span className="font-bold text-indigo-800">{block.speakerPieces ? plainPieces(block.speakerPieces) : block.speaker}:</span>
                 <span className="whitespace-pre-line">
                   {renderPieces(block.pieces)}
                   {speaker}

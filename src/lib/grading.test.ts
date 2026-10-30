@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { gradeAttempt, gradeQuestion, scoreOutOf10, starsFor } from "./grading"
+import { essayChoice, essayValueSchema, gradeAttempt, gradeQuestion, isEssayAnswered, scoreOutOf10, starsFor } from "./grading"
 import { newInk } from "./ink"
 import type { Question } from "./types"
 
@@ -23,6 +23,39 @@ const match: Question = {
 }
 const order: Question = { ...base, id: "o", type: "sap-xep", tokens: ["Hôm nay", "em", "đến", "trường"], shuffled: [2, 0, 3, 1] }
 const essay: Question = { ...base, id: "e", type: "tu-luan", points: 2, rubric: "" }
+
+describe("choose-and-rewrite answers", () => {
+  const q = { ...essay, options: ["didn't invite", "didn't invited"] }
+  const ink = { ...newInk("o-li"), pages: [{ strokes: [[100, 100, 5, 110, 100, 5]] }] }
+
+  it("preserves the choice alongside text or handwriting through validation", () => {
+    expect(essayValueSchema.parse({ text: "They didn't invite Mark.", choice: 0 })).toEqual({ text: "They didn't invite Mark.", choice: 0 })
+    expect(essayValueSchema.parse({ text: "", ink, choice: 1 })).toEqual({ text: "", ink, choice: 1 })
+    expect(essayValueSchema.parse({ text: "An ordinary essay." })).toEqual({ text: "An ordinary essay." })
+    for (const choice of [-1, 0.5, 6, "0"]) expect(essayValueSchema.safeParse({ text: "", choice }).success).toBe(false)
+  })
+
+  it("requires a valid choice and written work for completion", () => {
+    expect(isEssayAnswered(q, { text: "", choice: 0 })).toBe(false)
+    expect(isEssayAnswered(q, { text: "They didn't invite Mark." })).toBe(false)
+    expect(isEssayAnswered(q, { text: "They didn't invite Mark.", choice: 2 })).toBe(false)
+    expect(isEssayAnswered(q, { text: "They didn't invite Mark.", choice: 0 })).toBe(true)
+    expect(isEssayAnswered(q, { text: "", ink, choice: 1 })).toBe(true)
+    expect(isEssayAnswered(q, { text: "", ink: newInk("o-li"), choice: 0 })).toBe(false)
+    expect(isEssayAnswered(essay, { text: "Ordinary essay." })).toBe(true)
+  })
+
+  it("does not mistake an out-of-range or fractional choice for a valid option", () => {
+    expect(essayChoice(q, { text: "", choice: 0 })).toBe("didn't invite")
+    for (const choice of [-1, 0.5, 2]) expect(essayChoice(q, { text: "", choice })).toBeUndefined()
+    expect(essayChoice(q, null)).toBeUndefined()
+  })
+
+  it("leaves both parts for the parent's grading instead of auto-grading the choice", () => {
+    expect(gradeQuestion(q, { text: "They didn't invite Mark.", choice: 0 })).toEqual({ isCorrect: null, pointsAwarded: null })
+    expect(gradeQuestion(q, { text: "", choice: 1 })).toEqual({ isCorrect: null, pointsAwarded: null })
+  })
+})
 
 describe("gradeQuestion", () => {
   it("marks unanswered objective questions wrong with 0 points", () => {

@@ -7,6 +7,7 @@ import { SUBJECTS } from "@/lib/subjects"
 import type { Question, SubjectId } from "@/lib/types"
 import { answerText } from "@/lib/views/student"
 import { fullPrompt } from "@/lib/question-groups"
+import { plainRichText } from "@/lib/rich-text"
 
 /*
  * Hints for wrong answers on the child's result page while a retry is still
@@ -78,11 +79,11 @@ const containsWord = (text: string, word: string) => new RegExp(`(^|[^\\p{L}\\p{
 
 /** True when the hint gives away an answer that isn't already visible in the question. */
 export function leaksAnswer(hint: string, q: Question): boolean {
-  const plainHint = latexToPlain(hint)
+  const plainHint = latexToPlain(plainRichText(hint))
   const text = normalizeText(plainHint)
-  const prompt = normalizeText(latexToPlain(fullPrompt(q)))
+  const prompt = normalizeText(latexToPlain(plainRichText(fullPrompt(q))))
   const textLeak = secrets(q).some((s) => {
-    const secret = normalizeText(latexToPlain(s))
+    const secret = normalizeText(latexToPlain(plainRichText(s)))
     return secret.length > 0 && containsWord(text, secret) && !containsWord(prompt, secret)
   })
   return textLeak || mathValueLeaks(plainHint, q)

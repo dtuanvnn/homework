@@ -247,6 +247,8 @@ export interface OrderingQuestion
 export interface EssayQuestion extends QuestionBase {
   type: "tu-luan"
   rubric: string
+  /** Choose a phrase, then write the full answer; both parts are graded by the parent. */
+  options?: string[]
 }
 
 /**

@@ -3,6 +3,26 @@ import type { Question } from "@/lib/types"
 import { changeDraftType, emptyDraft, fromDraft, parsePoints, patchDraft, toDraft, validateDraft } from "./question-draft"
 
 describe("fromDraft", () => {
+  it("round-trips an essay's choices and omits choices on ordinary essays", () => {
+    const q = { id: "q1", type: "tu-luan" as const, prompt: "Mark --- They", points: 1, skills: [], rubric: "", options: ["didn't invite", "didn't invited"] }
+    expect(toDraft(q).options).toEqual(["didn't invite", "didn't invited"])
+    expect(fromDraft(toDraft(q), q.id)).toEqual(q)
+    const plain = { ...emptyDraft("tu-luan"), prompt: "Viết một câu." }
+    expect(validateDraft(plain)).toEqual([])
+    expect(fromDraft(plain, "q2")).not.toHaveProperty("options")
+  })
+
+  it("validates optional essay choices without asking for a correct option", () => {
+    const d = { ...emptyDraft("tu-luan"), prompt: "Mark --- They", options: ["didn't invite", "didn't invited"] }
+    expect(validateDraft(d)).toEqual([])
+    expect(validateDraft({ ...d, options: ["", ""] })).toContain("Cần ít nhất 2 phương án")
+    expect(validateDraft({ ...d, options: ["only one"] })).toContain("Cần ít nhất 2 phương án")
+    expect(validateDraft({ ...d, options: Array(7).fill("word") })).toContain("Tối đa 6 phương án")
+    expect(fromDraft({ ...d, options: [" didn't invite ", "", "didn't invited"] }, "q1")).toMatchObject({
+      options: ["didn't invite", "didn't invited"],
+    })
+  })
+
   it("keeps the câu's bài when it is edited", () => {
     const q: Question = { id: "q1", type: "tu-luan", prompt: "Anna ___", points: 1, skills: [], rubric: "", group: { id: "g", label: "Part 4", prompt: "Read and write." } }
     expect(fromDraft(toDraft(q), q.id, q).group).toEqual(q.group)
@@ -20,9 +40,17 @@ describe("fromDraft", () => {
 describe("changeDraftType", () => {
   const wordProblem = { ...emptyDraft("tra-loi-ngan"), prompt: "Một cửa hàng bán 285 kg gạo…\nHỏi cả hai buổi bán được bao nhiêu ki-lô-gam?", points: 2, shortAnswer: "605 kg" }
 
+  it("does not turn old multiple-choice options into a required essay choice when changing type", () => {
+    const mc = { ...emptyDraft("trac-nghiem"), prompt: "Viết một câu.", options: ["yes", "no"], correctIndexes: [0] }
+    const d = changeDraftType(mc, "tu-luan")
+    expect(d.options).toEqual([])
+    expect(fromDraft(d, "q")).not.toHaveProperty("options")
+  })
+
   it("turns a short answer into an essay with the answer as grading hint, keeping the prompt", () => {
     const essay = fromDraft(changeDraftType(wordProblem, "tu-luan"), "q1")
     expect(essay).toMatchObject({ type: "tu-luan", rubric: "Đáp số: 605 kg", points: 2, prompt: wordProblem.prompt })
+    expect(validateDraft(changeDraftType(wordProblem, "tu-luan"))).toEqual([])
   })
 
   it("keeps an existing rubric", () => {

@@ -81,6 +81,23 @@ Phụ thuộc: bài viết tay lưu dạng nét bút (`EssayValue.ink`, `lib/ink
 - Cắt hình đang gom theo box trùng nhau (`UploadFlow.tsx:110`); các câu con chung hình nên chuyển thành hình của đề chung thay vì lặp lại.
 - Đáp án/lời giải ở cuối tài liệu ("Tài liệu có sẵn lời giải") ghi theo "Bài 3: a) … b) …" → khớp theo nhãn bài + chữ cái, không theo số câu liên tục.
 
+## Chọn cụm từ và viết lại câu
+
+> **Đã triển khai (2026-10-30):** câu tự luận có phương án chọn; hỗ trợ soạn/sửa, quét/sinh đề, làm bài bằng chữ hoặc viết tay, lưu nháp/offline, chấm và kết quả. Dữ liệu là `tu-luan.options` + `EssayValue.choice`; phụ huynh chấm cả hai phần.
+
+- **Dạng đề.** “Choose and unscramble the sentences”, ví dụ: `Mark --- They --- didn't invite / didn't invited`.
+- **Khi làm bài.** Trong cùng câu hỏi, con chọn một trong các phương án (`didn't invite` hoặc `didn't invited`), rồi viết lại câu hoàn chỉnh bằng ô tự luận/viết tay.
+- **Không dùng kéo-thả.** Phần viết lại câu là tự luận, không chuyển thành dạng sắp xếp từ (`sap-xep`); chỉ chọn phương án chưa thay thế cho việc viết lại câu.
+- **Khi quét đề.** Giữ các từ/cụm từ của đề và các phương án để con tự chọn; không chọn sẵn hoặc sắp xếp thành câu đúng.
+
+## Định dạng chữ trong đề quét và soạn thảo
+
+- **Nhu cầu.** Đề có dạng “chọn từ/phần gạch chân” cần giữ đúng chữ được gạch chân, kể cả vài chữ cái trong một từ; hỗ trợ thêm in đậm và tô nổi bật.
+- **Đã chốt (2026-10-30).** Thanh nút **In đậm / Gạch chân / Tô nổi bật**: chọn chữ rồi bấm, bấm lại để bỏ; có xem trước ở đề câu hỏi, đề chung, phương án và lời giải. Tô nổi bật là nền vàng. Dùng `**chữ đậm**`, `<u>chữ gạch chân</u>`, `==chữ nổi bật==`, không đổi database và không nhận HTML tùy ý.
+- **Quét đề.** AI giữ định dạng in sẵn ở đúng đoạn chữ, không tự đánh dấu đáp án, không chép dấu làm bài của học sinh và không biến chữ gạch chân thành ô trống. Chỗ không đọc rõ phải báo phụ huynh kiểm tra.
+- **Phạm vi.** Giữ định dạng ở review/soạn thảo, làm bài, chấm, kết quả, bản in và offline; tương thích công thức `$…$`, ô trống `___` và đọc thành tiếng (không đọc ký hiệu định dạng).
+- **Đã triển khai (2026-10-30).** Định dạng dùng chung trên các màn, giữ công thức và chỗ trống, bỏ ký hiệu khi đọc thành tiếng; có kiểm thử bộ phân tích, bật/tắt từng định dạng, luồng scan → editor → câu hỏi cho học sinh và thao tác trên iPad. Luồng quét đã được bổ sung hướng dẫn giữ dấu nhấn in sẵn; độ chính xác nhận diện vẫn cần phụ huynh kiểm tra ở bước review.
+
 ## Gợi ý tính năng khác (chưa chốt)
 
 - Ôn lại câu sai (lặp lại ngắt quãng, lấy từ `answers.question`).

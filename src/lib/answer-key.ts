@@ -36,7 +36,8 @@ export function withLaterAnswerKey(snapshot: Question, current: Question | undef
     case "sap-xep":
       return snapshot
     case "tu-luan":
-      return { ...snapshot, ...extra, rubric: (current as typeof snapshot).rubric }
+      if (current.type !== "tu-luan" || JSON.stringify(current.options) !== JSON.stringify(snapshot.options)) return snapshot
+      return { ...snapshot, ...extra, rubric: current.rubric }
     case "tu-vung":
       return snapshot
   }

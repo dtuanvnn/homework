@@ -16,6 +16,15 @@ import {
 } from "./grading"
 
 const ink: Ink = { v: 1, paper: "o-li", pages: [{ strokes: [[100, 100, 5, 110, 100, 5]] }] }
+describe("choose-and-rewrite grading view", () => {
+  const q = { id: "q", type: "tu-luan" as const, prompt: "Mark --- They", points: 1, skills: [], rubric: "", options: ["didn't invite", "didn't invited"] }
+  it("includes the choice with typed and handwritten work", () => {
+    expect(responseText(q, { text: "They didn't invite Mark.", choice: 0 })).toBe("Đã chọn: didn't invite\nThey didn't invite Mark.")
+    expect(responseText(q, { text: "", ink, choice: 1 })).toBe("Đã chọn: didn't invited")
+    expect(responseText(q, { text: "They didn't invite Mark." })).toBe("Chưa chọn phương án\nThey didn't invite Mark.")
+  })
+})
+
 const set = { id: "s1", title: "Phép chia có dư", subject: "toan" as const }
 const attempt = (over: Partial<QueueAttempt> & { id: string }): QueueAttempt => ({
   attemptNo: 1,

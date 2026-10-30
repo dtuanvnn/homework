@@ -5,7 +5,7 @@
 import { chosenOptions, correctOptions } from "../choice"
 import { isFlashcardSet } from "../flashcard"
 import { OPTION_LETTERS } from "../questions"
-import type { EssayValue, Response } from "../grading"
+import { essayChoice, isEssayValue, type Response } from "../grading"
 import { inkSchema, isInkEmpty, type Ink } from "../ink"
 import { answerAsRichText } from "../rich-text"
 import type { Attachment, Question, QuestionType, SubjectId } from "../types"
@@ -210,9 +210,7 @@ export function correctAnswerText(q: Question): string {
   }
 }
 
-export function isEssayValue(value: unknown): value is EssayValue {
-  return typeof value === "object" && value !== null && !Array.isArray(value) && ("text" in value || "drawing" in value || "ink" in value)
-}
+export { isEssayValue } from "../grading"
 
 /** The child's answer, written for the parent. Essays only return their text. */
 export function responseText(q: Question, response: Response | null | undefined): string {
@@ -247,7 +245,9 @@ export function responseText(q: Question, response: Response | null | undefined)
     case "tu-luan": {
       if (!isEssayValue(response)) return NO_ANSWER
       // A handwriting-only essay has no text; the handwriting is shown instead.
-      return response.text?.trim() || (response.drawing || essayInk(response) ? "" : NO_ANSWER)
+      const text = response.text?.trim() || (response.drawing || essayInk(response) ? "" : NO_ANSWER)
+      const picked = essayChoice(q, response)
+      return [q.options?.length ? (picked !== undefined ? `Đã chọn: ${picked}` : "Chưa chọn phương án") : "", text].filter(Boolean).join("\n")
     }
     case "tu-vung":
       return essayInk(response) ? "" : NO_ANSWER

@@ -81,6 +81,7 @@ Rules:
 - Language: Toán and Tiếng Việt questions are entirely in Vietnamese. Tiếng Anh questions use English items with short Vietnamese instructions, as in Vietnamese grade-3+ English textbooks (e.g. "Chọn từ khác loại: cat / dog / pen").
 - Keep wording short, clear and age-appropriate. Use familiar Vietnamese names and everyday contexts.
 - Produce exactly the requested number of questions with the requested type mix. Fill only the fields of each question's type; set the others to null.
+- A choose-and-unscramble / choose-and-rewrite exercise is tu-luan: give the jumbled words in prompt, 2–6 phrase alternatives in options, and the correct choice plus rewritten sentence in rubric. Ordinary essays have options null. Do not use sap-xep or a separate multiple-choice question for this combined task.
 - Every answer must be correct and unambiguous. Double-check arithmetic, units, spelling and diacritics before answering; multiple-choice questions have plausible distractors and exactly one correct option, unless the request asks for questions with several correct answers (then list every correct index).
 - Tag each question with 1-2 skills, reusing the given topic names where they fit.
 - Points: 1 per question, 2 for tu-luan, unless the parent asks otherwise.
@@ -93,7 +94,7 @@ function formatReferences(references: readonly ReferenceSet[]): string {
   return references
     .filter((r) => r.questions.length)
     .map((r, i) => {
-      const lines = r.questions.map((q) => `- [${q.type}] ${oneLine(q.prompt)} => ${oneLine(answerKey(q))}`)
+      const lines = r.questions.map((q) => `- [${q.type}] ${oneLine(q.prompt)}${q.type === "tu-luan" && q.options?.length ? ` (${q.options.map(oneLine).join(" / ")})` : ""} => ${oneLine(answerKey(q))}`)
       return `Reference set ${i + 1}: "${oneLine(r.title)}"\n${lines.join("\n")}`
     })
     .join("\n\n")

@@ -1,5 +1,5 @@
 import { Check } from "lucide-react"
-import RichText from "@/components/question/RichText"
+import RichText, { RichTextRun, TextEmphasis } from "@/components/question/RichText"
 import type { PassagePiece } from "@/lib/blanks"
 import { cn } from "@/lib/utils"
 
@@ -22,11 +22,12 @@ export default function BlankText({ pieces, slot }: { pieces: PassagePiece[]; sl
   return (
     <>
       {pieces.map((piece, i) => {
-        if (piece.kind === "text") return piece.bold ? <strong key={i}><RichText text={piece.text} /></strong> : <RichText key={i} text={piece.text} />
+        if (piece.kind === "text") return <RichTextRun key={i} {...piece} />
         const s = slot(piece.index)
         const label = s.label ? `(${s.label}) ` : ""
         return (
-          <span key={i} className="inline-flex flex-wrap items-baseline gap-1 align-baseline">
+          <TextEmphasis key={i} {...piece}>
+          <span className="inline-flex flex-wrap items-baseline gap-1 align-baseline">
             <span
               aria-current={s.current ? "true" : undefined}
               className={cn(
@@ -49,6 +50,7 @@ export default function BlankText({ pieces, slot }: { pieces: PassagePiece[]; sl
               </span>
             )}
           </span>
+          </TextEmphasis>
         )
       })}
     </>

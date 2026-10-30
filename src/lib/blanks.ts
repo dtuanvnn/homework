@@ -1,6 +1,6 @@
 import { blankMatches, gradeQuestion } from "./grading"
 import { BLANK } from "./questions"
-import { answerAsRichText } from "./rich-text"
+import { answerAsRichText, splitRichText, type RichStyle } from "./rich-text"
 import type { FillBlankQuestion } from "./types"
 
 /*
@@ -9,17 +9,23 @@ import type { FillBlankQuestion } from "./types"
  * print (components/question/BlankText).
  */
 
-export type PassagePiece = { kind: "text"; text: string; bold?: boolean } | { kind: "blank"; index: number }
+export type PassagePiece = ({ kind: "text"; text: string; math?: boolean } | { kind: "blank"; index: number }) & RichStyle
 
 /**
  * The text between blanks and the blanks (1-based, after `offset` earlier
  * blanks) in order; empty text pieces are left out.
  */
 export function passagePieces(prompt: string, offset = 0): PassagePiece[] {
-  return prompt.split(BLANK).flatMap((text, i): PassagePiece[] => [
-    ...(i > 0 ? [{ kind: "blank" as const, index: offset + i }] : []),
-    ...(text ? [{ kind: "text" as const, text }] : []),
-  ])
+  let index = offset
+  return splitRichText(prompt).flatMap((segment): PassagePiece[] => {
+    const { bold, underline, highlight } = segment
+    const style: RichStyle = { ...(bold ? { bold } : {}), ...(underline ? { underline } : {}), ...(highlight ? { highlight } : {}) }
+    const text = segment.kind === "math" ? segment.tex : segment.text
+    return text.split(BLANK).flatMap((part, i): PassagePiece[] => [
+      ...(i > 0 ? [{ kind: "blank" as const, index: ++index, ...style }] : []),
+      ...(part ? [{ kind: "text" as const, text: part, ...(segment.kind === "math" ? { math: true } : {}), ...style }] : []),
+    ])
+  })
 }
 
 export interface BlankMark {

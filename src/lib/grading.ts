@@ -9,8 +9,9 @@
  * sap-xep → token indexes in the chosen order, tu-luan → EssayValue,
  * tu-vung → EssayValue with empty text and the handwritten word as `ink`.
  */
+import { z } from "zod"
 import { chosenOptions, correctOptions } from "./choice"
-import { isInkEmpty, type Ink } from "./ink"
+import { inkSchema, isInkEmpty, type Ink } from "./ink"
 import { mathAnswerMatches } from "./math-answer"
 import type { Question } from "./types"
 
@@ -20,9 +21,33 @@ export interface EssayValue {
   drawing?: string
   /** Handwriting as vector strokes on pages (lib/ink.ts). */
   ink?: Ink
+  /** 0-based choice for an essay with options; the rewritten sentence remains in text/ink. */
+  choice?: number
 }
 
 export type Response = number | boolean | string | string[] | number[] | Record<string, number> | EssayValue
+
+export const essayValueSchema = z.object({
+  text: z.string().max(20_000),
+  drawing: z.string().startsWith("data:image/").optional(),
+  ink: inkSchema.optional(),
+  choice: z.number().int().min(0).max(5).optional(),
+}) satisfies z.ZodType<EssayValue>
+
+export function isEssayValue(value: unknown): value is EssayValue {
+  return typeof value === "object" && value !== null && !Array.isArray(value) && ("text" in value || "drawing" in value || "ink" in value)
+}
+
+export function essayChoice(q: { options?: string[] }, value: unknown): string | undefined {
+  if (!isEssayValue(value) || typeof value.choice !== "number" || !Number.isInteger(value.choice) || value.choice < 0) return undefined
+  return q.options?.[value.choice]
+}
+
+export function isEssayAnswered(q: { options?: string[] }, value: unknown): boolean {
+  if (!isEssayValue(value)) return false
+  const written = Boolean((typeof value.text === "string" && value.text.trim()) || value.drawing || !isInkEmpty(value.ink))
+  return written && (!q.options?.length || essayChoice(q, value) !== undefined)
+}
 
 export interface QuestionGrade {
   /** null = the parent has to grade it. */

@@ -1,7 +1,6 @@
 import "server-only"
 import { z } from "zod"
-import type { Response } from "@/lib/grading"
-import { inkSchema } from "@/lib/ink"
+import { essayValueSchema, type Response } from "@/lib/grading"
 import { assertAccess, type Context } from "./access"
 import { getAssignment, isUuid, type AssignmentRecord } from "./queries"
 
@@ -20,7 +19,7 @@ const responseSchema = z.union([
   z.string().max(5000),
   z.array(z.union([z.string().max(500), z.number()])).max(100),
   z.record(z.string().max(4), z.number()),
-  z.object({ text: z.string().max(20_000), drawing: z.string().startsWith("data:image/").optional(), ink: inkSchema.optional() }),
+  essayValueSchema,
 ])
 
 const responsesSchema = z

@@ -71,7 +71,7 @@ async function essayBlocks(items: { row: AnswerRow; number: number }[]): Promise
   const sentFigures = new Set<string>()
   for (const { row, number } of items) {
     const typed = isEssayValue(row.response) ? (row.response.text ?? "") : ""
-    blocks.push({ type: "text", text: essayQuestionText(row.question, number, typed) })
+    blocks.push({ type: "text", text: essayQuestionText(row.question, number, typed, isEssayValue(row.response) ? row.response.choice : undefined) })
     blocks.push(...(await figureBlocks(row.question, number, sentFigures)))
     const ink = essayInk(row.response)
     const drawing = essayDrawing(row.response)

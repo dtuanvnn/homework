@@ -3,12 +3,12 @@ import MathAnswerInput from '@/components/take/MathAnswerInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { BLANK, OPTION_LETTERS, countBlanks } from '@/lib/questions'
 import { cn } from '@/lib/utils'
 import { orderingTokens, type QuestionDraft } from './question-draft'
 import FormulaPreview from './FormulaPreview'
+import { FormattedInput, FormattedTextarea } from './FormattedTextField'
 
 interface Props {
   draft: QuestionDraft
@@ -46,14 +46,13 @@ function MultipleChoiceFields({ draft, onChange }: Props) {
               {correct ? <Check className="size-5" /> : OPTION_LETTERS[i]}
             </button>
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <Input
+              <FormattedInput
                 value={opt}
-                onChange={(e) => setOption(i, e.target.value)}
+                onChange={(value) => setOption(i, value)}
                 placeholder={`Phương án ${OPTION_LETTERS[i]}`}
                 aria-label={`Phương án ${OPTION_LETTERS[i]}`}
                 className={cn(correct && 'border-emerald-300 bg-emerald-50/50')}
               />
-              <FormulaPreview text={opt} />
             </div>
             {draft.options.length > 2 && (
               <Button variant="ghost" size="icon" className="shrink-0 text-slate-400" onClick={() => remove(i)} aria-label={`Xóa phương án ${OPTION_LETTERS[i]}`}>
@@ -302,17 +301,53 @@ function OrderingFields({ draft, onChange }: Props) {
 }
 
 function EssayFields({ draft, onChange }: Props) {
+  const choosing = draft.options.length > 0
   return (
     <div className="flex flex-col gap-2">
+      {choosing ? (
+        <fieldset className="mb-3 flex flex-col gap-2">
+          <legend className="mb-2 text-sm font-semibold text-slate-700">Phương án để con chọn trước khi viết lại câu</legend>
+          {draft.options.map((option, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold text-slate-500">{OPTION_LETTERS[i]}</span>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <FormattedInput
+                  aria-label={`Phương án ${OPTION_LETTERS[i]}`}
+                  placeholder={`Phương án ${OPTION_LETTERS[i]}`}
+                  value={option}
+                  onChange={(value) => onChange({ options: draft.options.map((o, j) => j === i ? value : o) })}
+                />
+              </div>
+              {draft.options.length > 2 && (
+                <Button variant="ghost" size="icon" aria-label={`Xóa phương án ${OPTION_LETTERS[i]}`} onClick={() => onChange({ options: draft.options.filter((_, j) => j !== i) })}>
+                  <X className="size-4" />
+                </Button>
+              )}
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2">
+            {draft.options.length < OPTION_LETTERS.length && (
+              <Button variant="ghost" className="text-indigo-700" onClick={() => onChange({ options: [...draft.options, ''] })}>
+                <Plus /> Thêm phương án
+              </Button>
+            )}
+            <Button variant="ghost" className="text-slate-500" onClick={() => onChange({ options: [] })}>Bỏ phần chọn phương án</Button>
+          </div>
+          <p className="text-xs text-slate-500">Con chọn một phương án rồi viết lại câu bằng chữ hoặc viết tay. Ghi đáp án và câu mẫu trong gợi ý chấm; phụ huynh chấm cả hai phần.</p>
+        </fieldset>
+      ) : (
+        <Button variant="outline" className="mb-3 w-fit" onClick={() => onChange({ options: ['', ''] })}>
+          <Plus /> Thêm phần chọn phương án
+        </Button>
+      )}
       <Label htmlFor="rubric">Gợi ý chấm (không bắt buộc)</Label>
-      <Textarea
+      <FormattedTextarea
         id="rubric"
         rows={4}
         value={draft.rubric}
-        onChange={(e) => onChange({ rubric: e.target.value })}
+        onChange={(rubric) => onChange({ rubric })}
         placeholder="Giới thiệu được tên bạn (0,5đ) · Tả ngoại hình hoặc tính tình (0,5đ) · …"
       />
-      <FormulaPreview text={draft.rubric} />
       <p className="text-xs text-slate-500">Ngăn cách các tiêu chí bằng dấu “·”. Câu tự luận do phụ huynh chấm.</p>
     </div>
   )

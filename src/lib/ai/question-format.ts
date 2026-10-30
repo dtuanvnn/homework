@@ -26,7 +26,7 @@ export const aiQuestionSchema = z.object({
     ),
   points: z.number().describe("Points for the question; 1 if the document doesn't say"),
   skills: z.array(z.string()).describe("1-2 short Vietnamese skill tags, e.g. \"Bảng nhân 7\", \"Toán có lời văn\", \"Dấu hỏi/ngã\""),
-  options: z.array(z.string()).nullable().describe("trac-nghiem: the options without their A/B/C letters"),
+  options: z.array(z.string()).nullable().describe("trac-nghiem: the options without their A/B/C letters; tu-luan with a choose-and-rewrite instruction: the printed phrase alternatives (2–6), in their printed order; null for an ordinary essay"),
   correctIndexes: z
     .array(z.number().int())
     .nullable()
@@ -151,8 +151,12 @@ function keylessDraft(ai: AiQuestion, issues: string[]): QuestionContent {
       return { ...base, type: "sap-xep", tokens, shuffled: tokens.map((_, i) => i) }
     }
     case "tu-luan":
-      return { ...base, type: "tu-luan", rubric: "" }
+      return { ...base, type: "tu-luan", rubric: "", ...essayOptions(ai) }
   }
+}
+
+function essayOptions(ai: AiQuestion): { options?: string[] } {
+  return ai.options?.length ? { options: ai.options.map((o) => o.trim()).filter(Boolean) } : {}
 }
 
 /** Math flags for answers `answers`; math is turned off (with a note) when one can't be evaluated. */
@@ -212,7 +216,7 @@ function draft(ai: AiQuestion, issues: string[]): QuestionContent {
       return { ...base, type: "sap-xep", tokens, shuffled: shuffleIndexes(tokens.length) }
     }
     case "tu-luan":
-      return { ...base, type: "tu-luan", rubric: ai.rubric?.trim() ?? "" }
+      return { ...base, type: "tu-luan", rubric: ai.rubric?.trim() ?? "", ...essayOptions(ai) }
   }
 }
 

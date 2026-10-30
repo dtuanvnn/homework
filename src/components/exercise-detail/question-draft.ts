@@ -56,7 +56,7 @@ export function emptyDraft(type: QuestionType): QuestionDraft {
     prompt: DEFAULT_PROMPTS[type] ?? '',
     points: type === 'tu-luan' ? 2 : 1,
     skills: [],
-    options: ['', '', '', ''],
+    options: type === 'tu-luan' ? [] : ['', '', '', ''],
     correctIndexes: [],
     tfAnswer: true,
     blanks: [],
@@ -102,7 +102,7 @@ export function toDraft(q: Question): QuestionDraft {
     case 'sap-xep':
       return { ...base, orderingText: q.tokens.join(' / ') }
     case 'tu-luan':
-      return { ...base, rubric: q.rubric }
+      return { ...base, rubric: q.rubric, options: q.options ? [...q.options] : [] }
     case 'tu-vung':
       return { ...base, shortAnswer: q.word }
   }
@@ -116,6 +116,7 @@ export function toDraft(q: Question): QuestionDraft {
 export function changeDraftType(d: QuestionDraft, type: QuestionType): QuestionDraft {
   if (type === d.type) return d
   const next = { ...d, type }
+  if (type === 'tu-luan') next.options = []
   if (type === 'tu-luan' && !d.rubric.trim() && d.shortAnswer.trim()) next.rubric = `Đáp số: ${d.shortAnswer.trim()}`
   if (type === 'tra-loi-ngan' && !d.shortAnswer.trim() && d.rubric.trim()) next.shortAnswer = d.rubric.trim().replace(/^Đáp số:\s*/i, '')
   return next
@@ -130,8 +131,7 @@ export function parsePoints(text: string): number | null {
 }
 
 export function orderingTokens(text: string): string[] {
-  return text
-    .split('/')
+  return (text.match(/(?:<\/u>|[^/])+/g) ?? [])
     .map((t) => t.trim())
     .filter(Boolean)
 }
@@ -168,6 +168,12 @@ export function validateDraft(d: QuestionDraft): string[] {
     case 'sap-xep':
       if (orderingTokens(d.orderingText).length < 2) issues.push('Câu cần ít nhất 2 phần, ngăn cách bằng “/”')
       break
+    case 'tu-luan': {
+      const filled = d.options.filter((o) => o.trim())
+      if (d.options.length && filled.length < 2) issues.push('Cần ít nhất 2 phương án')
+      if (filled.length > 6) issues.push('Tối đa 6 phương án')
+      break
+    }
   }
   return issues
 }
@@ -221,8 +227,10 @@ export function fromDraft(d: QuestionDraft, id: string, previous?: Question): Qu
         previous?.type === 'sap-xep' && previous.tokens.join('/') === tokens.join('/') ? previous.shuffled : undefined
       return { ...base, type: 'sap-xep', tokens, shuffled: keepShuffle ?? shuffleIndexes(tokens.length) }
     }
-    case 'tu-luan':
-      return { ...base, type: 'tu-luan', rubric: d.rubric.trim() }
+    case 'tu-luan': {
+      const options = d.options.map((o) => o.trim()).filter(Boolean)
+      return { ...base, type: 'tu-luan', rubric: d.rubric.trim(), ...(options.length ? { options } : {}) }
+    }
     case 'tu-vung':
       return { ...base, type: 'tu-vung', word: d.shortAnswer.trim() }
   }

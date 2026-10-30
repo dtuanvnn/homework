@@ -6,13 +6,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { formatScoreValue } from '@/lib/format'
 import { BLANK, QUESTION_TYPES, QUESTION_TYPE_LIST, uid } from '@/lib/questions'
 import type { Question, QuestionType } from '@/lib/types'
 import FigureField, { type FigureSource } from './FigureField'
-import FormulaPreview from './FormulaPreview'
+import { FormattedTextarea } from './FormattedTextField'
 import QuestionTypeFields from './QuestionTypeFields'
 import SkillTagInput from './SkillTagInput'
 import { changeDraftType, emptyDraft, fromDraft, parsePoints, patchDraft, toDraft, validateDraft, type QuestionDraft } from './question-draft'
@@ -206,15 +205,14 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
                     ))}
                   </div>
                 </div>
-                <Textarea
+                <FormattedTextarea
                   id="q-prompt"
                   ref={promptRef}
                   rows={draft.prompt.includes('\n') || draft.prompt.length > 160 ? 8 : 3}
                   value={draft.prompt}
-                  onChange={(e) => patch({ prompt: e.target.value })}
+                  onChange={(prompt) => patch({ prompt })}
                   placeholder={promptCopy?.placeholder}
                 />
-                <FormulaPreview text={draft.prompt} />
               </div>
 
               {draft.answerStatus && (
@@ -238,14 +236,13 @@ export default function QuestionEditorSheet({ open, onOpenChange, editing, onSub
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="q-solution">Lời giải (không bắt buộc)</Label>
-                <Textarea
+                <FormattedTextarea
                   id="q-solution"
                   rows={draft.solution.includes('\n') || draft.solution.length > 160 ? 6 : 3}
                   value={draft.solution}
-                  onChange={(e) => patch({ solution: e.target.value })}
+                  onChange={(solution) => patch({ solution })}
                   placeholder="Các bước giải và đáp số. Con xem được khi đã hết lượt làm."
                 />
-                <FormulaPreview text={draft.solution} />
                 {setId && (
                   <FigureField
                     label="Hình lời giải"

@@ -41,6 +41,16 @@ it("isPassing needs half the points", () => {
 })
 
 describe("prompt builders", () => {
+  it("sends both the available options and the child's selection for combined essays", () => {
+    const q = { ...essay, options: ["didn't invite", "didn't invited"] }
+    const text = essayQuestionText(q, 1, "They didn't invite Mark.", 0)
+    expect(text).toContain("Các lựa chọn: didn't invite | didn't invited")
+    expect(text).toContain("Con đã chọn: didn't invite")
+    expect(text).toContain("They didn't invite Mark.")
+    expect(essayQuestionText(q, 1, "", undefined)).toContain("Con chưa chọn phương án")
+    expect(paperQuestionText(q, 1)).toContain("Các lựa chọn: didn't invite | didn't invited")
+  })
+
   it("includes the bài's shared prompt for essays and paper work", () => {
     const grouped = { ...essay, group: { id: "g", label: "Part 4", prompt: "Read and write." } }
     expect(essayQuestionText(grouped, 21, "")).toContain("Đề bài: Part 4\nRead and write.\n")

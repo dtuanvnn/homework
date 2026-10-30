@@ -6,6 +6,18 @@ const base = { prompt: "Chọn đáp án đúng", points: 1, skills: [] }
 const snapshot: Question = { ...base, id: "q1", type: "trac-nghiem", options: ["3", "4"], correctIndex: 0, answerStatus: "missing" }
 
 describe("withLaterAnswerKey", () => {
+  it("takes a later essay key only when the child saw the same alternatives", () => {
+    const original = { ...base, id: "q", type: "tu-luan" as const, rubric: "", options: ["didn't invite", "didn't invited"], answerStatus: "missing" as const }
+    const current = { ...original, rubric: "They didn't invite Mark.", answerStatus: "ai" as const, solution: "Use the base verb after didn't." }
+    expect(withLaterAnswerKey(original, current)).toMatchObject({ rubric: "They didn't invite Mark.", solution: "Use the base verb after didn't." })
+    for (const options of [["invited", "invite"], ["didn't invited", "didn't invite"], undefined]) {
+      expect(withLaterAnswerKey(original, { ...current, options })).toBe(original)
+    }
+    const plain = { ...original, options: undefined }
+    expect(withLaterAnswerKey(plain, { ...current, options: undefined })).toMatchObject({ rubric: "They didn't invite Mark." })
+    expect(withLaterAnswerKey(plain, current)).toBe(plain)
+  })
+
   it("takes the key and solution solved after the child submitted", () => {
     const current: Question = { ...base, id: "q1", prompt: "Đề đã sửa", type: "trac-nghiem", options: ["3", "4"], correctIndex: 1, answerStatus: "ai", solution: "Vì 2 + 2 = 4" }
     expect(withLaterAnswerKey(snapshot, current)).toEqual({ ...snapshot, correctIndex: 1, answerStatus: "ai", solution: "Vì 2 + 2 = 4" })
